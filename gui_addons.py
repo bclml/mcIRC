@@ -187,6 +187,7 @@ class AddonManager:
     def load(self, name):
         if name in self.loaded: return True
         try:
+            _fresh_helpers(name)
             spec = importlib.util.spec_from_file_location(f"addon_{name}", os.path.join(ADDON_DIR, name + ".py"))
             mod = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(mod)
@@ -264,6 +265,18 @@ def vkey(version):
     """'1.10.2' -> (1, 10, 2) so versions compare numerically; junk compares lowest."""
     try: return tuple(int(p) for p in str(version).strip().lstrip("v").split("."))
     except ValueError: return (0,)
+
+
+def _fresh_helpers(name):
+    """Before an addon is (re)loaded, helper modules its package put next to the app (meshbot_common.py, ...) are read again: after an
+    update the new addon must never run with the older copy still in memory."""
+    import importlib, sys
+    for dest in read_installed().get(name, {}).get("files", []):
+        if "/" in dest or not dest.endswith(".py"): continue
+        mod = sys.modules.get(dest[:-3])
+        if mod is not None and getattr(mod, "__file__", None):
+            try: importlib.reload(mod)
+            except Exception: pass
 
 
 def read_installed():

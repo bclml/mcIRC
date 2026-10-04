@@ -13,7 +13,7 @@ if hasattr(sys.stdout, "reconfigure"): sys.stdout.reconfigure(encoding="utf-8", 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 WINDOWS_ONLY = {"test_cancel", "test_launcher"}                       # use .cmd stand-ins, tasklist, PowerShell, WinForms
-NO_DISPLAY_OK = {"test_updater", "test_diag", "test_portable", "test_install_update", "test_146", "test_health"}     # (the GUI ones are skipped without a display)
+NO_DISPLAY_OK = {"test_updater", "test_addon_helpers", "test_diag", "test_portable", "test_install_update", "test_146", "test_health"}     # (the GUI ones are skipped without a display)
 
 
 def has_display():

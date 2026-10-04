@@ -33,7 +33,7 @@ def run_one(name):
     if p.returncode != 0 and not lines: lines = [l for l in (p.stderr or "").splitlines() if l.strip()]
     failed = [l for l in lines if l.startswith("[FAIL]")]
     passed = bool(lines) and (lines[-1].strip() in ("PASS", "ALL PASSED") or lines[-1].strip().endswith("ALL PASSED")) and not failed and p.returncode == 0
-    return passed, "\n".join(failed[:8] + (lines[-12:] if not passed and not failed else [])), time.time() - t0
+    return passed, "\n".join(failed[:8] + ((lines[-12:] + (p.stderr or "").splitlines()[-25:]) if not passed and not failed else [])), time.time() - t0
 
 
 def main(argv):

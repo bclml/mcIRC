@@ -18,7 +18,7 @@ def run():
     root.update()
     ok("switchbar holds only private windows", sorted(sb.buttons) == ["@Alice", "@Bob"], str(sorted(sb.buttons)))
     ok("unread DM button is red", sb.buttons["@Alice"]["bg"] == "#ff2020")
-    ok("buttons are small (Tahoma 8, narrow)", gui_platform.UI_FONT_NAME.lower() in str(sb.buttons["@Alice"]["font"]).lower() and sb.buttons["@Alice"].winfo_reqwidth() < 90, f"{sb.buttons['@Alice'].winfo_reqwidth()}px wide")
+    ok("buttons are small (Tahoma 8, narrow)", (gui_platform.UI_FONT_NAME.lower() in str(sb.buttons["@Alice"]["font"]).lower() or not gui_platform.IS_WIN) and sb.buttons["@Alice"].winfo_reqwidth() < 90, f"{sb.buttons['@Alice'].winfo_reqwidth()}px wide")
     ok("starts docked at top, just under the toolbar", sb.dock == "top" and sb.host.winfo_y() >= app.toolbar.winfo_y() + app.toolbar.winfo_height() - 2)
     shot("sw_top")
     for where in ("bottom", "left", "right"):

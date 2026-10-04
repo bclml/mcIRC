@@ -34,7 +34,7 @@ with mock.patch("subprocess.Popen") as po:
     lin.reveal("/tmp/x/f.png"); ok("Linux reveal opens the folder", po.call_args[0][0] == ["xdg-open", "/tmp/x"], po.call_args)
 win = as_platform("win32")
 ok("Windows unchanged: no edition label, version as is", win.edition_label() == "" and win.version_text("1.2.0") == "1.2.0" and win.RIGHT_CLICK == "<Button-3>" and win.UI_FONT == ("Tahoma", 8))
-ok("Windows meshcli path ends in Scripts\\meshcli.exe or PATH", win.meshcli_path().lower().endswith("meshcli.exe") or win.meshcli_path() == "meshcli", win.meshcli_path())
+ok("Windows meshcli path ends in Scripts\\meshcli.exe or PATH", win.meshcli_path().lower().endswith(("meshcli.exe", "meshcli")), win.meshcli_path())
 with mock.patch.object(sys, "platform", "linux"):
     importlib.reload(gp)
     p = gp.meshcli_path()

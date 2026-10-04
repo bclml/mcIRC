@@ -91,6 +91,7 @@ gui_nodecfg.read_node = lambda: {"info": {"name": "N"}, "ver": {}, "core": {}, "
 app.settings["poll_seconds"] = 1; app.settings["node_sync_minutes"] = 9999; app.settings["auto_reset_radio"] = False
 app.node_sync_worker = lambda: None
 logs = []
+logging.getLogger().setLevel(logging.INFO)      # (on a machine without installed addons nothing else sets it)
 class H(logging.Handler):
     def emit(self, r): logs.append(r.getMessage())
 logging.getLogger().addHandler(H())

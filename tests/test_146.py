@@ -116,7 +116,7 @@ app = mcIRC.App(root, demo=True); root.update()
 app.map_layers["Test layer"] = (lambda: [(49.1, -121.5, "INCIDENT - Silver Skagit Road (Hope)", "Long details\nsecond line"), (49.2, -121.6, "Plain item")], "#d32f2f")
 app.open_map(); root.update()
 pts = app.map_win.points()
-mine = [p for p in pts if "Silver Skagit" in p[2]]
+mine = [p for p in pts if p[0] == 49.1 and "Silver Skagit" in p[2]]      # (other layers, e.g. a real installed addon, may add their own pins)
 ok("map: label (up to 40 chars) on the pin, details in the info box", mine and mine[0][2] == "INCIDENT - Silver Skagit Road (Hope)" and mine[0][5] == "Long details\nsecond line", mine)
 ok("map: 3-item layer entries still work", any(p[2] == "Plain item" and p[5] == "Plain item" for p in pts))
 ok("map info box is tall enough for details", int(app.map_win.info.cget("height")) >= 10)

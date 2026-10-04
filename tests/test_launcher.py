@@ -52,7 +52,7 @@ ok("the install command actually runs (pip answers), with spaces in the paths", 
 ok("and when the packages are still missing afterwards the user is told, exit code 3", code == 3 and "could not be installed" in out, (code, out[-200:]))
 
 # ---- a folder with spaces in its name
-tmp = os.path.join(work, "my mc IRC folder")
+tmp = os.path.join(os.path.realpath(work), "my mc IRC folder")      # (CI temp folders have 8.3 short names; the launcher prints the long form)
 os.makedirs(os.path.join(tmp, "scripts"))
 shutil.copy(os.path.join(ROOT, "scripts", "start_mcirc.ps1"), os.path.join(tmp, "scripts"))
 open(os.path.join(tmp, "mcIRC.py"), "w").write("print('hi')\n")

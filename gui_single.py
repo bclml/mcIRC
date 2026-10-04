@@ -12,7 +12,8 @@ def acquire(on_raise):
     """Become the one running instance.  Returns the listening socket (keep it alive), or None if another mcIRC already is."""
     srv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     try:
-        if hasattr(socket, "SO_EXCLUSIVEADDRUSE"): srv.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
+        if hasattr(socket, "SO_EXCLUSIVEADDRUSE"): srv.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)           # Windows: no second listener on the port
+        else: srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)                                                    # Linux / macOS: a restart right after a quit must not hit TIME_WAIT (a live listener still blocks the bind)
         srv.bind(("127.0.0.1", PORT))
         srv.listen(4)
     except OSError:

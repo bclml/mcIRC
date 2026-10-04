@@ -119,8 +119,8 @@ class AdvertWatcher:
 
     def _event(self, ev):
         kind = ev["event"]
-        if kind == "rx":                                   # a route heard: only the path is kept (map: signals)
-            self.app.q.put(("call", lambda e=ev: self.app.note_signal("in", e.get("path", ""), size=e.get("size", 1))))
+        if kind == "rx":                                   # a packet heard: kind, route, signal (map signals, packet monitor) - never its content
+            self.app.q.put(("call", lambda e=ev: self.app.note_packet(e)))
             return
         gui_diag.count("adverts" if kind == "advert" else "advert_contacts")
         if kind == "advert":

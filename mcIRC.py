@@ -253,6 +253,7 @@ class App(PrivateMixin, MenusMixin, CommandsMixin):
         self.log_dir = tempfile.mkdtemp(prefix="meshlogs_") if demo else LOG_DIR   # demo mode must never touch the real logs
         self.commands, self.map_layers = {}, {}   # filled by addons
         self.signal_traces = []                    # paths the radio really heard (map: Show signals)
+        self.packet_log = []                       # every packet the listener heard: kind, route, signal (MeshCore tools: packet monitor)
         self._name_lookups = {}                   # key prefix -> time of the last radio lookup (rate limit)
         self.worker = CoreWorker(self)
         self.nodes = NodeStore(":memory:") if demo else NodeStore()
@@ -846,6 +847,15 @@ class App(PrivateMixin, MenusMixin, CommandsMixin):
             note = gui_echo.describe(r)
             if note and w is not None and mark: w.add_note(mark, f"({note})")
         self.bg(work, done)
+
+    def note_packet(self, ev):
+        """A packet the radio heard (from the listener): kept for the packet monitor; its route also goes to the map's signal view."""
+        rec = {"t": time.time(), "type": ev.get("type", ""), "route": ev.get("route", ""), "path": ev.get("path", ""), "size": ev.get("size", 1) or 1,
+               "snr": ev.get("snr"), "rssi": ev.get("rssi"), "length": ev.get("length"),
+               "my_pos": (self.settings.get("node_lat"), self.settings.get("node_lon"))}      # where we were (MeshCore tools: wardrive log)
+        self.packet_log.append(rec)
+        del self.packet_log[:-1000]
+        if rec["path"]: self.note_signal("in", rec["path"], size=rec["size"])
 
     def note_signal(self, direction, path, idx=None, size=1):
         """A path the radio really heard (a repeat of our message, or an incoming packet): kept for a while for the map's signal view."""

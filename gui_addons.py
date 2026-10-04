@@ -138,6 +138,21 @@ class AddonAPI:
         if not hasattr(self._app, "bot_helps"): self._app.bot_helps = []
         self._app.bot_helps.append(entry)
         self._helps.append(entry)
+    def disconnect(self):
+        """Let go of the radio (e.g. before a firmware update).  Safe from any thread."""
+        self._app.q.put(("call", self._app.disconnect))
+    def refresh_channels(self):
+        """Read the node's channels again (after a tool added / removed one): the channel windows follow.  Call from a background job."""
+        import meshcore_io as io
+        io.CHANNEL_INDEX_BY_NAME.clear()
+        io.resolve_channel_indices()
+        self._app.q.put(("channels",))
+    @property
+    def packet_log(self):
+        """Packets the radio heard recently: [{t, type, route, path, size, snr, rssi, length}] (no content)."""
+        return list(getattr(self._app, "packet_log", []))
+    @property
+    def signal_traces(self): return list(getattr(self._app, "signal_traces", []))
     def bot_names(self):
         """Titles of the loaded addons that registered bot commands (whether or not they answer anywhere right now)."""
         out = []

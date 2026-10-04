@@ -1,8 +1,8 @@
 {
   "name": "node_tools",
   "title": "MeshCore tools",
-  "version": "1.0.0",
-  "description": "Node clock, channel manager, backup & restore, firmware check / update, path tools, packet monitor, radio health graphs and coverage map - in the Addons menu. Updating firmware from mcIRC needs 'pip install esptool'.",
+  "version": "1.1.0",
+  "description": "Node clock, channel manager, backup & restore, firmware check / update, Wi-Fi firmware builder (needs PlatformIO), path tools, packet monitor, radio health graphs and coverage map - in the Addons menu. Updating firmware from mcIRC needs 'pip install esptool'.",
   "requires": [],
   "files": {
     "node_tools.py": "addons/node_tools.py",
@@ -12,6 +12,7 @@
     "ntools_backup.py": "ntools_backup.py",
     "ntools_firmware.py": "ntools_firmware.py",
     "ntools_paths.py": "ntools_paths.py",
-    "ntools_monitor.py": "ntools_monitor.py"
+    "ntools_monitor.py": "ntools_monitor.py",
+    "ntools_wifi.py": "ntools_wifi.py"
   }
 }

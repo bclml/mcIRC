@@ -348,6 +348,34 @@ class RadioHealth:
 
 HEALTH = RadioHealth()
 
+# Which node "the node" is for the code running on this thread.  Settings pages and tools run their work inside `with on_node(...)` to talk to
+# an extra node (Options > More nodes) instead of the main one: node_args() / node_lock() and execute_mesh_command follow it.
+_TARGET = threading.local()
+
+
+class on_node:
+    """with on_node(conn_args, lock, health): ...   - on this thread, commands for the main node go to that node.  on_node(None) = the main node."""
+    def __init__(self, conn_args=None, lock=None, health=None):
+        self.t = (list(conn_args), lock or _MeshLock(), health or RadioHealth()) if conn_args else None
+
+    def __enter__(self):
+        self.prev = getattr(_TARGET, "t", None)
+        _TARGET.t = self.t
+        return self
+
+    def __exit__(self, *exc): _TARGET.t = self.prev
+
+
+def node_args():
+    """Connection arguments of the node this thread works on (default: the main node)."""
+    t = getattr(_TARGET, "t", None)
+    return t[0] if t else CONNECTION_ARGS
+
+
+def node_lock():
+    t = getattr(_TARGET, "t", None)
+    return t[1] if t else MESH_LOCK
+
 # Alerts that could not be sent (the radio was not answering) wait here and go out as soon as a poll works again, unless they are too old to matter.
 PENDING_SENDS = collections.deque()
 PENDING_MAX_AGE = 30 * 60
@@ -398,6 +426,10 @@ def _trace(args, attempt, outcome, started, detail=""):
 
 def execute_mesh_command(args_list, timeout=30, retries=2, retry_delay=2, lock=None, health=None):
     """Runs meshcli with these arguments.  lock / health: the radio's own (extra nodes - gui_multinode.py); default the main node's."""
+    t = getattr(_TARGET, "t", None)
+    if t:                                                   # working on another node (on_node): the main node's prefix, lock and health become its
+        if CONNECTION_ARGS and args_list[:len(CONNECTION_ARGS)] == CONNECTION_ARGS: args_list = t[0] + args_list[len(CONNECTION_ARGS):]
+        if args_list[:len(t[0])] == t[0]: lock, health = lock or t[1], health or t[2]
     lock = lock or MESH_LOCK
     health = health or HEALTH
     launch = cli_cmd()

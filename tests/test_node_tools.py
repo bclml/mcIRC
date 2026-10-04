@@ -60,6 +60,7 @@ REL = [{"tag_name": "repeater-v1.18.0", "assets": []}, {"tag_name": "companion-v
                                                                     {"name": "LilyGo_T3S3_sx1262_companion_radio_usb-v1.17.1-x.bin"}]}]
 ver, url, assets = ntools_firmware.latest_companion(get=lambda u: REL)
 ok("firmware: the newest companion release (not repeater)", ver == "v1.17.1")
+ok("firmware: every companion release is listed, newest first (the version list)", [r[0] for r in ntools_firmware.companion_releases(get=lambda u: REL)] == ["v1.17.1", "v1.16.0"])
 ok("firmware: the application image for the board and connection (not -merged, not BLE)", ntools_firmware.pick_asset(assets, "Heltec V3", "usb")["name"] == "Heltec_v3_companion_radio_usb-v1.17.1-x.bin")
 ok("firmware: an unknown board gets no file", ntools_firmware.pick_asset(assets, "RAK 4631", "usb") is None)
 ok("firmware: versions compare as numbers", ntools_firmware.vkey("v1.17.1") > ntools_firmware.vkey("v1.16.0-07a3ca9") and ntools_firmware.vkey("v1.10.0") > ntools_firmware.vkey("v1.9.9"))

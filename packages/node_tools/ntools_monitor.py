@@ -22,7 +22,7 @@ class MonitorWindow(ToolWindow):
     COLS = (("time", 70), ("kind", 90), ("route", 70), ("hops", 45), ("path", 160), ("snr", 50), ("rssi", 50), ("bytes", 50))
 
     def __init__(self, api):
-        super().__init__(api, "Packet monitor", "720x460")
+        super().__init__(api, "Packet monitor", "720x460", choose_node=False)
         self.t = ttk.Treeview(self, columns=[c for c, _ in self.COLS], show="headings")
         for c, w in self.COLS:
             self.t.heading(c, text=c)
@@ -84,7 +84,7 @@ def derived(samples):
 
 class HealthWindow(ToolWindow):
     def __init__(self, api, addon):
-        super().__init__(api, "Radio health", "760x560")
+        super().__init__(api, "Radio health", "760x560", choose_node=False)
         self.addon = addon
         top = tk.Frame(self, bg=BG)
         top.pack(fill="x", padx=6, pady=4)
@@ -140,7 +140,7 @@ def heard_repeaters(packets, nodes):
 
 class CoverageWindow(ToolWindow):
     def __init__(self, api, addon):
-        super().__init__(api, "Coverage", "620x420")
+        super().__init__(api, "Coverage", "620x420", choose_node=False)
         self.addon = addon
         tk.Label(self, bg=BG, justify="left", wraplength=580, text=(
             "The repeaters your node hears directly, from the last hop of every packet it hears. On the map: tick 'Coverage: strong (SNR >= 5)' and "

@@ -22,7 +22,7 @@ def json_docs(text):
 
 def read_node():
     """Everything the node reports about itself: {'info','ver','core','radio'} (each a dict, possibly empty)."""
-    res = ea.execute_mesh_command(ea.CONNECTION_ARGS + [".infos", ".ver", ".get", "stats_core", ".get", "stats_radio"], timeout=60)
+    res = ea.execute_mesh_command(ea.node_args() + [".infos", ".ver", ".get", "stats_core", ".get", "stats_radio"], timeout=60)
     out = {"info": {}, "ver": {}, "core": {}, "radio": {}}
     for d in json_docs(f"{res.stdout}\n{res.stderr}"):
         if "tx_power" in d: out["info"] = d
@@ -68,10 +68,10 @@ def build_commands(old, new):
 def write_node(old, new):
     """Applies the changes one setting at a time.  Returns ([(label, ok, detail)], radio_changed)."""
     results = []
-    with ea.MESH_LOCK:
+    with ea.node_lock():
         for label, args in build_commands(old, new):
             try:
-                res = ea.execute_mesh_command(ea.CONNECTION_ARGS + args, timeout=40)
+                res = ea.execute_mesh_command(ea.node_args() + args, timeout=40)
                 out = f"{res.stdout}\n{res.stderr}"
                 bad = re.search(r"\berror\b", out, re.IGNORECASE)
                 results.append((label, not bad, out.strip().splitlines()[-1] if bad else "ok"))
@@ -82,8 +82,8 @@ def write_node(old, new):
 
 def reboot_and_wait():
     """Reboots the node and waits until it answers again.  Returns the fresh node dict."""
-    with ea.MESH_LOCK:
-        try: ea.execute_mesh_command(ea.CONNECTION_ARGS + ["reboot"], retries=0)
+    with ea.node_lock():
+        try: ea.execute_mesh_command(ea.node_args() + ["reboot"], retries=0)
         except Exception: pass  # the node drops the link while restarting
         time.sleep(8)
         for _ in range(6):
@@ -94,6 +94,6 @@ def reboot_and_wait():
 
 def action(name):
     """Simple one-shot commands: 'advert', 'floodadv', 'clock sync'.  Returns the node's reply text."""
-    with ea.MESH_LOCK:
-        res = ea.execute_mesh_command(ea.CONNECTION_ARGS + name.split(), timeout=40)
+    with ea.node_lock():
+        res = ea.execute_mesh_command(ea.node_args() + name.split(), timeout=40)
     return (res.stdout.strip().splitlines() or ["done"])[-1]

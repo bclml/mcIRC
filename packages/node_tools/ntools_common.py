@@ -11,8 +11,8 @@ MONO = ("Courier New", 9)
 
 def run(*args, timeout=40, retries=1):
     """meshcli on the connected node -> its output text (stdout + stderr).  Raises when the node does not answer."""
-    if not io.CONNECTION_ARGS: raise RuntimeError("not connected to a node")
-    r = io.execute_mesh_command(io.CONNECTION_ARGS + [str(a) for a in args], timeout=timeout, retries=retries)
+    if not io.node_args(): raise RuntimeError("not connected to a node")
+    r = io.execute_mesh_command(io.node_args() + [str(a) for a in args], timeout=timeout, retries=retries)
     return f"{r.stdout}\n{r.stderr}"
 
 
@@ -31,22 +31,51 @@ def plain(text):
 
 
 class ToolWindow(tk.Toplevel):
-    """A tool window with a status line and a way to run radio work in the background (one job at a time)."""
-    def __init__(self, api, title, size="640x460"):
+    """A tool window with a status line, a 'Node:' choice (main node or one from Options > More nodes) and a way to run radio work in the
+    background on that node (one job at a time).  on_node_change() is called when another node is chosen."""
+    def __init__(self, api, title, size="640x460", choose_node=True):
         super().__init__(api.ui()["root"], bg=BG)
-        self.api, self.busy = api, False
+        self.api, self.busy, self.node_key = api, False, "main"
         self.title(title)
         self.geometry(size)
         self.status = tk.Label(self, bg=BG, fg="#555", anchor="w", justify="left", wraplength=600)
         self.status.pack(side="bottom", fill="x", padx=6, pady=4)
+        if choose_node and hasattr(api, "node_choices"):
+            row = tk.Frame(self, bg=BG)
+            row.pack(side="top", fill="x", padx=10, pady=(8, 0))
+            tk.Label(row, text="Node:", bg=BG).pack(side="left")
+            self.node_var = tk.StringVar()
+            self.node_box = ttk.Combobox(row, textvariable=self.node_var, width=40, state="readonly", postcommand=self._fill_nodes)
+            self.node_box.pack(side="left", padx=4)
+            self.node_box.bind("<<ComboboxSelected>>", lambda e: self._node_picked())
+            self._fill_nodes()
+
+    def _fill_nodes(self):
+        self.choices = self.api.node_choices()
+        self.node_box.config(values=[t for _, t in self.choices])
+        self.node_var.set(next((t for k, t in self.choices if k == self.node_key), self.choices[0][1]))
+
+    def _node_picked(self):
+        key = next((k for k, t in self.choices if t == self.node_var.get()), "main")
+        if key != self.node_key:
+            self.node_key = key
+            self.on_node_change()
+
+    def on_node_change(self): pass
+
+    def node_args(self):
+        """Connection arguments of the chosen node (for checks done on the window itself)."""
+        with self.api.on_node(self.node_key): return io.node_args()
 
     def say(self, text, error=False):
         if self.winfo_exists(): self.status.config(text=text, fg="#c00000" if error else "#555")
 
     def job(self, label, fn, done=None, need_radio=True):
-        """Runs fn() in the background; done(result) afterwards on the window.  Exceptions are shown in the status line."""
+        """Runs fn() in the background on the chosen node; done(result) afterwards on the window.  Exceptions are shown in the status line."""
         if self.busy: return self.say("Still busy with the last request...")
-        if need_radio and not self.api.connected: return self.say("Connect to your node first.", error=True)
+        key = self.node_key
+        if need_radio and not self.api.node_ready(key):
+            return self.say("Connect to your node first." if key == "main" else f"Node '{key}' is not connected (it connects with Connect).", error=True)
         self.busy = True
         self.say(label + "...")
         def finished(r):
@@ -55,7 +84,9 @@ class ToolWindow(tk.Toplevel):
             if isinstance(r, Exception): return self.say(f"{label} failed: {io.explain_failure(str(r))}", error=True)
             self.say(label + " - done.")
             if done: done(r)
-        self.api.run_background(fn, finished)
+        def work():
+            with self.api.on_node(key): return fn()
+        self.api.run_background(work if need_radio else fn, finished)
 
 
 def text_box(parent, height=12):

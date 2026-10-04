@@ -35,7 +35,7 @@ An addon runs Python code with full access to your PC. Install only addons you t
 `reply(msg, text)` (answer a message in its channel or privately), `node_position()` (lat, lon, name from Options),
 `add_bot_commands(provider)` (tell `bothelp` which commands your bot answers in a channel), `bot_commands(channel)`,
 `add_command` (a `/slash` command), `add_menu_item`, `add_toolbar_button`, `add_map_layer`, `nodes` (every node ever
-seen), `run_background`, `after`, `connected`, `theme` (the colours in use) and `ui()` (the main window's parts, for addons that restyle the look). Hooks run on the GUI thread: put anything slow (radio, network) in
+seen), `run_background`, `after`, `connected`, `node_choices()` / `node_ready(key)` / `with on_node(key):` (work on the main node or one from More nodes, in a background job), `theme` (the colours in use) and `ui()` (the main window's parts, for addons that restyle the look). Hooks run on the GUI thread: put anything slow (radio, network) in
 `run_background`. The fully commented `addons/_example_addon.py` shows each of them.
 
 ## Packaging (for sharing)

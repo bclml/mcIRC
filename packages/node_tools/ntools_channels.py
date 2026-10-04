@@ -60,6 +60,8 @@ class ChannelsWindow(ToolWindow):
         sel = self.t.selection()
         return next((c for c in self.chs if str(c["channel_idx"]) == sel[0]), None) if sel else None
 
+    def on_node_change(self): self.read()
+
     def read(self):
         def show(chs):
             self.chs, dup = chs, duplicates(chs)
@@ -73,7 +75,7 @@ class ChannelsWindow(ToolWindow):
     def _then_refresh(self, label, fn):
         def work():
             fn()
-            self.api.refresh_channels()                    # the channel windows in mcIRC follow
+            if self.node_key == "main": self.api.refresh_channels()      # the channel windows in mcIRC follow (an extra node re-reads its own)
             return read_channels()
         self.job(label, work, lambda chs: (setattr(self, "chs", chs), self.read()))
 

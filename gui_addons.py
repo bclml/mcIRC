@@ -141,6 +141,21 @@ class AddonAPI:
     def disconnect(self):
         """Let go of the radio (e.g. before a firmware update).  Safe from any thread."""
         self._app.q.put(("call", self._app.disconnect))
+    def add_extra_node(self, cfg):
+        """Adds a node to Options > More nodes (replacing one with the same label) and connects it if mcIRC is connected."""
+        nodes = [c for c in self._app.settings.get("extra_nodes", []) if c.get("label") != cfg["label"]]
+        self._app.settings["extra_nodes"] = nodes + [dict(cfg)]
+        self._app.save()
+        if self._app.connected: self._app.q.put(("call", self._app.start_extra_nodes))
+    def node_choices(self):
+        """[(key, text)]: the main node ('main') and every node in Options > More nodes (key = its label) - for a 'which node' list."""
+        return self._app.node_choices()
+    def node_ready(self, key="main"):
+        """True when that node is connected and answering."""
+        return self._app.node_ready(key)
+    def on_node(self, key="main"):
+        """`with api.on_node(key):` inside a background job - meshcli commands for the node (meshcore_io.node_args()) go to that node."""
+        return self._app.node_target(key)
     def refresh_channels(self):
         """Read the node's channels again (after a tool added / removed one): the channel windows follow.  Call from a background job."""
         import meshcore_io as io

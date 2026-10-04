@@ -24,15 +24,20 @@ UA = {"User-Agent": "mcIRC (https://github.com/bclml/mcIRC)", "Accept": "applica
 def vkey(v): return tuple(int(x) for x in re.findall(r"\d+", (v or "").split("-")[0])[:3])
 
 
-def latest_companion(get=None):
-    """The newest 'companion-vX.Y.Z' release: (version, html_url, [assets])."""
+def companion_releases(get=None):
+    """Every 'companion-vX.Y.Z' release, newest first: [(version, html_url, [assets])].  New releases show up here by themselves."""
     if get is None:
         def get(url):
             with urllib.request.urlopen(urllib.request.Request(url, headers=UA), timeout=20) as r: return json.loads(r.read().decode("utf-8"))
-    rels = [r for r in get(RELEASES + "?per_page=30") if str(r.get("tag_name", "")).startswith("companion-") and not r.get("prerelease")]
+    rels = [r for r in get(RELEASES + "?per_page=60") if str(r.get("tag_name", "")).startswith("companion-") and not r.get("prerelease")]
     if not rels: raise RuntimeError("no companion firmware release found")
-    r = max(rels, key=lambda r: vkey(r["tag_name"].split("-", 1)[1]))
-    return r["tag_name"].split("-", 1)[1], r.get("html_url", ""), r.get("assets", [])
+    rels.sort(key=lambda r: vkey(r["tag_name"].split("-", 1)[1]), reverse=True)
+    return [(r["tag_name"].split("-", 1)[1], r.get("html_url", ""), r.get("assets", [])) for r in rels]
+
+
+def latest_companion(get=None):
+    """The newest companion release: (version, html_url, [assets])."""
+    return companion_releases(get)[0]
 
 
 def board_key(model):
@@ -76,11 +81,17 @@ class FirmwareWindow(ToolWindow):
         row = tk.Frame(self, bg=BG)
         row.pack(fill="x", padx=10)
         ttk.Button(row, text="Check for a newer version", command=self.check).pack(side="left")
+        tk.Label(row, text="  Version:", bg=BG).pack(side="left")
+        self.ver = tk.StringVar()
+        self.ver_box = ttk.Combobox(row, textvariable=self.ver, width=12, state="readonly")
+        self.ver_box.pack(side="left")
+        self.ver_box.bind("<<ComboboxSelected>>", lambda e: self.show())
         self.flash_btn = ttk.Button(row, text="Update the node...", command=self.flash, state="disabled")
         self.flash_btn.pack(side="left", padx=6)
         self.log = tk.Text(self, height=14, font=MONO, bg="#101010", fg="#d0ffd0")
         self.log.pack(fill="both", expand=True, padx=10, pady=8)
         self.node = self.asset = self.latest = None
+        self.releases = []
         self.check()
 
     def write(self, text):
@@ -90,25 +101,39 @@ class FirmwareWindow(ToolWindow):
 
     def check(self):
         def work():
-            node = cfg.read_node()
-            return node, latest_companion()
+            return cfg.read_node(), companion_releases()
         def done(r):
-            node, (ver, url, assets) = r
-            self.node, self.latest = node, (ver, url, assets)
-            have, model = node["ver"].get("ver", "?"), node["ver"].get("model", "?")
-            conn = "usb" if (io.CONNECTION_ARGS or [""])[0] == "-s" else "ble"
-            self.asset = pick_asset(assets, model, conn)
-            newer = vkey(ver) > vkey(have)
-            ok, why = gui_health.reset_allowed(io.CONNECTION_ARGS)
-            lines = [f"Board:      {model}", f"Installed:  {have}", f"Newest:     {ver}" + ("   <- newer" if newer else "   (you are up to date)"),
-                     f"File:       {self.asset['name'] if self.asset else 'no matching file for this board'}"]
-            if not ok: lines.append("Updating from mcIRC: not on this board - " + why)
-            elif not esptool_available(): lines.append("Updating from mcIRC needs: pip install esptool   (then restart mcIRC)")
-            lines.append(f"Release:    {url}")
-            self.info.config(text="\n".join(lines))
-            can = bool(newer and self.asset and ok and esptool_available())
-            self.flash_btn.config(state="normal" if can else "disabled")
+            self.node, self.releases = r
+            self.ver_box.config(values=[v for v, _, _ in self.releases])
+            self.ver.set(self.releases[0][0])                                  # the newest is preselected
+            self.show()
         self.job("Checking the firmware", work, done)
+
+    def on_node_change(self):
+        self.node = None
+        self.flash_btn.config(state="disabled")
+        self.check()
+
+    def show(self):
+        """The chosen version against the installed one."""
+        if not self.node or not self.releases: return
+        ver, url, assets = next((r for r in self.releases if r[0] == self.ver.get()), self.releases[0])
+        self.latest = (ver, url, assets)
+        have, model = self.node["ver"].get("ver", "?"), self.node["ver"].get("model", "?")
+        args = self.node_args() or [""]
+        conn = {"-s": "usb", "-t": "wifi"}.get(args[0], "ble")
+        self.asset = pick_asset(assets, model, conn)
+        newest = self.releases[0][0]
+        rel = "newer" if vkey(ver) > vkey(have) else "older" if vkey(ver) < vkey(have) else "installed"
+        ok, why = gui_health.reset_allowed(args)
+        lines = [f"Board:      {model}", f"Installed:  {have}", f"Newest:     {newest}" + ("   (you are up to date)" if vkey(newest) <= vkey(have) else "   <- newer"),
+                 f"Chosen:     {ver}   ({rel})", f"File:       {self.asset['name'] if self.asset else 'no matching file for this board'}"]
+        if not ok: lines.append("Updating from mcIRC: not on this board - " + why)
+        elif not esptool_available(): lines.append("Updating from mcIRC needs: pip install esptool   (then restart mcIRC)")
+        lines.append(f"Release:    {url}")
+        self.info.config(text="\n".join(lines))
+        can = bool(rel != "installed" and self.asset and ok and esptool_available())
+        self.flash_btn.config(state="normal" if can else "disabled")
 
     def flash(self):
         ver, url, _ = self.latest
@@ -116,7 +141,7 @@ class FirmwareWindow(ToolWindow):
         if not messagebox.askyesno("Update the node", f"Update {model} from {self.node['ver'].get('ver')} to {ver}?\n\nFile: {self.asset['name']}\n"
                                    "Only the application is replaced: settings, contacts, channels and identity stay.\n"
                                    "A backup is made first. mcIRC disconnects during the update (about a minute).\n\nDon't unplug the board.", parent=self): return
-        port = io.CONNECTION_ARGS[1]
+        port, main = self.node_args()[1], self.node_key == "main"
         import ntools_backup
         def work():
             log = []
@@ -125,10 +150,10 @@ class FirmwareWindow(ToolWindow):
             self.api.ui()["root"].after(0, lambda: self.write(log[-1]))
             img = download(self.asset["browser_download_url"], os.path.join(tempfile.gettempdir(), self.asset["name"]))
             self.api.ui()["root"].after(0, lambda: self.write(f"Downloaded {os.path.getsize(img)} bytes\nDisconnecting and flashing...\n"))
-            self.api.disconnect()                                              # let go of the port
+            if main: self.api.disconnect()                                     # let go of the port (an extra node: its lock below keeps it quiet)
             import time
             time.sleep(6)
-            with io.MESH_LOCK:
+            with io.node_lock():
                 p = subprocess.run([sys.executable, "-m", "esptool", "--port", port, "--baud", "460800", "--before", "default-reset", "--after", "hard-reset",
                                     "write-flash", APP_OFFSET, img], capture_output=True, text=True, timeout=600, creationflags=io.NO_WINDOW)
             return p.returncode, p.stdout[-3000:] + p.stderr[-2000:]

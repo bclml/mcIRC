@@ -5,6 +5,7 @@ lock and health, its own channel list and its own polling thread; its windows ca
 grouped under the node in the window tree.  Private chats stay on the top bar whatever node they come from: each private window remembers which
 node the person is on, and replies go back through that node.  Addons only see the nodes ticked in their settings (default: the main node)."""
 import logging
+import os
 import threading
 import time
 
@@ -135,12 +136,57 @@ class MultiNodeMixin:
     def stop_extra_nodes(self):
         for n in self.extra_nodes.values(): n.stop()
 
+    # ---- choosing a node for settings and tools ----
+    def node_choices(self):
+        """[(key, text)] for 'which node' lists: the main node ('main') first, then every extra node (key = its label)."""
+        out = [("main", f"Main node ({self.settings.get('node_name') or 'USB'})")]
+        for c in self.settings.get("extra_nodes", []):
+            n = self.extra_nodes.get(c.get("label"))
+            name = (n.info.get("name") if n else None) or ""
+            out.append((c["label"], f"{c['label']}{' (' + name + ')' if name else ''}"))
+        return out
+
+    def node_ready(self, key):
+        if key in (None, "", "main"): return bool(self.connected)
+        n = self.extra_nodes.get(key)
+        return bool(n and n.connected)
+
+    def node_target(self, key):
+        """`with app.node_target(key):` - the node's settings / tools commands on this thread go to that node (gui_nodecfg, the MeshCore tools)."""
+        n = None if key in (None, "", "main") else self.extra_nodes.get(key)
+        if n is not None: return io.on_node(n.args, n.lock, n.health)
+        cfg = next((c for c in self.settings.get("extra_nodes", []) if c.get("label") == key), None)
+        return io.on_node(conn_args(cfg)) if cfg else io.on_node(None)
+
     # ---- windows ----
     def node_parent(self, label):
         iid = f"node:{label}"
         if hasattr(self, "tree") and not self.tree.exists(iid):
             self.tree.insert("", "end", iid=iid, text=f"Node {label}", open=True)
         return iid
+
+    def remove_node(self, label, ask=True):
+        """Right-click on 'Node <label>' > Remove: disconnects it, takes it out of Options > More nodes and closes its windows.
+        Their log files stay in the logs folder, renamed '... removed <date>.old.txt' so they don't come back at the next start."""
+        from tkinter import messagebox
+        configured = any(c.get("label") == label for c in self.settings.get("extra_nodes", []))
+        if ask and not messagebox.askyesno("Remove node", f"Remove node '{label}'?\n\n"
+                                           + ("It is disconnected and taken out of Options > More nodes. " if configured else "")
+                                           + "Its windows are closed (their history stays in the logs folder).", parent=self.root): return
+        n = self.extra_nodes.pop(label, None)
+        if n: n.stop()
+        self.settings["extra_nodes"] = [c for c in self.settings.get("extra_nodes", []) if c.get("label") != label]
+        for name in [nm for nm in self.windows if split_tag(nm)[1] == label and not nm.startswith("@")]:
+            w = self.windows.pop(name)
+            if w.log:
+                w.log.stamp("Session Close")
+                try: os.replace(w.log.path, w.log.path[:-4] + time.strftime(" removed %Y-%m-%d %H%M.old.txt"))
+                except OSError: pass
+            w.frame.destroy()
+            if self.tree.exists(name): self.tree.delete(name)
+            if w is self.current: self.select_window("Status")
+        if self.tree.exists(f"node:{label}"): self.tree.delete(f"node:{label}")
+        self.save()
 
     def node_window(self, label):
         """The node's own Status window ('Status [915]')."""

@@ -86,11 +86,11 @@
     {
       "name": "node_tools",
       "title": "MeshCore tools",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "author": "bclml",
-      "description": "Node clock (check and set), channel manager (add / rename / re-key / remove, duplicates shown), backup & restore (settings, channels, contacts, optional identity), firmware check and update for ESP32 boards, path tools (show / discover / reset / trace, repeater status and neighbours), live packet monitor, radio health graphs and a coverage map. Firmware updates need 'pip install esptool'.",
+      "description": "Node clock (check and set), channel manager (add / rename / re-key / remove, duplicates shown), backup & restore (settings, channels, contacts, optional identity), firmware check and update for ESP32 boards, a Wi-Fi firmware builder (your Wi-Fi in MeshCore's companion firmware, flashed and added as a node), a version list with the newest preselected, a Node: choice to work on any connected node, path tools (show / discover / reset / trace, repeater status and neighbours), live packet monitor, radio health graphs and a coverage map. Firmware updates need 'pip install esptool'.",
       "path": "packages/node_tools",
-      "tested": "2026-10-04 with app 1.5.4 on a Heltec V3 (fw 1.16.0): every read checked on the real node; writing (clock set, channel edits, restore, firmware update) checked with a stand-in radio only"
+      "tested": "2026-10-04 with app 1.5.4 on a Heltec V3 (fw 1.16.0): every read checked on the real node; writing (clock set, channel edits, restore, firmware update) checked with a stand-in radio only. Wi-Fi firmware: built and flashed to a real Heltec V4 with app 2.0.1 (v1.17.1, found on the network, name and radio written over Wi-Fi)"
     }
   ]
 }

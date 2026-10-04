@@ -1,4 +1,4 @@
-"""Options pages for the USB node's own settings: radio, behaviour, and a status/actions page."""
+"""Options pages for a node's own settings: radio, behaviour, and a status/actions page - for the main node or one from More nodes (Node: list)."""
 import gui_platform
 import tkinter as tk
 from tkinter import ttk, messagebox
@@ -12,6 +12,7 @@ class NodePages:
 
     def __init__(self, dlg):
         self.dlg, self.app, self.old, self.node = dlg, dlg.app, None, None
+        self.node_key, self.node_var, self.node_boxes = "main", tk.StringVar(), []
         S, B = tk.StringVar, tk.BooleanVar
         self.v = {k: S() for k in ("name", "lat", "lon", "freq", "bw", "sf", "cr", "tx", "telem_base", "telem_loc", "telem_env", "path_hash", "pin")}
         self.v.update({k: B() for k in ("multi_acks", "loc_policy", "manual_add")})
@@ -34,9 +35,46 @@ class NodePages:
         ttk.Button(r, text="Read from node", command=self.read).pack(side="left", padx=2)
         ttk.Button(r, text="Write changes to node", command=self.write).pack(side="left", padx=2)
 
+    def _node_row(self, f):
+        r = tk.Frame(f, bg=BG)
+        r.pack(fill="x", pady=(2, 6))
+        tk.Label(r, text="Node:", bg=BG, width=24, anchor="w").pack(side="left")
+        box = ttk.Combobox(r, textvariable=self.node_var, width=34, state="readonly", postcommand=self._fill_nodes)
+        box.pack(side="left")
+        box.bind("<<ComboboxSelected>>", lambda e: self._node_picked())
+        self.node_boxes.append(box)
+
+    def _fill_nodes(self):
+        self.choices = self.app.node_choices()
+        for b in self.node_boxes: b.config(values=[t for _, t in self.choices])
+        self.node_var.set(next((t for k, t in self.choices if k == self.node_key), self.choices[0][1]))
+
+    def _node_picked(self):
+        key = next((k for k, t in self.choices if t == self.node_var.get()), "main")
+        if key == self.node_key: return
+        self.node_key, self.old, self.node = key, None, None
+        for k, v in self.v.items(): v.set(False if isinstance(v, tk.BooleanVar) else "")
+        self.status_lbl.config(text="Not read yet.")
+        self.say("Not read yet - press 'Read from node'.")
+        if self.app.node_ready(key): self.read()
+
+    def _ready(self):
+        if self.node_key == "main": return self.app.require_connection()
+        if self.app.node_ready(self.node_key): return True
+        messagebox.showinfo("Node", f"Node '{self.node_key}' is not connected. It connects together with the main node (File > Connect).", parent=self.dlg)
+        return False
+
+    def _bg(self, fn, done):
+        """fn() in the background, on the chosen node."""
+        key = self.node_key
+        def work():
+            with self.app.node_target(key): return fn()
+        self.app.bg(work, done)
+
     def build(self, stage):
         a, b, c = (tk.Frame(stage, bg=BG) for _ in range(3))
         tk.Label(a, text="This node: identity and radio", bg=BG, font=(gui_platform.DIALOG_FONT_NAME, 9, "bold")).pack(anchor="w")
+        self._node_row(a)
         self._buttons(a)
         for label, key, vals in (("Node name:", "name", None), ("Latitude:", "lat", None), ("Longitude:", "lon", None),
                                  ("Frequency (MHz):", "freq", None), ("Bandwidth (kHz):", "bw", cfg.BW_CHOICES),
@@ -46,6 +84,7 @@ class NodePages:
         tk.Label(a, text="Changing frequency / bandwidth / SF / CR needs a reboot; you'll be asked after writing. All stations on the mesh must use the same radio settings.",
                  bg=BG, fg="#555", justify="left", wraplength=440).pack(anchor="w", pady=4)
         tk.Label(b, text="This node: behaviour", bg=BG, font=(gui_platform.DIALOG_FONT_NAME, 9, "bold")).pack(anchor="w")
+        self._node_row(b)
         self._buttons(b)
         tk.Checkbutton(b, text="Multi-acks (extra acknowledgements)", variable=self.v["multi_acks"], bg=BG).pack(anchor="w")
         tk.Checkbutton(b, text="Share my location in adverts", variable=self.v["loc_policy"], bg=BG).pack(anchor="w")
@@ -55,6 +94,7 @@ class NodePages:
         self._row(b, "Path hash mode (0-2):", "path_hash", ["0", "1", "2"])
         self._row(b, "BLE pin (0 = default):", "pin")
         tk.Label(c, text="This node: status and actions", bg=BG, font=(gui_platform.DIALOG_FONT_NAME, 9, "bold")).pack(anchor="w")
+        self._node_row(c)
         self.status_lbl = tk.Label(c, bg="white", relief="sunken", justify="left", anchor="nw", wraplength=440, height=13, text="Not read yet.")
         self.status_lbl.pack(fill="x", pady=4)
         for row in ((("Refresh", self.read), ("Send advert", lambda: self.act("advert")), ("Send flood advert", lambda: self.act("floodadv"))),
@@ -62,6 +102,7 @@ class NodePages:
             r = tk.Frame(c, bg=BG)
             r.pack(anchor="w")
             for text, fn in row: ttk.Button(r, text=text, command=fn).pack(side="left", padx=2, pady=2)
+        self._fill_nodes()
         return dict(zip(self.TITLES, (a, b, c)))
 
     # ---- reading ----
@@ -69,9 +110,9 @@ class NodePages:
         for m in self.msg: m.config(text=text)
 
     def read(self):
-        if not self.app.require_connection(): return
+        if not self._ready(): return
         self.say("Reading from the node...")
-        self.app.bg(cfg.read_node, lambda r: self.say(f"Read failed: {r}") if isinstance(r, Exception) else self.fill(r))
+        self._bg(cfg.read_node, lambda r: self.say(f"Read failed: {r}") if isinstance(r, Exception) else self.fill(r))
 
     def fill(self, node):
         self.node, self.old = node, cfg.values_from(node)
@@ -90,6 +131,7 @@ class NodePages:
             f"TX airtime: {rad.get('tx_air_secs', '?')} s    RX airtime: {rad.get('rx_air_secs', '?')} s\n"
             f"Max TX power: {i.get('max_tx_power', '?')} dBm"))
         self.say("Settings read from the node.")
+        if self.node_key != "main": return                                     # an extra node: nothing of it is kept in the main node's settings
         self.app.adopt_node_info(node)
         for k in ("radio_capacity", "node_name", "node_lat", "node_lon"):      # the other Options pages show these too: OK must not save the old values back
             if k in self.dlg.vars: self.dlg.vars[k].set(str(self.app.settings[k]))
@@ -112,7 +154,7 @@ class NodePages:
         return new
 
     def write(self):
-        if not self.app.require_connection(): return
+        if not self._ready(): return
         if self.old is None:
             messagebox.showinfo("This node", "Press 'Read from node' first.", parent=self.dlg)
             return
@@ -140,18 +182,18 @@ class NodePages:
                     self.reboot(confirm=False, then=(lambda: self.act("floodadv")) if renamed else None)
                     return
             self.read()
-        self.app.bg(lambda: cfg.write_node(old, new), done)
+        self._bg(lambda: cfg.write_node(old, new), done)
 
     def act(self, name):
-        if not self.app.require_connection(): return
-        self.app.bg(lambda: cfg.action(name), lambda r: self.app.status_line(f"*** Node: {name} - {r}", "error" if isinstance(r, Exception) else "info"))
+        if not self._ready(): return
+        self._bg(lambda: cfg.action(name), lambda r: self.app.status_line(f"*** Node: {name} - {r}", "error" if isinstance(r, Exception) else "info"))
 
     def reboot(self, confirm=True, then=None):
-        if not self.app.require_connection(): return
+        if not self._ready(): return
         if confirm and not messagebox.askyesno("Reboot node", "Reboot the node now? Chat is interrupted for about 20 seconds.", parent=self.dlg): return
         self.say("Rebooting the node, waiting for it to come back (about 20s)...")
         def done(r):
             if isinstance(r, Exception): return self.say(f"Reboot failed: {r}")
             self.fill(r)
             if then: then()
-        self.app.bg(cfg.reboot_and_wait, done)
+        self._bg(cfg.reboot_and_wait, done)

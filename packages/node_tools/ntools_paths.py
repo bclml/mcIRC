@@ -41,6 +41,12 @@ class PathsWindow(ToolWindow):
         self.contacts = {}
         self.load()
 
+    def on_node_change(self):
+        self.contacts = {}
+        self.pick.set("")
+        self.pick.config(values=[])
+        self.load()
+
     def load(self):
         def done(cs):
             self.contacts = cs

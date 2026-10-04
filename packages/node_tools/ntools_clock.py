@@ -47,6 +47,8 @@ class ClockWindow(ToolWindow):
                        variable=self.auto, bg=BG, command=lambda: api.set("clock_auto", self.auto.get())).pack(anchor="w", padx=10, pady=8)
         self.read()
 
+    def on_node_change(self): self.read()
+
     def read(self):
         self.job("Reading the node's clock", node_time, lambda r: self.info.config(text=describe(*r)[0]))
 

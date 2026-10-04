@@ -44,7 +44,12 @@ class MenusMixin:
     # ---- the menus ----
     def _tree_menu(self, e):
         iid = self.tree.identify_row(e.y)
-        if iid in self.windows:
+        if iid.startswith("node:"):                                    # a node group ('Node 915'): remove it by hand
+            label = iid[5:]
+            m = tk.Menu(self.root, tearoff=0)
+            m.add_command(label=f"Remove node '{label}'...", command=lambda: self.remove_node(label))
+            m.tk_popup(e.x_root, e.y_root)
+        elif iid in self.windows:
             self.select_window(iid)
             self.show_window_menu(iid, e.x_root, e.y_root)
 

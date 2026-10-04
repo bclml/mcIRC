@@ -8,6 +8,15 @@ PORT = 47811
 HELLO = b"mcIRC\n"
 
 
+class _Lock:
+    """The listening socket.  close() must also wake the thread blocked in accept(): on Linux a plain close() leaves the port listening until that thread returns."""
+    def __init__(self, sock): self.sock = sock
+    def close(self):
+        try: self.sock.shutdown(socket.SHUT_RDWR)
+        except OSError: pass
+        self.sock.close()
+
+
 def acquire(on_raise):
     """Become the one running instance.  Returns the listening socket (keep it alive), or None if another mcIRC already is."""
     srv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -20,7 +29,7 @@ def acquire(on_raise):
         srv.close()
         return None
     threading.Thread(target=_serve, args=(srv, on_raise), daemon=True).start()
-    return srv
+    return _Lock(srv)
 
 
 def _serve(srv, on_raise):

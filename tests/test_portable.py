@@ -92,7 +92,8 @@ ok("addon versions in the manifests match the catalog (and are at least 1.1.1, s
 src = open(os.path.join(B, "mcIRC.py"), encoding="utf-8").read() + "".join(open(os.path.join(B, f), encoding="utf-8").read() for f in os.listdir(B) if f.startswith("gui_") and f.endswith(".py"))
 ok("no os.startfile left outside gui_platform", src.count("os.startfile") == 1, src.count("os.startfile"))
 ok("no hard-coded Segoe UI / Consolas left in the app", '"Segoe UI"' not in src.replace('"Segoe UI" if IS_WIN', "") and src.count('"Consolas"') <= 2)
-import tomllib
+try: import tomllib
+except ImportError: import tomli as tomllib      # Python 3.10 (CI installs tomli)
 py = tomllib.load(open(os.path.join(B, "pyproject.toml"), "rb"))
 ok("pyproject version equals VERSION", py["project"]["version"] == open(os.path.join(B, "VERSION")).read().strip(), py["project"]["version"])
 req = [l.split("#")[0].strip() for l in open(os.path.join(B, "requirements.txt"), encoding="utf-8") if l.split("#")[0].strip()]

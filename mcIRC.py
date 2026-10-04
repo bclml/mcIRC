@@ -15,7 +15,7 @@ from tkinter import ttk, messagebox
 
 import meshcore_io as ea
 from gui_addons import AddonManager
-from gui_common import (BG, TEXT_BG, FONT_FAMILY, NICK_COLORS, CHANNELS, safe_text, load_settings, save_settings,
+from gui_common import (BG, TEXT_BG, FONT_FAMILY, NICK_COLORS, CHANNELS, safe_text, load_settings, save_settings, SETTINGS_PATH,
                         channel_index, display_for_index)
 from gui_dialogs import OptionsDialog, ChannelListDialog, AddonsDialog, NodeListDialog, show_about
 from gui_map import MapWindow
@@ -244,6 +244,7 @@ class QueueLogHandler(logging.Handler):
 class App(PrivateMixin, MenusMixin, CommandsMixin):
     def __init__(self, root, demo=False):
         self.root, self.demo, self.connected = root, demo, False
+        first_start = not os.path.exists(SETTINGS_PATH)          # a brand-new setup: the default addons get installed below
         self.settings = load_settings()
         if not self.settings.get("auto_reset_v2"):                 # restarting a silent radio is on by default now (also on existing installs, once)
             self.settings["auto_reset_radio"], self.settings["auto_reset_v2"] = True, True
@@ -261,6 +262,8 @@ class App(PrivateMixin, MenusMixin, CommandsMixin):
         self.adverts = AdvertWatcher(self)
         self.recovery = gui_health.Recovery(self)
         ea.HEALTH.listeners.append(lambda ev, info: self.q.put(("health", ev, info)))      # called on the connection thread
+        if first_start and not demo:
+            for name in self.addons.install_defaults(): logging.info(f"New setup: installed the default addon '{name}' (Tools > Addons to switch it off).")
         if demo: self.settings["addons"], self.settings["addons_enabled"] = {}, {n: True for n in self.addons.discover()}
         gui_style.apply_classic(root)   # old-mIRC chrome: must run before any widget exists
         self.font = gui_style.chat_font(self.settings["font_size"])

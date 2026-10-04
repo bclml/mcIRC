@@ -75,7 +75,7 @@ class Addon(AddonBase):
             self.api.set("count", self.api.get("count", 0) + 1)
             self.api.send(msg["channel"], f"@[{msg['nick']}] pong")
 
-    def build_options(self, parent):       # optional Options page
+    def build_options(self, parent):       # optional settings page (Tools > Addons, double-click the addon)
         self.v = tk.BooleanVar(value=self.api.get("enabled", False))
         f = tk.Frame(parent, bg=parent["bg"])
         tk.Checkbutton(f, text="Answer !ping", variable=self.v, bg=parent["bg"]).pack(anchor="w")

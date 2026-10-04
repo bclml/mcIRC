@@ -89,7 +89,7 @@ class HealthWindow(ToolWindow):
         top = tk.Frame(self, bg=BG)
         top.pack(fill="x", padx=6, pady=4)
         ttk.Button(top, text="Read now", command=self.read_now).pack(side="left")
-        tk.Label(top, text=f"  Sampled every {addon.sample_minutes()} min while connected (Options > Addon: MeshCore tools).", bg=BG, fg="#555").pack(side="left")
+        tk.Label(top, text=f"  Sampled every {addon.sample_minutes()} min while connected (Tools > Addons > double-click MeshCore tools).", bg=BG, fg="#555").pack(side="left")
         self.c = tk.Canvas(self, bg="white", highlightthickness=0)
         self.c.pack(fill="both", expand=True, padx=6, pady=4)
         self.c.bind("<Configure>", lambda e: self.draw())

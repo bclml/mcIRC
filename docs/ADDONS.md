@@ -64,7 +64,7 @@ python packages/check_package.py packages/my_addon
 
 checks the manifest, destinations, syntax, that the addon loads, and that `on_load` / `on_unload` run (it never calls `on_connect`, so no radio or network activity). Then try it in
 `--demo` mode and, if it talks to the radio, on a real node. Never put secrets (API keys, passwords) in the code - use
-`self.api.get/set` and an Options page.
+`self.api.get/set` and a settings page (`build_options`; people open it with a double-click in Tools > Addons).
 
 ## Submitting
 

@@ -1,4 +1,4 @@
-"""mIRC-style dialogs: Options (category tree + pages, including pages contributed by addons), Addons manager,
+"""mIRC-style dialogs: Options (category tree + pages; addon settings have their own window: Tools > Addons, double-click), Addons manager,
 node list, channel list, About."""
 import gui_platform
 import os, time
@@ -45,16 +45,6 @@ class OptionsDialog(tk.Toplevel):
         for name in order:
             self.tree.insert("", "end", iid=name, text=name)
             self.frames[name] = node_frames[name] if name in node_frames else getattr(self, self.PAGES[name])(tk.Frame(self.stage, bg=BG))
-        for name, (inst, _) in app.addons.loaded.items():
-            holder = tk.Frame(self.stage, bg=BG)  # the addon builds inside this; this is what gets shown/hidden
-            try: page = inst.build_options(holder)
-            except Exception as e:
-                app.status_line(f"*** Addon '{name}' options page failed: {e}", "error")
-                continue
-            if page is not None:
-                self.tree.insert("", "end", iid="addon:" + name, text="Addon: " + (inst.title or name))
-                self.frames["addon:" + name] = holder
-                page.pack(fill="both", expand=True)
         self.tree.bind("<<TreeviewSelect>>", lambda e: self._show(self.tree.selection()[0]))
         self.tree.selection_set("Connect")
         if app.connected: self.node_pages.read()
@@ -183,8 +173,6 @@ class OptionsDialog(tk.Toplevel):
             messagebox.showerror("Options", "Please check the numeric fields.", parent=self)
             return False
         s.update(new)
-        for name, (inst, _) in self.app.addons.loaded.items():
-            if "addon:" + name in self.frames: self.app.addons._call(name, "apply_options")
         self.app.apply_settings()
         return True
 
@@ -197,25 +185,32 @@ class AddonsDialog(tk.Toplevel):
         super().__init__(app.root, bg=BG)
         self.app = app
         self.title("Addons")
-        self.geometry("720x330")
+        self.geometry("800x420")
+        self.minsize(640, 300)
         self.transient(app.root)
+        # buttons and hint are packed first, at the bottom, so they always stay visible however small the window gets
+        self.hint = tk.Label(self, bg=BG, fg="#555", justify="left", wraplength=760, anchor="w",
+                             text="Double-click an addon (or select it and press Settings...) to see and change all its settings. "
+                                  "'Browse online catalog' lists the tested addons. To write your own: copy addons/_example_addon.py to "
+                                  "addons/my_addon.py, edit it, then Reload (see docs/ADDONS.md).")
+        self.hint.pack(side="bottom", fill="x", padx=8, pady=(0, 6))
+        rows = [tk.Frame(self, bg=BG), tk.Frame(self, bg=BG)]
+        rows[1].pack(side="bottom", fill="x", padx=6, pady=(0, 6))
+        rows[0].pack(side="bottom", fill="x", padx=6, pady=(0, 2))
+        for text, cmd in (("Settings...", self.settings), ("Enable / disable", self.toggle), ("Reload", self.reload), ("Update", self.update_addons),
+                          ("Uninstall", self.uninstall)):
+            ttk.Button(rows[0], text=text, command=cmd).pack(side="left", padx=2)
+        for text, cmd in (("Browse online catalog...", lambda: CatalogDialog(app)), ("Install from file...", self.install_file),
+                          ("Install from folder...", self.install_folder)):
+            ttk.Button(rows[1], text=text, command=cmd).pack(side="left", padx=2)
+        ttk.Button(rows[1], text="Close", command=self.destroy).pack(side="right", padx=2)
         cols = ("on", "title", "version", "file", "description")
         self.t = ttk.Treeview(self, columns=cols, show="headings", selectmode="browse")
-        for c, w in zip(cols, (40, 170, 60, 130, 300)):
+        for c, w in zip(cols, (40, 170, 60, 130, 360)):
             self.t.heading(c, text={"on": "On"}.get(c, c.capitalize()))
             self.t.column(c, width=w, anchor="w")
         self.t.pack(fill="both", expand=True, padx=6, pady=6)
-        self.t.bind("<Double-1>", lambda e: self.toggle())
-        b = tk.Frame(self, bg=BG)
-        b.pack(fill="x", padx=6, pady=(0, 6))
-        for text, cmd in (("Enable / disable", self.toggle), ("Reload", self.reload), ("Update", self.update_addons), ("Browse online catalog...", lambda: CatalogDialog(app)),
-                          ("Install from file...", self.install_file), ("Install from folder...", self.install_folder), ("Uninstall", self.uninstall)):
-            ttk.Button(b, text=text, command=cmd).pack(side="left", padx=2)
-        ttk.Button(b, text="Close", command=self.destroy).pack(side="right")
-        self.hint = tk.Label(self, bg=BG, fg="#555", justify="left", wraplength=690,
-                             text="Addons are optional extras (for example broadcasting alerts) - none are installed by default. Use 'Browse online catalog' for "
-                                  "tested addons. To write your own: copy addons/_example_addon.py to addons/my_addon.py, edit it, then Reload (see docs/ADDONS.md).")
-        self.hint.pack(pady=(0, 6), padx=6)
+        self.t.bind("<Double-1>", lambda e: self.settings())      # double-click: the addon's settings
         self.fill()
 
     def fill(self):
@@ -251,6 +246,12 @@ class AddonsDialog(tk.Toplevel):
         if n and messagebox.askyesno("Uninstall addon", f"Remove the addon '{n}'?\nIts settings are kept in case you install it again.", parent=self):
             self.app.addons.uninstall(n)
             self.fill()
+
+    def settings(self):
+        n = self._sel()
+        if not n: return
+        import gui_addonsettings
+        if gui_addonsettings.open_settings(self.app, n, parent=self) is not None: self.fill()
 
     def toggle(self):
         n = self._sel()

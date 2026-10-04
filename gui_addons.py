@@ -444,6 +444,27 @@ def updates_available(installed, catalog):
     return out
 
 
+DEFAULT_ADDONS = ("node_tools",)       # installed and switched on in a brand-new setup (from the packages/ folder that ships with mcIRC)
+
+
+def _install_defaults(self, packages_dir=None):
+    """First start of a new setup: install the default addons from the local packages/ folder and switch them on.  -> names installed.
+    Never touches an existing setup (the caller only runs this when there was no settings file yet)."""
+    packages_dir = packages_dir or os.path.join(BASE_DIR, "packages")
+    done = []
+    for name in DEFAULT_ADDONS:
+        manifest = os.path.join(packages_dir, name, "addon.json")
+        if not os.path.exists(manifest) or name in self.discover(): continue
+        try:
+            install_package(manifest)
+            self.app.settings.setdefault("addons_enabled", {})[name] = True
+            done.append(name)
+        except Exception as e:
+            self.errors[name] = f"could not install the default addon: {e}"
+    return done
+
+
+AddonManager.install_defaults = _install_defaults
 AddonManager.installed_version = _installed_version
 AddonManager.install = _install
 AddonManager.uninstall = _uninstall

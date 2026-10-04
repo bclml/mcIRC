@@ -48,7 +48,7 @@ def _wrap(text, limit):
 
 class Addon(AddonBase):
     title = "Bot help"
-    version = "1.0.0"
+    version = "1.0.1"
     author = "mcIRC"
     description = ("Answers 'bothelp' with the bot commands that work in that channel (Weather bot, Fun bot, Auto reply, ...), and can announce "
                    "'Type bothelp for a list of commands.' once a day at a set time. Off until you switch it on.")
@@ -61,7 +61,8 @@ class Addon(AddonBase):
 
     def found(self, channel, dm=False):
         if not hasattr(self.api, "bot_commands"): return {}
-        return {t: c for t, c in self.api.bot_commands(channel, dm).items() if t != self.title}
+        hidden = set(self.api.get("hidden", []))                 # bots switched off in Options: not listed, not announced for
+        return {t: c for t, c in self.api.bot_commands(channel, dm).items() if t != self.title and t not in hidden}
 
     # ---- answering 'bothelp' ----
     def on_message(self, msg):
@@ -113,6 +114,16 @@ class Addon(AddonBase):
             r.pack(fill="x", pady=1, padx=(20, 0))
             tk.Label(r, text=label, bg=bg).pack(side="left")
             tk.Entry(r, textvariable=self.v[key], width=width).pack(side="left", padx=4)
+        tk.Label(f, text="List these bots in 'bothelp' (untick to leave one out):", bg=bg).pack(anchor="w", pady=(8, 0))
+        names = [n for n in (self.api.bot_names() if hasattr(self.api, "bot_names") else []) if n != self.title]
+        hidden = set(self.api.get("hidden", []))
+        self.v_bots = {}
+        box = tk.Frame(f, bg=bg)
+        box.pack(anchor="w", padx=(20, 0))
+        for n in names:
+            self.v_bots[n] = tk.BooleanVar(value=n not in hidden)
+            tk.Checkbutton(box, text=n, variable=self.v_bots[n], bg=bg).pack(anchor="w")
+        if not names: tk.Label(box, text="(no bot addons are switched on yet)", bg=bg, fg="#555").pack(anchor="w")
         self.preview = tk.Label(f, bg=bg, fg="#555", justify="left", wraplength=440, anchor="w")
         self.preview.pack(anchor="w", pady=(8, 0))
         tk.Button(f, text="Show what 'bothelp' answers in each channel", command=self.show_preview).pack(anchor="w", pady=2)
@@ -131,6 +142,8 @@ class Addon(AddonBase):
         if not m or int(m.group(1)) > 23 or int(m.group(2)) > 59:
             t = "19:00"
             self.v["announce_time"].set(t)
+        keep = set(self.api.get("hidden", [])) - set(self.v_bots)        # bots not loaded right now keep their setting
+        self.api.set("hidden", sorted(keep | {n for n, v in self.v_bots.items() if not v.get()}))
         for k, var in self.v.items():
             val = var.get()
             self.api.set(k, t if k == "announce_time" else val.strip() if isinstance(val, str) else val)

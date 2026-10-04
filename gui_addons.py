@@ -138,6 +138,12 @@ class AddonAPI:
         if not hasattr(self._app, "bot_helps"): self._app.bot_helps = []
         self._app.bot_helps.append(entry)
         self._helps.append(entry)
+    def bot_names(self):
+        """Titles of the loaded addons that registered bot commands (whether or not they answer anywhere right now)."""
+        out = []
+        for api, _ in getattr(self._app, "bot_helps", []):
+            if api.display not in out: out.append(api.display)
+        return out
     def bot_commands(self, channel, dm=False):
         """{addon title: [commands]} for everything the loaded bots answer in `channel` (only bots that answer something there)."""
         out = {}

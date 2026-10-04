@@ -68,9 +68,9 @@
     {
       "name": "bot_help",
       "title": "Bot help",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "author": "bclml",
-      "description": "Answers 'bothelp' with the bot commands that work in that channel (Weather bot, Fun bot, Auto reply, ...), and can announce 'Type bothelp for a list of commands.' once a day at a set time. Off until you switch it on; rate-limited.",
+      "description": "Answers 'bothelp' with the bot commands that work in that channel (Weather bot, Fun bot, Auto reply, ...), and can announce 'Type bothelp for a list of commands.' once a day at a set time. Choose which bots it lists. Off until you switch it on; rate-limited.",
       "path": "packages/bot_help",
       "tested": "2026-10-04 with app 1.5.2 with a stand-in radio (not over the air yet)"
     }

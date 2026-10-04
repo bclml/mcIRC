@@ -87,6 +87,8 @@ if gui_map.tkintermapview:
 else:
     print("[SKIP] map checks need tkintermapview")
 
+if getattr(app, "map_win", None) is not None and app.map_win.winfo_exists():      # stop the map's tile threads before Tk goes away (Linux could crash at exit)
+    app.map_win.destroy(); root.update(); time.sleep(0.5)
 root.destroy()
 print("\nALL PASSED" if not fails else f"\n{len(fails)} FAILED: {fails}")
 sys.exit(1 if fails else 0)

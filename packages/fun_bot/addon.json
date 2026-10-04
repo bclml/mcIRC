@@ -1,0 +1,12 @@
+{
+  "name": "fun_bot",
+  "title": "Fun bot",
+  "version": "1.0.0",
+  "description": "dice, roll, magic8, joke, dadjoke, hacker, catfact and wc (World Cup scores and tables) - each switched on for the channels you choose. Off until you switch it on.",
+  "requires": [],
+  "files": {
+    "fun_bot.py": "addons/fun_bot.py",
+    "funbot_data.py": "funbot_data.py",
+    "meshbot_common.py": "meshbot_common.py"
+  }
+}

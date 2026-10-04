@@ -1,0 +1,13 @@
+{
+  "name": "weather_bot",
+  "title": "Weather bot",
+  "version": "1.0.0",
+  "description": "Answers weather commands in the channels you choose (default #weather): wx <place>, gwx, aqi, sun, moon, solar, sf, hfcond, satpass, airplanes, rain, aurora, channels, status, contact. Off until you switch it on. satpass needs 'pip install sgp4'.",
+  "requires": [],
+  "files": {
+    "weather_bot.py": "addons/weather_bot.py",
+    "meshbot_common.py": "meshbot_common.py",
+    "wxbot_sources.py": "wxbot_sources.py",
+    "wxbot_sky.py": "wxbot_sky.py"
+  }
+}

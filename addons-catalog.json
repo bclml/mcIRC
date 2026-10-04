@@ -46,6 +46,24 @@
       "description": "Flat, modern window chrome - toolbar, buttons, tabs, status bar, scrollbars and dialogs - in the colours of your skin or colour theme. Switch it off to get the classic look back. Never transmits anything.",
       "path": "packages/modern_look",
       "tested": "2026-10-04 with app 1.5.2 on Windows (demo mode and screenshots); Linux only in CI"
+    },
+    {
+      "name": "weather_bot",
+      "title": "Weather bot",
+      "version": "1.0.0",
+      "author": "bclml",
+      "description": "Answers weather commands in the channels you choose (default #weather): wx <place> (city, postal code, ZIP, node name or lat,lon), gwx, aqi, sun, moon, solar, sf, hfcond, satpass, airplanes, rain, aurora, channels, status, contact. Free data, no API keys. Off until you switch it on; rate-limited. satpass needs 'pip install sgp4'.",
+      "path": "packages/weather_bot",
+      "tested": "2026-10-04 with app 1.5.2: every data source checked live; answering checked with canned data and a stand-in radio (not over the air yet)"
+    },
+    {
+      "name": "fun_bot",
+      "title": "Fun bot",
+      "version": "1.0.0",
+      "author": "bclml",
+      "description": "dice, roll, magic8, joke, dadjoke, hacker, catfact and wc (World Cup scores and tables), each switched on for the channels you choose. Off until you switch it on; rate-limited.",
+      "path": "packages/fun_bot",
+      "tested": "2026-10-04 with app 1.5.2: every data source checked live; answering checked with canned data and a stand-in radio (not over the air yet)"
     }
   ]
 }

@@ -53,7 +53,7 @@ async def run(a):
                 key = log.get("path", "")
                 if key in paths: return
                 paths.add(key)
-                out(event="repeat", path=key, snr=log.get("snr"))
+                out(event="repeat", path=key, size=log.get("path_hash_size", 1), snr=log.get("snr"))
 
         mc.subscribe(EventType.RX_LOG_DATA, on_rx)
 

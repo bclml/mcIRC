@@ -25,7 +25,7 @@ os.makedirs(os.path.join(stub, "meshcore"))
 open(os.path.join(stub, "meshcore", "__init__.py"), "w").write(textwrap.dedent('''
     import asyncio, enum, sys
     class EventType(enum.Enum):
-        CONTACTS = "contacts"; NEW_CONTACT = "new_contact"; ADVERTISEMENT = "advertisement"
+        CONTACTS = "contacts"; NEW_CONTACT = "new_contact"; ADVERTISEMENT = "advertisement"; RX_LOG_DATA = "rx_log_data"
     class Ev:
         def __init__(self, payload): self.payload = payload
     class Cmds:
@@ -49,6 +49,7 @@ open(os.path.join(stub, "meshcore", "__init__.py"), "w").write(textwrap.dedent('
             await self.fire(EventType.ADVERTISEMENT, {"public_key": "bb" * 32})
             await self.fire(EventType.CONTACTS, {"k2": {"public_key": "bb" * 32, "adv_name": "Fresh Repeater", "type": 2, "adv_lat": 49.3, "adv_lon": -123.3, "lastmod": 9}})
             await self.fire(EventType.NEW_CONTACT, {"public_key": "cc" * 32, "adv_name": "Pending Guy", "type": 1})
+            await self.fire(EventType.RX_LOG_DATA, {"path_len": 2, "path": "a1b2", "path_hash_size": 1, "payload_typename": "GRP_TXT", "snr": 6.5, "message": "secret text"})
         async def disconnect(self): print("STUB disconnect", file=sys.stderr, flush=True)
 '''))
 env = dict(os.environ, PYTHONPATH=stub, PYTHONUTF8="1")
@@ -57,7 +58,9 @@ def run_helper(lastmod):
     return [json.loads(l) for l in p.stdout.splitlines() if l.startswith("{")], p.stderr
 ev, err = run_helper(100)
 kinds = [e["event"] for e in ev]
-ok("helper: catch-up contact, ready, advert, contact, new_contact", kinds == ["contact", "ready", "advert", "contact", "new_contact"], kinds)
+ok("helper: catch-up contact, ready, advert, contact, new_contact, heard route", kinds == ["contact", "ready", "advert", "contact", "new_contact", "rx"], kinds)
+rx = next((e for e in ev if e["event"] == "rx"), {})
+ok("a heard route is passed on as its path only - never any message text", rx.get("path") == "a1b2" and "secret" not in json.dumps(rx), rx)
 ok("helper asks only for changes since lastmod and disconnects", "lastmod=100" in err and "STUB disconnect" in err, err)
 ev0, err0 = run_helper(0)
 ok("helper: with nothing known the first full load is silent", [e["event"] for e in ev0][0] == "ready" and "lastmod=0" in err0, [e["event"] for e in ev0])

@@ -7,6 +7,7 @@ up), then stays connected for --seconds and prints one JSON line per event as it
     {"event": "advert", "public_key": "..."}              a node advertised (the details follow a moment later)
     {"event": "contact", "contact": {...}}                a contact that was added or changed on the radio (name, type, position, ...)
     {"event": "new_contact", "contact": {...}}            an advert waiting for approval (the node is in manual-add mode)
+    {"event": "rx", "path": "a1b2", "size": 1, "type": "GRP_TXT", "snr": 7.5}   a packet that came through repeaters (its route only)
     {"event": "error", "message": "..."}
 
 No message text is ever read or printed here."""
@@ -48,6 +49,12 @@ async def run(a):
     mc.subscribe(EventType.CONTACTS, on_contacts)
     mc.subscribe(EventType.NEW_CONTACT, on_new)
     mc.subscribe(EventType.ADVERTISEMENT, on_advert)
+
+    async def on_rx(ev):                    # the route of a flooded packet the radio heard - for the map's signal view
+        d = ev.payload or {}
+        if d.get("path_len", 0) > 0 and d.get("path"):
+            out(event="rx", path=d["path"], size=d.get("path_hash_size", 1), type=d.get("payload_typename", ""), snr=d.get("snr"))
+    if getattr(EventType, "RX_LOG_DATA", None) is not None: mc.subscribe(EventType.RX_LOG_DATA, on_rx)      # (older meshcore libraries don't have it)
     try:
         await mc.commands.get_contacts(lastmod=a.lastmod)       # catch-up (silent when mcIRC knew nothing)
         emit["on"] = True

@@ -3,6 +3,7 @@ contributed by addons (e.g. incidents, earthquakes).  Everything has a show/hide
 
 Uses real OpenStreetMap tiles when `pip install tkintermapview` is available, otherwise a plain lat/lon plot."""
 import gui_platform
+import gui_signals
 import time
 import tkinter as tk
 from tkinter import ttk
@@ -36,6 +37,8 @@ class MapWindow(tk.Toplevel):
         self.show_memory = tk.BooleanVar(value=True)
         self.show_names = tk.BooleanVar(value=False)
         self.show_me = tk.BooleanVar(value=True)
+        self.show_signals = tk.BooleanVar(value=False)
+        self.signal_paths, self._sig_job, self._dots, self._xy = [], None, [], None
         self.max_days = tk.StringVar(value="0")
         self.layer_vars = {}
         side = tk.Frame(self, bg=BG, width=210)
@@ -57,6 +60,10 @@ class MapWindow(tk.Toplevel):
         self.layer_box = tk.LabelFrame(side, text="Layers", bg=BG)
         self.layer_box.pack(fill="x", pady=6)
         tk.Checkbutton(self.layer_box, text="My node", variable=self.show_me, command=self.refresh, bg=BG, anchor="w").pack(fill="x")
+        tk.Checkbutton(self.layer_box, text="Signals my radio hears (10 min)", variable=self.show_signals, command=self.draw_signals, bg=BG,
+                       fg=gui_signals.OUT_COLOR, selectcolor="white", anchor="w").pack(fill="x")
+        self.sig_label = tk.Label(self.layer_box, bg=BG, fg="#555", justify="left", anchor="w", wraplength=190, font=(gui_platform.DIALOG_FONT_NAME, 8))
+        self.sig_label.pack(fill="x")
         ttk.Button(side, text="Refresh", command=lambda: self.refresh(force=True)).pack(fill="x", pady=2)
         ttk.Button(side, text="Center on BC", command=self.center).pack(fill="x", pady=2)
         ttk.Button(side, text="Node list...", command=app.open_node_list).pack(fill="x", pady=2)
@@ -130,8 +137,72 @@ class MapWindow(tk.Toplevel):
             (self._draw_tiles if tkintermapview else self._draw_plain)(pts)
         else:
             self._update_info(pts)
+        self.draw_signals()
         if self._job: self.after_cancel(self._job)
         self._job = self.after(REFRESH_MS, self.refresh)
+
+    # ---- signals: the routes of packets the radio really heard ----
+    def signal_arrived(self):
+        """mcIRC heard a new path: redraw the routes and send a dot along the newest one."""
+        if not self.show_signals.get(): return
+        if self._sig_job is None: self._sig_job = self.after(300, self._signal_now)
+
+    def _signal_now(self):
+        self._sig_job = None
+        newest = self.draw_signals()
+        if newest and gui_signals and self._xy is None: self._animate(newest)
+
+    def _me(self):
+        s = self.app.settings
+        try: lat, lon = float(s.get("node_lat") or 0), float(s.get("node_lon") or 0)
+        except (TypeError, ValueError): return None
+        return (lat, lon) if (lat or lon) else None
+
+    def draw_signals(self):
+        """Draws every route heard in the last 10 minutes (newest thickest).  Returns the newest route's points."""
+        if not self.winfo_exists(): return None
+        for p in self.signal_paths:
+            try: p.delete()
+            except Exception: pass
+        self.signal_paths = []
+        if self._xy is not None: self.map.delete("sig")
+        if not self.show_signals.get():
+            self.sig_label.config(text="")
+            return None
+        now, me, nodes = time.time(), self._me(), self.app.nodes.all()
+        traces = [t for t in getattr(self.app, "signal_traces", []) if now - t["t"] < gui_signals.KEEP_SECONDS][-40:]
+        drawn, newest = 0, None
+        for i, t in enumerate(traces):
+            pts = gui_signals.route(t, nodes, me)
+            if len(pts) < 2: continue
+            color = gui_signals.OUT_COLOR if t["dir"] == "out" else gui_signals.IN_COLOR
+            width = 4 if i == len(traces) - 1 else 2
+            if self._xy is None:
+                try: self.signal_paths.append(self.map.set_path(pts, color=color, width=width))
+                except Exception: continue
+            else:
+                x, y = self._xy
+                self.map.create_line(*[v for lat, lon in pts for v in (x(lon), y(lat))], fill=color, width=width, tags="sig")
+            drawn, newest = drawn + 1, pts
+        outs = sum(t["dir"] == "out" for t in traces)
+        self.sig_label.config(text=f"{len(traces)} heard: {outs} repeat{'' if outs == 1 else 's'} of my messages, {len(traces) - outs} incoming. "
+                                   f"{drawn} drawn" + (" (some repeaters have no position)" if drawn < len(traces) else "")
+                                   + ("" if me else " - set your position in Options > Node"))
+        return newest
+
+    def _animate(self, pts, step=0, steps=24, dot=None):
+        """A dot travelling along the newest route, so you can see which way it went."""
+        if not self.winfo_exists() or not self.show_signals.get():
+            if dot is not None: dot.delete()
+            return
+        pos = gui_signals.along(pts, step / steps)
+        try:
+            if dot is None: dot = self.map.set_marker(pos[0], pos[1], text="", marker_color_circle="#ffffff", marker_color_outside=gui_signals.OUT_COLOR)
+            else: dot.set_position(*pos)
+        except Exception:
+            return
+        if step < steps: self.after(60, lambda: self._animate(pts, step + 1, steps, dot))
+        else: self.after(400, dot.delete)
 
     def request_refresh(self):
         """Ask for a refresh soon; many requests in a burst (adverts arriving) become one."""
@@ -175,6 +246,7 @@ class MapWindow(tk.Toplevel):
         lon0, lon1 = min(lons) - 0.2, max(lons) + 0.2
         x = lambda lon: 30 + (lon - lon0) / (lon1 - lon0) * (w - 60)
         y = lambda lat: h - 30 - (lat - lat0) / (lat1 - lat0) * (h - 60)
+        self._xy = (x, y)                                  # the signal routes are drawn with the same scale
         c.create_text(10, 10, anchor="nw", text="pip install tkintermapview for the street map", fill="#808080")
         for lat, lon, label, fill, outline, info in pts:
             px, py = x(lon), y(lat)

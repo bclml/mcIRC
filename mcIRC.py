@@ -830,7 +830,7 @@ class App(PrivateMixin, MenusMixin, CommandsMixin):
         more when none was heard (Options > Connect).  Falls back to the normal send if the helper could not send at all."""
         args = list(ea.CONNECTION_ARGS)
         def on_event(ev):
-            if ev.get("event") == "repeat": self.q.put(("call", lambda e=ev: self.note_signal("out", e.get("path", ""), idx)))
+            if ev.get("event") == "repeat": self.q.put(("call", lambda e=ev: self.note_signal("out", e.get("path", ""), idx, e.get("size", 1))))
         def work():
             r = gui_echo.send_watched(args, idx, text, resend=self.settings.get("resend_unheard", True), on_event=on_event)
             if not r["sent"]: ea.execute_mesh_command(ea.CONNECTION_ARGS + cmd)        # the helper sent nothing: the usual way
@@ -841,10 +841,10 @@ class App(PrivateMixin, MenusMixin, CommandsMixin):
             if note and w is not None and mark: w.add_note(mark, f"({note})")
         self.bg(work, done)
 
-    def note_signal(self, direction, path, idx=None):
+    def note_signal(self, direction, path, idx=None, size=1):
         """A path the radio really heard (a repeat of our message, or an incoming packet): kept for a while for the map's signal view."""
         if not path: return
-        self.signal_traces.append({"t": time.time(), "dir": direction, "path": path, "idx": idx})
+        self.signal_traces.append({"t": time.time(), "dir": direction, "path": path, "idx": idx, "size": size or 1})
         del self.signal_traces[:-200]
         mw = getattr(self, "map_win", None)
         if mw is not None and mw.winfo_exists() and hasattr(mw, "signal_arrived"): mw.signal_arrived()

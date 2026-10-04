@@ -45,7 +45,7 @@ def match_rule(rule, text):
 
 class Addon(AddonBase):
     title = "Auto reply"
-    version = "1.1.1"
+    version = "1.1.2"
     author = "bclml"
     description = "Keyword rules: answer chosen words on chosen channels with your own text, to the channels you pick."
 
@@ -70,7 +70,8 @@ class Addon(AddonBase):
             if now - self.last_any < MIN_GAP or now - self.last_by_key.get(key, 0) < float(r.get("cooldown", 20)): return
             hops = msg.get("hops")
             try:
-                reply = r.get("reply", "").format_map(_Safe(sender=msg["nick"], hops=0 if hops in (None, 255) else hops, snr=msg.get("snr", "?"),
+                template = r.get("reply", "").replace("@{sender}", "@[{sender}]")      # MeshCore mention format: a name with spaces or symbols is not cut short
+                reply = template.format_map(_Safe(sender=msg["nick"].replace("[", "").replace("]", ""), hops=0 if hops in (None, 255) else hops, snr=msg.get("snr", "?"),
                                                               channel=msg["channel"], keyword=hit[0], text=hit[1]))
             except (IndexError, ValueError):
                 reply = r.get("reply", "")

@@ -17,7 +17,7 @@ TO_ONE = "🐬 sends a pod of dolphins to @[{nick}] 🐬"
 
 class Addon(AddonBase):
     title = "Dolphins"
-    version = "1.0.1"
+    version = "1.0.2"
     author = "mcIRC"
     description = "/dolphins sends a pod of dolphins to the channel in front; /dolphins Nick sends them to one person."
     tick_seconds = 0
@@ -30,6 +30,6 @@ class Addon(AddonBase):
 
     def cmd_dolphins(self, arg):
         nick = re.sub(r"[\[\]@]", "", arg).strip()[:32]
-        if time.time() - self._last < MIN_GAP: return self.api.log(f"Easy there - one pod every {MIN_GAP} seconds.", "warn")
-        if not self.api.send_current(TO_ONE.format(nick=nick) if nick else random.choice(PODS)): return self.api.log("Open a channel or private window first - /dolphins sends to the window in front.", "warn")
+        if time.time() - self._last < MIN_GAP: return self.api.notice(f"Easy there - one pod every {MIN_GAP} seconds.", "warn")
+        if not self.api.send_current(TO_ONE.format(nick=nick) if nick else random.choice(PODS)): return self.api.notice("Open a channel or private window first - /dolphins sends to the window in front.", "warn")
         self._last = time.time()

@@ -47,6 +47,12 @@ class AddonAPI:
 
     # -- output --
     def log(self, text, level="info"): self._app.q.put(("call", lambda: self._app.status_line(f"*** [{self.name}] {text}", level)))
+    def notice(self, text, level="info"):
+        """A line in the window the person is looking at (Status if none), for answers to something they just did.  levels: info warn error"""
+        def show():
+            w = self._app.current or self._app.status
+            w.write(self._app.stamp() + [(f"*** [{self.name}] {text}", level)])
+        self._app.q.put(("call", show))
     def ensure_window(self, name, topic=""): return self._app.ensure_window(name, topic or f"Window of addon '{self.name}'")
     def write(self, window, text, tag="text"):
         """Write a line into a window (created on demand). tags: text info warn error new clear critical meta"""

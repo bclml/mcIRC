@@ -55,7 +55,7 @@ MENTION = re.compile(r"@\[([^\]]+)\]|@([^\s,:;!?()\[\]]+)")
 def _plain(s): return re.sub(r"\W", "", s.lower())
 
 
-def split_mentions(text, base_tag, my_name, words=()):
+def split_mentions(text, base_tag, my_name, words=(), names=()):
     """Cut a message into (text, tag) parts so "@nickname" / "@[nick name]" stand out, in a stronger colour when it is YOUR name, and highlight
     words are underlined.  Returns (parts, mentions_me, hit_highlight_word)."""
     parts, pos, me, word = [], 0, False, False
@@ -70,12 +70,19 @@ def split_mentions(text, base_tag, my_name, words=()):
             parts.append((m.group(0), "highlight"))
             word, i = True, m.end()
         if i < len(seg): parts.append((seg[i:], tag))
-    for m in MENTION.finditer(text):
-        plain(text[pos:m.start()], base_tag)
-        mine = bool(my_name) and _plain(m.group(1) or m.group(2) or "") == _plain(my_name)
+    while True:
+        m = MENTION.search(text, pos)
+        if not m: break
+        start, end, name = m.start(), m.end(), m.group(1) or m.group(2) or ""
+        if m.group(2) and names:                                  # "@PMD - Froggy" (no brackets): take the longest known name the text continues with
+            rest = text[start + 1:].lower()
+            best = max((n for n in names if len(n) > len(name) and rest.startswith(n.lower()) and not text[start + 1 + len(n):start + 2 + len(n)].isalnum()), key=len, default=None)
+            if best: end, name = start + 1 + len(best), best
+        plain(text[pos:start], base_tag)
+        mine = bool(my_name) and _plain(name) == _plain(my_name)
         me = me or mine
-        parts.append((m.group(0), "mention_me" if mine else "mention"))
-        pos = m.end()
+        parts.append((text[start:end], "mention_me" if mine else "mention"))
+        pos = end
     plain(text[pos:], base_tag)
     return parts, me, word
 
@@ -456,7 +463,7 @@ class App(PrivateMixin, MenusMixin, CommandsMixin):
         mine = nick == self.settings["node_name"]
         nick_tag = "bot" if mine else f"nick{sum(map(ord, nick)) % len(self.theme['nicks'])}"
         words = [x.strip() for x in self.settings.get("highlight_words", "").split(",") if x.strip()]
-        body, me, word = (split_mentions(text, tag, self.settings["node_name"], words) if not mine else ([(text, tag)], False, False))
+        body, me, word = (split_mentions(text, tag, self.settings["node_name"], words, w.nicks) if not mine else ([(text, tag)], False, False))
         parts = self.stamp() + [("<", "text"), (nick, (nick_tag, "nickname")), ("> ", "text")] + body
         if suffix: parts.append((f"  {suffix}", "meta"))
         w.write(parts)

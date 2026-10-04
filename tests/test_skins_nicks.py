@@ -95,6 +95,29 @@ ok("...also for a plain @name", "Reply to Dave" in right_click_at("@Dave"))
 t.tag_add("sel", "1.0", "end"); root.update()
 ok("...even while text is selected", "Reply to Carol" in right_click_at("Carol")); t.tag_remove("sel", "1.0", "end")
 
+# ---- an unbracketed @name that is a longer known name is highlighted as a whole
+froggy = "PMD - Froggy" + chr(0x22c6) + chr(0x2da) + chr(0xaa5c) + chr(0xff61)
+parts, me, _ = mcIRC.split_mentions(f"@{froggy} Test should be made", "text", "Me", (), {froggy})
+ok("'@PMD - Froggy...' (no brackets) is highlighted in full when it is a known name", parts[0] == (f"@{froggy}", "mention") and parts[1][0].startswith(" Test"), parts[:2])
+parts, _, _ = mcIRC.split_mentions("hi @Bob there and @[A B]", "text", "Me", (), {"Bobby"})
+ok("a plain @Bob and a bracketed @[A B] are unchanged", [p for p in parts if p[1] == "mention"] == [("@Bob", "mention"), ("@[A B]", "mention")], parts)
+parts, me, _ = mcIRC.split_mentions(f"@{froggy} hi", "text", froggy, (), {froggy})
+ok("...and it counts as a mention of you when it is your name", me and parts[0][1] == "mention_me")
+
+# ---- auto reply mentions with brackets, so a name with spaces and symbols is not cut short
+ar, arapi = None, None
+spec = importlib.util.spec_from_file_location("addon_auto_reply", os.path.join(ROOT, "packages", "auto_reply", "auto_reply.py"))
+armod = importlib.util.module_from_spec(spec); spec.loader.exec_module(armod)
+arapi = AddonAPI(app, "auto_reply"); ar = armod.Addon(arapi)
+arapi.set("enabled", True)
+arapi.set("rules", [{"name": "t", "enabled": True, "triggers": "test", "match": "exact", "listen": "", "reply": "@{sender} Test received, {hops} hops", "reply_to": "", "cooldown": 0}])
+ar.on_load()
+out = []
+with mock.patch.object(app, "send_to", lambda ch, text: out.append((ch, text))):
+    ar.on_message({"channel": "Public", "channel_idx": 0, "nick": froggy, "text": "test", "snr": 5, "hops": 2, "raw": {}})
+ok("the auto reply addresses the sender as @[full name]", out and out[0][1].startswith(f"@[{froggy}] Test received"), out)
+ar.on_unload()
+
 # ---- lines restored from the log of an earlier session are clickable too
 class FakeLog:
     path = ""
@@ -125,6 +148,12 @@ with mock.patch.object(app, "send_to", lambda ch, text: sent.append((ch, text)))
     app.commands["dolphins"][0]("Bob")                                 # also rate limited
     ok("/slap sends one mention-style line to the channel in front", len(sent) >= 1 and sent[0][0] == "Public" and sent[0][1] == "slaps @[Bob] around a bit with a large trout", sent)
     ok("a second slap inside 10 seconds is refused", len([s for s in sent if "slaps" in s[1]]) == 1)
+    for _ in range(20):
+        try: item = app.q.get_nowait()
+        except Exception: break
+        if item[0] == "call": item[1]()
+    shown_text = app.windows["Public"].text.get("1.0", "end")
+    ok("the refusal is shown in the window in front, not only in Status", "[slap] Easy there" in shown_text, shown_text[-200:])
     ok("/dolphins sends a pod", any("\U0001F42C" in s[1] for s in sent), sent)
     slap._last = dol._last = 0
     sent.clear(); app.commands["dolphins"][0]("Bob")

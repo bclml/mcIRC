@@ -837,7 +837,9 @@ def main():
             print("mcIRC is already running - brought it to the front.")
             return
     gui_diag.start(gui_update.local_version(), demo=args.demo)
+    gui_platform.set_app_id()
     root = tk.Tk()
+    gui_platform.set_app_icon(root)
     root.report_callback_exception = gui_diag.tk_exception
     holder["app"] = App(root, demo=args.demo)
     root.mainloop()

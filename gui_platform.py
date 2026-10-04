@@ -118,6 +118,34 @@ def _win_clipboard_image(png_path):
         u32.CloseClipboard()
 
 
+# ---- the program's icon (the mcIRC logo) -------------------------------------------------------------------------------------------------------------
+ASSETS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets")
+
+
+def set_app_id():
+    """Windows: give mcIRC its own taskbar identity (otherwise it is grouped under, and shows the icon of, pythonw.exe).  Call before the first window."""
+    if IS_WIN:
+        try:
+            import ctypes
+            ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("bclml.mcIRC")
+        except Exception:
+            pass
+
+
+def set_app_icon(root):
+    """Window, dialog and taskbar icon: assets/mcIRC.ico on Windows, assets/mcIRC.png elsewhere.  Never raises."""
+    try:
+        if IS_WIN:
+            root.iconbitmap(default=os.path.join(ASSETS, "mcIRC.ico"))
+        else:
+            import tkinter as tk
+            img = tk.PhotoImage(master=root, file=os.path.join(ASSETS, "mcIRC.png"))
+            root.iconphoto(True, img)
+            root._mcirc_icon = img                        # keep a reference so Tk does not discard it
+    except Exception:
+        pass
+
+
 # ---- hints for the problems each system has ------------------------------------------------------------------------------------------------------
 def permission_hint():
     if not IS_WIN and not IS_MAC: return "on Linux your user must be allowed to use serial ports: run  sudo usermod -aG dialout $USER  (some distros: uucp), then log out and in again"

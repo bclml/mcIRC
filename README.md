@@ -1,3 +1,5 @@
+<p align="center"><img src="assets/mcIRC.png" alt="mcIRC logo" width="160"></p>
+
 # mcIRC
 
 An **mIRC-style chat client for [MeshCore](https://meshcore.co.uk/) LoRa mesh nodes** for Windows (and, experimentally, Linux and macOS): channels and direct messages in the classic treebar / switchbar / nick-list layout, a node list and map, full control of your node's settings, per-window log files, and **addons** for anything more. It works with any board running MeshCore Companion firmware over USB, Bluetooth or WiFi.
@@ -57,7 +59,7 @@ Known differences: macOS ignores button colours (the "red when unread" switchbar
 
 1. Clone this repo (or download it) into its own folder
 2. `pip install -r requirements.txt`  (or with uv: `uv run mcIRC.py` does this for you)
-3. Double-click `Run_GUI.bat` (no console window stays open). Try it without a radio first: `python mcIRC.py --demo`
+3. Double-click **`mcIRC.exe`** (or `Run_GUI.bat`); no console window stays open. Both need Python on your PATH, the same as `python mcIRC.py`. Try it without a radio first: `python mcIRC.py --demo`
 4. Options > Connect > *Scan for devices...* > pick your node > OK, then File > Connect
 
 ## Features

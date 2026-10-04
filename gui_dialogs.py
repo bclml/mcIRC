@@ -277,7 +277,6 @@ class NodeListDialog(tk.Toplevel):
         b = tk.Frame(self, bg=BG)
         b.pack(fill="x", padx=6, pady=6)
         ttk.Button(b, text="Read radio now", command=lambda: app.sync_nodes_now(then=self.fill)).pack(side="left")
-        ttk.Button(b, text="Put remembered nodes back on the radio", command=lambda: app.restore_nodes_now(then=self.fill)).pack(side="left", padx=6)
         tk.Label(b, text="  Double-click a node to message it.", bg=BG, fg="#555").pack(side="left")
         ttk.Button(b, text="Close", command=self.destroy).pack(side="right")
         self.fill()

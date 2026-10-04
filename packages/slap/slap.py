@@ -10,7 +10,7 @@ MIN_GAP = 10          # seconds between two slaps: the mesh is a tiny shared cha
 
 class Addon(AddonBase):
     title = "Slap"
-    version = "1.0.2"
+    version = "1.0.3"
     author = "mcIRC"
     description = "/slap Nick slaps Nick around a bit with a large trout (change the fish in Options). Only sends when you type the command."
     tick_seconds = 0
@@ -23,7 +23,8 @@ class Addon(AddonBase):
 
     def line(self, nick):
         item = (self.api.get("item", "a large trout") or "a large trout").strip()
-        return f"slaps @[{nick}] around a bit with {item}"
+        fish = " " + chr(0x1F41F) if re.search(r"trout|fish|salmon|cod|herring|mackerel", item, re.IGNORECASE) else ""     # (Unicode has no trout emoji; this is the fish)
+        return f"slaps @[{nick}] around a bit with {item}{fish}"
 
     def cmd_slap(self, arg):
         nick = re.sub(r"[\[\]@]", "", arg).strip()

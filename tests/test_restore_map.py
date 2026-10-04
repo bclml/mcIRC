@@ -2,7 +2,7 @@ import os as _os; _os.environ["MCIRC_NO_LOG_FILE"] = "1"      # tests must never
 import os, sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT); os.chdir(ROOT)
-"""Putting remembered nodes back on the radio (fake radio), and a map that does not blink when nothing changed."""
+"""A direct message to a person the radio lost puts just that contact back (fake radio), and a map that does not blink when nothing changed."""
 import tempfile, time, tkinter as tk
 from types import SimpleNamespace
 from unittest import mock
@@ -37,18 +37,15 @@ def fake_exec(args, timeout=90, retries=1):
         i += 1
     return SimpleNamespace(stdout="", stderr="", returncode=0)
 
-with mock.patch.object(gn, "fetch_radio_contacts", lambda: dict(radio)), mock.patch.object(ea, "execute_mesh_command", fake_exec), mock.patch.object(ea, "CONNECTION_ARGS", ["-s", "COMX"]):
-    r = gn.restore_to_radio(store, capacity=6)
-ok("only as many as fit are put back (capacity 6, 2 already there -> 4)", r["added"] == 4 and r["on_radio"] == 6, r)
-adds = [a for c in calls for a in c if a == "add_contact"]
-ok("each node is added with add_contact and its path reset", len(adds) == 4 and sum(a == "reset_path" for c in calls for a in c) == 4)
-ok("batches of at most 5 nodes per radio call", all(c.count("add_contact") <= 5 for c in calls))
-ok("the key, type and name are passed on", any(c[c.index("add_contact") + 1] in KEYS and c[c.index("add_contact") + 3].startswith("Node") for c in calls))
+with mock.patch.object(ea, "execute_mesh_command", fake_exec), mock.patch.object(ea, "CONNECTION_ARGS", ["-s", "COMX"]):
+    n = gn.add_to_radio([store.find_by_prefix(KEYS[2])])
+ok("one remembered node is put back on the radio", n == 1 and KEYS[2] in radio and len(calls) == 1)
+ok("...with add_contact (key, type, name) and its path reset", calls[0][2:6] == ["add_contact", KEYS[2], "1", "Node 2"] and calls[0][6:8] == ["reset_path", KEYS[2]], calls[0])
+calls.clear()
+with mock.patch.object(ea, "execute_mesh_command", fake_exec), mock.patch.object(ea, "CONNECTION_ARGS", ["-s", "COMX"]):
+    gn.add_to_radio([store.find_by_prefix(KEYS[3])])
 ok("a name that starts with '-' is replaced (meshcli would read it as an option)", not any(a == "-dash name" for c in calls for a in c))
-seen = {n["public_key"]: n["last_seen"] for n in store.all()}
-restored = [k for k in radio if k not in (KEYS[0], KEYS[1])]
-ok("being put back does not count as being heard: last seen is unchanged", all(seen[k] == old for k in restored), {k[:4]: seen[k] for k in restored})
-ok("the restored nodes are marked as on the radio", all(n["on_radio"] for n in store.all() if n["public_key"] in radio))
+ok("there is no bulk 'put everything back' any more", not hasattr(gn, "restore_to_radio"))
 
 # ---- a direct message to a person the radio lost: put the contact back, then send again
 import mcIRC

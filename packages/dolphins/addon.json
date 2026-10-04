@@ -1,7 +1,7 @@
 {
   "name": "dolphins",
   "title": "Dolphins",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "/dolphins sends a pod of dolphins leaping through the channel (or to one person). Only sends when you type the command.",
   "requires": [],
   "files": {

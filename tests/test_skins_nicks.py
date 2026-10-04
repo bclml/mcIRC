@@ -146,7 +146,7 @@ with mock.patch.object(app, "send_to", lambda ch, text: sent.append((ch, text)))
     app.commands["slap"][0]("Bob")                                     # second one inside the rate limit
     app.commands["dolphins"][0]("")
     app.commands["dolphins"][0]("Bob")                                 # also rate limited
-    ok("/slap sends one mention-style line to the channel in front", len(sent) >= 1 and sent[0][0] == "Public" and sent[0][1] == "slaps @[Bob] around a bit with a large trout", sent)
+    ok("/slap sends one mention-style line to the channel in front", len(sent) >= 1 and sent[0][0] == "Public" and sent[0][1] == "slaps @[Bob] around a bit with a large trout " + chr(0x1F41F), sent)
     ok("a second slap inside 10 seconds is refused", len([s for s in sent if "slaps" in s[1]]) == 1)
     for _ in range(20):
         try: item = app.q.get_nowait()
@@ -154,7 +154,7 @@ with mock.patch.object(app, "send_to", lambda ch, text: sent.append((ch, text)))
         if item[0] == "call": item[1]()
     shown_text = app.windows["Public"].text.get("1.0", "end")
     ok("the refusal is shown in the window in front, not only in Status", "[slap] Easy there" in shown_text, shown_text[-200:])
-    ok("/dolphins sends a pod", any("\U0001F42C" in s[1] for s in sent), sent)
+    ok("/dolphins sends a pod with 3 or 4 dolphins", any(3 <= s[1].count(chr(0x1F42C)) <= 4 for s in sent), sent)
     slap._last = dol._last = 0
     sent.clear(); app.commands["dolphins"][0]("Bob")
     ok("/dolphins Bob sends them to one person with a mention", sent and "@[Bob]" in sent[0][1], sent)
@@ -170,7 +170,7 @@ dms = []
 app.select_window("@Alice"); slap._last = dol._last = 0
 with mock.patch.object(app, "send_dm", lambda win, text: dms.append((win.name, text))), mock.patch.object(app, "send_to", lambda *a: dms.append(("CHANNEL!",) + a)):
     app.commands["slap"][0]("Alice")
-    ok("in a private window /slap goes to that person, not to a channel", dms == [("@Alice", "slaps @[Alice] around a bit with a large trout")], dms)
+    ok("in a private window /slap goes to that person, not to a channel", dms == [("@Alice", "slaps @[Alice] around a bit with a large trout " + chr(0x1F41F))], dms)
 dmw = app.windows["@Alice"]
 app.chat_line(dmw, "Alice", "hi there", "text"); root.update()
 dstart = dmw.text.search("Alice", "1.0"); dx, dy, _, _ = dmw.text.bbox(dstart)

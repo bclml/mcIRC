@@ -159,7 +159,7 @@ def _add_args(rows):
 
 
 def add_to_radio(rows):
-    """Puts remembered nodes back on the radio itself (e.g. after its contact list was cleared).  Returns how many were sent; a batch that fails is logged and skipped."""
+    """Puts remembered nodes back on the radio itself, one at a time when a direct message to them fails because the radio lost them.  Returns how many were sent; a batch that fails is logged and skipped."""
     done = 0
     for i in range(0, len(rows), 5):
         batch = rows[i:i + 5]
@@ -169,21 +169,6 @@ def add_to_radio(rows):
         except Exception as e:
             logging.error(f"Putting nodes back on the radio failed: {e}")
     return done
-
-
-def restore_to_radio(store, capacity):
-    """Pushes the nodes mcIRC remembers but the radio does not have back onto the radio (newest first, as many as fit).
-    -> {'added', 'wanted', 'on_radio'}.  Their 'last seen' times are kept: being put back is not the same as being heard."""
-    on_radio = set(fetch_radio_contacts())
-    want = [r for r in store.all() if r["public_key"] not in on_radio][:max(0, capacity - len(on_radio))]
-    seen = {r["public_key"]: r["last_seen"] for r in want}
-    added = add_to_radio(want)
-    after = fetch_radio_contacts()
-    store.update_from_radio(after)
-    with store.lock:
-        store.db.executemany("UPDATE nodes SET last_seen=? WHERE public_key=?", [(t, k) for k, t in seen.items()])
-        store.db.commit()
-    return {"added": added, "wanted": len(want), "on_radio": len(after)}
 
 
 def sync(store, prune_days, also_remove_from_radio):

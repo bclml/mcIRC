@@ -7,17 +7,17 @@ from gui_addons import AddonBase
 
 MIN_GAP = 10          # seconds between two sends: the mesh is a tiny shared channel
 PODS = [
-    "~~~ 🐬 ~~~ a pod of dolphins leaps through the waves ~~~ 🐬 ~~~",
-    "🐬 . 🐬 . 🐬  dolphins ride the bow wave",
-    "~ ~ 🐬 ~ ~  splash!  🐬 ~ ~ 🐬 ~ ~",
-    "🌊 🐬 🌊 🐬 🌊  so long, and thanks for all the fish",
+    "~~~ 🐬 🐬 🐬 ~~~ a pod of dolphins leaps through the waves ~~~ 🐬 ~~~",
+    "🐬 . 🐬 . 🐬 . 🐬  dolphins ride the bow wave",
+    "~ ~ 🐬 ~ ~  splash!  🐬 ~ ~ 🐬 ~ ~ 🐬 ~ ~",
+    "🌊 🐬 🌊 🐬 🌊 🐬 🌊 🐬  so long, and thanks for all the fish",
 ]
-TO_ONE = "🐬 sends a pod of dolphins to @[{nick}] 🐬"
+TO_ONE = "🐬 🐬 🐬 sends a pod of dolphins to @[{nick}] 🐬"
 
 
 class Addon(AddonBase):
     title = "Dolphins"
-    version = "1.0.2"
+    version = "1.0.3"
     author = "mcIRC"
     description = "/dolphins sends a pod of dolphins to the channel in front; /dolphins Nick sends them to one person."
     tick_seconds = 0

@@ -688,19 +688,6 @@ class App(PrivateMixin, MenusMixin, CommandsMixin):
         except ea.Cancelled: raise
         except Exception as e: logging.error(f"Node sync failed: {e}")
 
-    def restore_nodes_now(self, then=None):
-        """Put the nodes mcIRC remembers back on the radio (after its contact list was cleared)."""
-        if not self.require_connection(): return
-        def done(r):
-            if isinstance(r, Exception): self.status_line(f"*** Putting nodes back on the radio failed: {r}", "error")
-            else:
-                self.status_line(f"*** Put {r['added']} of {r['wanted']} remembered node(s) back on the radio ({r['on_radio']}/{self.settings['radio_capacity']} now).", "info")
-                self.sync_nodes_now(then=then)
-                return
-            if then: then()
-        self.status_line("*** Putting remembered nodes back on the radio - this takes a minute or two...", "info")
-        self.bg(lambda: gui_nodes.restore_to_radio(self.nodes, self.settings["radio_capacity"]), done)
-
     def sync_nodes_now(self, then=None):
         if not self.require_connection(): return
         s = self.settings

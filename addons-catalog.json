@@ -23,7 +23,7 @@
     {
       "name": "slap",
       "title": "Slap",
-      "version": "1.0.2",
+      "version": "1.0.3",
       "author": "bclml",
       "description": "The IRC classic: /slap Nick slaps someone around a bit with a large trout (also in the right-click menu on a name). Only sends when you type or click it; one per 10 seconds.",
       "path": "packages/slap",
@@ -32,7 +32,7 @@
     {
       "name": "dolphins",
       "title": "Dolphins",
-      "version": "1.0.2",
+      "version": "1.0.3",
       "author": "bclml",
       "description": "/dolphins sends a pod of dolphins to the channel in front, or to one person (also in the right-click menu on a name). Only sends when you type or click it; one per 10 seconds.",
       "path": "packages/dolphins",

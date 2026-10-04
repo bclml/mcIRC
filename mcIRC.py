@@ -137,7 +137,9 @@ class CoreWorker:
         self.thread = threading.Thread(target=self._run, args=(s,), daemon=True)
         self.thread.start()
 
-    def stop(self): self.stop_evt.set()
+    def stop(self):
+        self.stop_evt.set()
+        ea.cancel_running()          # abort the radio command that is running right now instead of waiting for it to time out
 
     def _run(self, s):
         q = self.app.q
@@ -152,8 +154,18 @@ class CoreWorker:
                 return
             gui_diag.event("connect", "using " + gui_diag.describe_args(args))
             ea.CONNECTION_ARGS = args
-            ea.resolve_channel_indices()
+            waited = 0
+            while not ea.resolve_channel_indices(attempts=1, retries=1, quiet=True):      # "connected" only once the node has really answered
+                if self.stop_evt.is_set(): return
+                if waited == 0:
+                    logging.warning("The node is not answering yet. Check the USB cable or press the board's reset button "
+                                    "(or Tools > Reset radio via USB...). Still trying - press Disconnect to stop.")
+                waited += 1
+                self.app.recovery.maybe()                       # only acts if "restart a silent radio automatically" is on
+                self.stop_evt.wait(5)
+                if self.stop_evt.is_set(): return
             if self.stop_evt.is_set(): return
+            if waited: logging.info(f"The node is answering now (after {waited} failed attempt(s)).")
             q.put(("channels",))
             q.put(("state", "connected", " ".join(args)))
             gui_diag.event("connect", f"connected; {len(ea.CHANNEL_INDEX_BY_NAME)} channel(s) resolved")
@@ -162,6 +174,8 @@ class CoreWorker:
                 gui_diag.node_summary(node)
                 q.put(("nodeinfo", node))
                 if args[0] == "-s": q.put(("lastport", args[1]))   # it answered: next time use this port without probing
+            except ea.Cancelled:
+                raise
             except Exception as e:
                 why = ea.explain_failure(str(e))
                 logging.warning(f"Could not read the node's own settings: {why}")
@@ -178,6 +192,8 @@ class CoreWorker:
                     last_sync = now
                     self.app.node_sync_worker()
                 self.app.adverts.listen(self.app.settings["poll_seconds"], self.stop_evt)      # idle time = listening for adverts (or just waiting)
+        except ea.Cancelled:
+            gui_diag.event("connect", "cancelled")
         except Exception as e:
             logging.error(f"Connection ended: {e}")
             gui_diag.event("crash", "connection thread:\n" + traceback.format_exc())
@@ -640,6 +656,7 @@ class App(PrivateMixin, MenusMixin, CommandsMixin):
         """Runs on a worker thread: read the radio's contacts into long-term memory and forget stale ones."""
         s = self.settings
         try: self.q.put(("nodes", sync_nodes(self.nodes, s["node_prune_days"], s["prune_radio"])))
+        except ea.Cancelled: raise
         except Exception as e: logging.error(f"Node sync failed: {e}")
 
     def sync_nodes_now(self, then=None):
@@ -664,7 +681,7 @@ class App(PrivateMixin, MenusMixin, CommandsMixin):
     def disconnect(self):
         if self.worker.running:
             self.worker.stop()
-            self.status_line("*** Disconnecting..." if self.connected else "*** Cancelling the connection attempt (it stops once the current radio command finishes)...", "info")
+            self.status_line("*** Disconnecting..." if self.connected else "*** Cancelling the connection attempt...", "info")
 
     def open_options(self, page="Connect"):
         d = OptionsDialog(self)
@@ -685,6 +702,7 @@ class App(PrivateMixin, MenusMixin, CommandsMixin):
         for w in self.windows.values():
             if w.log: w.log.stamp("Session Close")
         self.worker.stop()
+        self.adverts.interrupt()                     # don't leave the advert listener holding the radio's port after the window is gone
         for n in list(self.addons.loaded): self.addons.unload(n)
         self.root.destroy()
 

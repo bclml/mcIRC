@@ -191,8 +191,7 @@ def auto_detect_usb_port(prefer=None, should_stop=None):
 def scan_ble(timeout=6):
     """Bluetooth devices meshcli can see: list of raw lines (format is whatever meshcli prints, usually 'address  name')."""
     try:
-        res = subprocess.run([DEFAULT_CLI_PATH if os.path.exists(DEFAULT_CLI_PATH) else "meshcli", "-l", "-T", str(timeout)],
-                             capture_output=True, text=True, **UTF8, timeout=timeout + 20, creationflags=NO_WINDOW)
+        res = _run_cli([DEFAULT_CLI_PATH if os.path.exists(DEFAULT_CLI_PATH) else "meshcli", "-l", "-T", str(timeout)], timeout + 20)
     except Exception as e:
         logging.warning(f"Bluetooth scan failed: {e}")
         return []
@@ -224,10 +223,7 @@ def auto_detect_ble_device():
         # -d "" tells meshcli to scan and connect to the first MeshCore companion device
         # it finds over Bluetooth (no address/name filter). "infos" is just a cheap command
         # to force the connection so we can read back which device it picked.
-        result = subprocess.run(
-            [binary, "-d", "", "-T", str(BLE_SCAN_TIMEOUT), "infos"],
-            capture_output=True, text=True, **UTF8, timeout=BLE_SCAN_TIMEOUT + 15, creationflags=NO_WINDOW
-        )
+        result = _run_cli([binary, "-d", "", "-T", str(BLE_SCAN_TIMEOUT), "infos"], BLE_SCAN_TIMEOUT + 15)
     except subprocess.TimeoutExpired:
         logging.critical("❌ BLE scan timed out. Make sure the node is powered on, in range, and already paired in Windows Bluetooth settings.")
         return None
@@ -245,6 +241,61 @@ def auto_detect_ble_device():
 
     logging.critical("❌ No MeshCore Bluetooth device detected. Make sure the node is powered on, within range, and paired with this computer first (Windows Settings > Bluetooth & devices > Add device).")
     return None
+
+class Cancelled(RuntimeError):
+    """A radio command was stopped because the user pressed Disconnect or closed the program."""
+
+
+_RUNNING = set()                 # meshcli processes running right now
+_RUNNING_LOCK = threading.Lock()
+_CANCEL_GEN = [0]                # bumped by cancel_running(); a command that started before the bump is abandoned
+
+
+def _kill(p):
+    """Kill a meshcli process AND its children.  On Windows meshcli.exe is only a launcher that starts python.exe; killing just the launcher could leave
+    the real process holding the serial port."""
+    try:
+        if os.name == "nt":
+            subprocess.run(["taskkill", "/PID", str(p.pid), "/T", "/F"], capture_output=True, creationflags=NO_WINDOW, timeout=10)
+        p.kill()
+    except Exception:
+        pass
+
+
+def cancel_running():
+    """Stop every meshcli command that is running or waiting to retry (Disconnect, closing the window) instead of waiting for it to time out."""
+    with _RUNNING_LOCK:
+        _CANCEL_GEN[0] += 1
+        procs = list(_RUNNING)
+    for p in procs: _kill(p)
+
+
+def _run_cli(cmd, timeout, gen=None):
+    """Run one meshcli process and return a CompletedProcess.  Raises subprocess.TimeoutExpired, or Cancelled if cancel_running() was called meanwhile."""
+    gen = _CANCEL_GEN[0] if gen is None else gen
+    p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, creationflags=NO_WINDOW, **UTF8)
+    with _RUNNING_LOCK:
+        _RUNNING.add(p)
+        cancelled_already = _CANCEL_GEN[0] != gen
+    if cancelled_already: _kill(p)
+    try:
+        try: out, err = p.communicate(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            _kill(p)
+            p.communicate()
+            raise
+    finally:
+        with _RUNNING_LOCK: _RUNNING.discard(p)
+    if _CANCEL_GEN[0] != gen: raise Cancelled("cancelled")
+    return subprocess.CompletedProcess(cmd, p.returncode, out, err)
+
+
+def _nap(seconds, gen):
+    """Sleep, but give up at once if the command was cancelled."""
+    for _ in range(max(1, int(seconds * 10))):
+        if _CANCEL_GEN[0] != gen: raise Cancelled("cancelled")
+        time.sleep(0.1)
+
 
 class RadioHealth:
     """Counts how many meshcli commands in a row failed for good (after their own retries).  DOWN_AFTER in a row = the radio is not answering.
@@ -330,15 +381,21 @@ def _trace(args, attempt, outcome, started, detail=""):
 def execute_mesh_command(args_list, timeout=30, retries=2, retry_delay=2):
     binary = DEFAULT_CLI_PATH if os.path.exists(DEFAULT_CLI_PATH) else "meshcli"
     last_err = None
+    gen = _CANCEL_GEN[0]
     for attempt in range(retries + 1):
+        if _CANCEL_GEN[0] != gen: raise Cancelled("cancelled")
         started = time.time()
         try:
             with MESH_LOCK:
-                result = subprocess.run([binary] + args_list, capture_output=True, text=True, **UTF8, timeout=timeout, creationflags=NO_WINDOW)
+                if _CANCEL_GEN[0] != gen: raise Cancelled("cancelled")
+                result = _run_cli([binary] + args_list, timeout=timeout, gen=gen)
+        except Cancelled:
+            _trace(args_list, attempt, "CANCELLED", started)
+            raise                                  # not a radio failure: no retry, not counted against the radio's health
         except subprocess.TimeoutExpired:
             last_err = RuntimeError(f"meshcli timed out after {timeout}s (BLE connection may have stalled or the node is out of range)")
             _trace(args_list, attempt, "TIMEOUT", started, f"after {timeout}s")
-            if attempt < retries: time.sleep(retry_delay)
+            if attempt < retries: _nap(retry_delay, gen)
             continue
         except OSError as e:
             _trace(args_list, attempt, "CANNOT-START", started, str(e)[:200])
@@ -354,11 +411,11 @@ def execute_mesh_command(args_list, timeout=30, retries=2, retry_delay=2):
             _trace(args_list, attempt, "ok", started, f"{len(result.stdout)} chars")
             HEALTH.success()
             return result
-        if attempt < retries: time.sleep(retry_delay)
+        if attempt < retries: _nap(retry_delay, gen)
     HEALTH.failure(last_err)
     raise last_err
 
-def resolve_channel_indices():
+def resolve_channel_indices(attempts=3, retries=2, quiet=False):
     """Fetches the node's real channel list (name -> index) via `.get_channels` — the leading dot
     forces JSON output from meshcore-cli regardless of any global -j flag. Channel indices aren't
     assumed/hardcoded (see CHANNEL_NAMES above); whatever this returns is what broadcast_via_cli
@@ -376,9 +433,10 @@ def resolve_channel_indices():
     itself now, but this adds a second, slower retry layer on top specifically for startup timing
     (node not fully awake yet), independent of that fix."""
     last_err = None
-    for attempt in range(3):
+    gen = _CANCEL_GEN[0]
+    for attempt in range(attempts):
         try:
-            result = execute_mesh_command(CONNECTION_ARGS + [".get_channels"])
+            result = execute_mesh_command(CONNECTION_ARGS + [".get_channels"], retries=retries)
             combined = f"{result.stdout}\n{result.stderr}"
             # meshcli sometimes prints its own INFO: log lines before the JSON payload (seen with
             # other commands like `infos`/BLE scans) — scan for wherever the actual JSON array
@@ -395,15 +453,19 @@ def resolve_channel_indices():
             CHANNEL_INDEX_BY_NAME.clear()
             CHANNEL_INDEX_BY_NAME.update({c["channel_name"]: c["channel_idx"] for c in data if c.get("channel_name")})
             logging.info(f"Resolved node channels: {CHANNEL_INDEX_BY_NAME}")
-            return
+            return True
+        except Cancelled:
+            raise
         except Exception as e:
             last_err = e
-            if attempt < 2: time.sleep(5)
-    logging.error(f"Could not read channel list from the node after 3 attempts ({last_err}). Category "
-                   f"alerts will be WITHHELD (not sent to Public) until channels resolve — this is "
-                   f"retried automatically every scan; see 'Resolved node channels' in the log once it "
-                   f"succeeds. If it never does, create #drivebc/#bcferries/#bctransit/#translink/"
-                   f"#weather (see How to run.txt) and restart.")
+            if attempt < attempts - 1: _nap(5, gen)
+    if not quiet:
+        logging.error(f"Could not read channel list from the node after {attempts} attempts ({last_err}). Category "
+                       f"alerts will be WITHHELD (not sent to Public) until channels resolve — this is "
+                       f"retried automatically every scan; see 'Resolved node channels' in the log once it "
+                       f"succeeds. If it never does, create #drivebc/#bcferries/#bctransit/#translink/"
+                       f"#weather (see How to run.txt) and restart.")
+    return False
 
 def _json_from_output(result):
     combined = f"{result.stdout}\n{result.stderr}"
@@ -471,6 +533,8 @@ def fetch_incoming_messages():
     found = []
     try:
         result = execute_mesh_command(CONNECTION_ARGS + [".sync_msgs"])
+    except Cancelled:
+        raise
     except Exception as e:
         logging.error(f"Failed to poll for incoming messages: {e}")
         return found

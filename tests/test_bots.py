@@ -112,6 +112,18 @@ with mock.patch.object(ws, "aqi", mock.Mock(side_effect=OSError("timed out"))), 
     sent.clear(); wx_bot.on_message(msg("aqi hope", nick="Hal"))
 ok("a service that is down gives a short polite answer", sent and "not answering right now" in sent[0][1], sent)
 
+# ---- every command that can use a place takes one: city, postal code, ZIP, node name or coordinates
+import wxbot_sky as sky
+asked = []
+fake_place = lambda arg, **k: asked.append(arg) or (49.1, -122.8, arg or "here")
+wapi.set("off", [])
+with mock.patch.object(mc, "resolve_place", fake_place),         mock.patch.object(ws, "aurora", lambda lat, lon, label, get=None: f"aurora {label}"),         mock.patch.object(sky, "satpass", lambda sat, lat, lon, label, get=None, now=None: f"pass {sat} {label}"),         mock.patch.object(sky, "airplanes", lambda lat, lon, label, nm=25, get=None: f"planes {nm} {label}"):
+    for text, want in (("aurora surrey", "aurora surrey"), ("satpass iss surrey", "pass iss surrey"), ("satpass 25544", "pass 25544 here"),
+                       ("satpass V3T 1V8", "pass iss V3T 1V8"), ("airplanes surrey", "planes 25 surrey"), ("airplanes 10 surrey", "planes 10 surrey"),
+                       ("overhead 5", "planes 5 here")):
+        sent.clear(); wx_bot.on_message(msg(text, nick=text))
+        ok(f"'{text}' -> {want}", sent and sent[0][1] == want, sent)
+
 fmod, fun, fapi = load("fun_bot", "fun_bot")
 fapi.set("enabled", True); fapi.set("channels", {"dice": "#bot-van", "joke": "all"})
 fun.limiter = mc.Limiter(0, 0)

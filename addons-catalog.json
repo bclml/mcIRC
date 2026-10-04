@@ -50,7 +50,7 @@
     {
       "name": "weather_bot",
       "title": "Weather bot",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "author": "bclml",
       "description": "Answers weather commands in the channels you choose (default #weather): wx <place> (city, postal code, ZIP, node name or lat,lon), gwx, aqi, sun, moon, solar, sf, hfcond, satpass, airplanes, rain, aurora, channels, status, contact. Free data, no API keys. Off until you switch it on; rate-limited. satpass needs 'pip install sgp4'.",
       "path": "packages/weather_bot",

@@ -18,16 +18,16 @@ COMMANDS = {        # command: (what it does, needs a place)
     "solar": "space weather: solar flux, Kp, solar wind, X-rays",
     "sf": "solar panel output forecast for a place (also: solarforecast)",
     "hfcond": "HF radio band conditions",
-    "satpass": "next satellite pass (satpass iss / hubble / <NORAD number>)",
-    "airplanes": "aircraft overhead (airplanes [miles]; also: overhead)",
+    "satpass": "next satellite pass (satpass iss / hubble / <NORAD number> [place])",
+    "airplanes": "aircraft overhead (airplanes [miles] [place]; also: overhead)",
     "rain": "rain in the next 2 hours for a place",
-    "aurora": "aurora chances and geomagnetic activity",
+    "aurora": "aurora chances and geomagnetic activity (for a place)",
     "channels": "where this bot answers and what it knows",
     "status": "is the bot running",
     "contact": "who runs this bot",
 }
 ALIASES = {"solarforecast": "sf", "overhead": "airplanes"}
-VERSION = "1.0.0"
+VERSION = "1.0.1"
 
 
 class Addon(AddonBase):
@@ -103,15 +103,19 @@ class Addon(AddonBase):
         if cmd == "sf": return ws.solar_forecast(*self.place(arg))
         if cmd == "hfcond": return ws.hfcond()
         if cmd == "rain": return ws.rain(*self.place(arg), units)
-        if cmd == "aurora": return ws.aurora(*self.place(""))
-        if cmd == "satpass": return sky.satpass(arg, *self.place(""))
-        if cmd == "airplanes":
-            nm = int(arg) if arg.strip().isdigit() else 25
-            return sky.airplanes(*self.place(""), nm=nm)
+        if cmd == "aurora": return ws.aurora(*self.place(arg))
+        if cmd == "satpass":                                       # satpass [satellite] [place]: 'satpass iss surrey', 'satpass 25544', 'satpass surrey'
+            first, _, rest = arg.partition(" ")
+            if first.lower() in sky.SATS or first.isdigit(): return sky.satpass(first, *self.place(rest))
+            return sky.satpass("iss", *self.place(arg))
+        if cmd == "airplanes":                                     # airplanes [miles] [place], in either order
+            words = arg.split()
+            nums = [w for w in words if w.isdigit()]
+            return sky.airplanes(*self.place(" ".join(w for w in words if not w.isdigit())), nm=int(nums[0]) if nums else 25)
         if cmd == "channels":
             where = ", ".join(sorted("all channels" if c == "*" else c for c in self.channels())) or "no channel"
             on = [c for c in COMMANDS if c not in self.cfg("off", []) and c not in ("channels", "status", "contact")]
-            return f"I answer in {where}. Try: wx <place>, " + ", ".join(c for c in on if c != "wx")
+            return f"I answer in {where}. Place = city, postal code or node. Try: wx <place>, " + ", ".join(c for c in on if c != "wx")
         if cmd == "status":
             up = int(time.time() - self.started)
             return (f"Weather bot {VERSION} on mcIRC {self._app_version()}: up {up // 3600}h{up % 3600 // 60:02d}m, {self.answers} answers, "

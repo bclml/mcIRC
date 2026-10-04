@@ -1,0 +1,10 @@
+{
+  "name": "dolphins",
+  "title": "Dolphins",
+  "version": "1.0.0",
+  "description": "/dolphins sends a pod of dolphins leaping through the channel (or to one person). Only sends when you type the command.",
+  "requires": [],
+  "files": {
+    "dolphins.py": "addons/dolphins.py"
+  }
+}

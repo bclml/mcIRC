@@ -34,6 +34,7 @@ from gui_donate import DonateDialog
 from gui_switchbar import SwitchBar
 from gui_update_ui import UpdateDialog, CatalogDialog, LINKS, open_link
 import gui_themes
+import gui_skins
 import gui_sounds
 from gui_private import PrivateMixin
 from gui_menus import MenusMixin
@@ -232,7 +233,7 @@ class App(PrivateMixin, MenusMixin, CommandsMixin):
         if demo: self.settings["addons"], self.settings["addons_enabled"] = {}, {n: True for n in self.addons.discover()}
         gui_style.apply_classic(root)   # old-mIRC chrome: must run before any widget exists
         self.font = gui_style.chat_font(self.settings["font_size"])
-        self.theme = gui_themes.get(self.settings.get("theme"))
+        self.theme = self._theme_now()
         self.map_win = self.addons_win = None
         root.title("mcIRC")
         root.geometry("1000x640")
@@ -243,6 +244,7 @@ class App(PrivateMixin, MenusMixin, CommandsMixin):
         self._body()
         self.switchbar = SwitchBar(self)
         gui_themes.style_panes(self, self.theme)
+        gui_skins.show_banner(self, self.skin)
         self.status = self.add_window("Status", "status window", in_tree=False)
         self.tree.insert("", 0, iid="Status", text="Status")
         self.tree.insert("", "end", iid="Channels", text="Channels", open=True)
@@ -380,6 +382,7 @@ class App(PrivateMixin, MenusMixin, CommandsMixin):
         log = WindowLog(name, self.log_dir) if self.settings["log_enabled"] else None
         w = ChatWindow(self.stack, name, topic, self.font, log, self.settings["log_history"], self.theme, self.settings["node_name"])
         w.frame.grid(row=0, column=0, sticky="nsew")
+        gui_platform.bind_right_click(w.text, lambda e, w=w: self._chat_menu(e, w))      # right-click a name in the text
         self.windows[name] = w
         if in_tree and hasattr(self, "tree") and not name.startswith("@") and self.tree.exists("Channels"):   # the tree holds Status + channels only; people/repeaters/rooms live on the top bar
             self.tree.insert("Channels", "end", iid=name, text=name)
@@ -452,7 +455,7 @@ class App(PrivateMixin, MenusMixin, CommandsMixin):
         nick_tag = "bot" if mine else f"nick{sum(map(ord, nick)) % len(self.theme['nicks'])}"
         words = [x.strip() for x in self.settings.get("highlight_words", "").split(",") if x.strip()]
         body, me, word = (split_mentions(text, tag, self.settings["node_name"], words) if not mine else ([(text, tag)], False, False))
-        parts = self.stamp() + [("<", "text"), (nick, nick_tag), ("> ", "text")] + body
+        parts = self.stamp() + [("<", "text"), (nick, (nick_tag, "nickname")), ("> ", "text")] + body
         if suffix: parts.append((f"  {suffix}", "meta"))
         w.write(parts)
         w.nicks.add(nick)
@@ -658,10 +661,16 @@ class App(PrivateMixin, MenusMixin, CommandsMixin):
         self.save()
         if self.current: self.refresh_nicks()
 
+    def _theme_now(self):
+        """Colours for the chat panes: the chosen theme, or the colours of the chosen skin's picture."""
+        self.skin = gui_skins.load(self.settings.get("skin"))
+        return gui_skins.themed(gui_themes.get(self.settings.get("theme")), self.skin)
+
     def apply_theme(self):
-        self.theme = gui_themes.get(self.settings.get("theme"))
+        self.theme = self._theme_now()
         for w in self.windows.values(): w.apply_theme(self.theme, self.font)
         gui_themes.style_panes(self, self.theme)
+        gui_skins.show_banner(self, self.skin)
 
     def node_sync_worker(self):
         """Runs on a worker thread: read the radio's contacts into long-term memory and forget stale ones."""

@@ -9,7 +9,7 @@
       "author": "bclml",
       "description": "DriveBC, BC Ferries, BC Transit, TransLink, weather, earthquake and tsunami alerts. Keeps the map layers up to date; broadcasting them to the mesh is off until you switch it on (a switch per alert type).",
       "path": "packages/broadcast_alerts",
-      "tested": "2026-10-03 with app 1.5.1"
+      "tested": "2026-10-03 with app 1.5.2"
     },
     {
       "name": "auto_reply",
@@ -18,7 +18,25 @@
       "author": "bclml",
       "description": "Keyword rules: answer the words you choose on the channels you choose, with your own reply text, sent to the channels you pick. Comes with a 'test' rule.",
       "path": "packages/auto_reply",
-      "tested": "2026-10-03 with app 1.5.1"
+      "tested": "2026-10-03 with app 1.5.2"
+    },
+    {
+      "name": "slap",
+      "title": "Slap",
+      "version": "1.0.0",
+      "author": "bclml",
+      "description": "The IRC classic: /slap Nick slaps someone around a bit with a large trout (also in the right-click menu on a name). Only sends when you type or click it; one per 10 seconds.",
+      "path": "packages/slap",
+      "tested": "2026-10-04 with app 1.5.2 (no radio; sending is covered by tests with a fake radio)"
+    },
+    {
+      "name": "dolphins",
+      "title": "Dolphins",
+      "version": "1.0.0",
+      "author": "bclml",
+      "description": "/dolphins sends a pod of dolphins to the channel in front, or to one person (also in the right-click menu on a name). Only sends when you type or click it; one per 10 seconds.",
+      "path": "packages/dolphins",
+      "tested": "2026-10-04 with app 1.5.2 (no radio; sending is covered by tests with a fake radio)"
     }
   ]
 }

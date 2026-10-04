@@ -7,6 +7,7 @@ from tkinter import ttk, messagebox
 
 import meshcore_io as ea
 import gui_themes
+import gui_skins
 import gui_sounds
 from gui_common import BG, CHANNELS, channel_index
 from gui_nodes import TYPE_NAMES
@@ -29,7 +30,7 @@ class OptionsDialog(tk.Toplevel):
         self.transient(app.root)
         keys = ("mode", "port", "baud", "ble_target", "tcp_host", "tcp_port", "node_name", "location", "poll_seconds", "node_lat", "node_lon", "node_prune_days",
                 "node_sync_minutes", "radio_capacity", "prune_radio", "auto_reset_radio", "advert_listen", "advert_notices", "show_time", "font_size", "auto_connect", "log_enabled", "log_history", "check_updates",
-                "theme", "highlight_words", "sounds_enabled", "sound_private", "sound_mention", "sound_highlight", "sound_channel", "sound_custom")
+                "theme", "skin", "highlight_words", "sounds_enabled", "sound_private", "sound_mention", "sound_highlight", "sound_channel", "sound_custom")
         self.vars = {k: (tk.BooleanVar if isinstance(s[k], bool) else tk.StringVar)(value=s[k] if isinstance(s[k], bool) else str(s[k])) for k in keys}
         body = tk.Frame(self, bg=BG)
         body.pack(fill="both", expand=True, padx=6, pady=6)
@@ -152,6 +153,11 @@ class OptionsDialog(tk.Toplevel):
         r.pack(fill="x", pady=3)
         tk.Label(r, text="Colour theme:", bg=BG, width=30, anchor="w").pack(side="left")
         ttk.Combobox(r, textvariable=self.vars["theme"], values=list(gui_themes.THEMES), state="readonly", width=16).pack(side="left")
+        r = tk.Frame(f, bg=BG)
+        r.pack(fill="x", pady=3)
+        tk.Label(r, text="Skin (a picture from skins/):", bg=BG, width=30, anchor="w").pack(side="left")
+        ttk.Combobox(r, textvariable=self.vars["skin"], values=[gui_skins.NONE] + gui_skins.list_skins(), state="readonly", width=16).pack(side="left")
+        tk.Label(f, text="A skin puts its picture across the top and takes the pane colours from it (it replaces the colour theme). Drop any PNG / JPG / GIF / BMP into the skins folder; see docs/SKINS.md.", bg=BG, fg="#555", wraplength=420, justify="left").pack(anchor="w")
         self._row(f, "Highlight words (comma separated):", "highlight_words", 24)
         tk.Label(f, text="@nickname and @[nick name] in messages are highlighted automatically (stronger when it is your name).", bg=BG, fg="#555", wraplength=420, justify="left").pack(anchor="w")
         tk.Checkbutton(f, text="Show timestamps", variable=self.vars["show_time"], bg=BG).pack(anchor="w", pady=(6, 0))

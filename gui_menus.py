@@ -58,6 +58,34 @@ class MenusMixin:
         m.add_command(label="Copy name", command=lambda: (self.root.clipboard_clear(), self.root.clipboard_append(nick)))
         m.tk_popup(e.x_root, e.y_root)
 
+    def _chat_menu(self, e, w):
+        """Right-click on a name in the chat text: private chat, reply, node info, and the fun commands addons provide."""
+        t = w.text
+        idx = t.index(f"@{e.x},{e.y}")
+        if "nickname" not in t.tag_names(idx): return
+        start, end = t.tag_prevrange("nickname", f"{idx}+1c")
+        nick = t.get(start, end).strip()
+        if not nick: return
+        mine = nick == self.settings["node_name"]
+        m = tk.Menu(self.root, tearoff=0)
+        if not mine:
+            m.add_command(label=f"Private message with {nick}", command=lambda: self._open_query_by_name(nick))
+            m.add_command(label=f"Reply to {nick}", command=lambda: self._reply_to(nick))
+            fun = [(label, cmd) for label, cmd in (("Slap {} with a large trout", "slap"), ("Send {} dolphins", "dolphins")) if cmd in self.commands and not w.name.startswith("@")]
+            if fun: m.add_separator()
+            for label, cmd in fun: m.add_command(label=label.format(nick), command=lambda c=cmd: self.commands[c][0](nick))
+            m.add_separator()
+            m.add_command(label="Node info...", command=lambda: self.node_info(name=nick))
+        m.add_command(label="Copy name", command=lambda: (self.root.clipboard_clear(), self.root.clipboard_append(nick)))
+        m.tk_popup(e.x_root, e.y_root)
+
+    def _reply_to(self, nick):
+        """Start the message line with @[nick] (MeshCore's mention format) and put the cursor after it."""
+        self.entry.delete(0, "end")
+        self.entry.insert(0, f"@[{nick}] ")
+        self.entry.focus_set()
+        self.entry.icursor("end")
+
     def _open_query_by_name(self, nick):
         node = self.nodes.find_by_name(nick)
         self.open_query(nick, node["public_key"] if node else None)

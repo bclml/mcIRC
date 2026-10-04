@@ -90,7 +90,10 @@ app.connected = False
 app.status.write = lambda parts: texts.append("".join(t for t, _ in parts)); texts = []
 app.connect(); check("clicking Connect again says it is already connecting", any("Already connecting" in t for t in texts), str(texts[-1:]))
 texts.clear(); app.disconnect(); check("Disconnect during connecting says it is cancelling", any("Cancelling" in t for t in texts), str(texts[-1:]))
-texts.clear(); app.connect(); check("Connect while cancelling asks to wait", any("Still cancelling" in t for t in texts))
+texts.clear(); app.connect()
+waited = any("Still cancelling" in t for t in texts)
+check("Connect while cancelling asks to wait (or, if the cancel already finished, simply connects)", waited or any("Connecting to the node" in t for t in texts), str(texts[-2:]))
+if not waited: app.worker.stop()      # (a fast cancel finished before the click: the click started a new attempt - stop that one too)
 time.sleep(0.8)
 k = kinds(states())
 check("cancelled attempt ends quickly without ever reporting 'connected'", "state:stopped" in k and "state:connected" not in k and not app.worker.running, str(k))

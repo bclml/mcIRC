@@ -51,7 +51,7 @@ class PrivateMixin:
         self.select_window(w.name)
         return w
 
-    def _dm_in(self, text, prefix, extra):
+    def _dm_in(self, text, prefix, extra, via=None):
         node = self.nodes.find_by_prefix(prefix)
         name = node["name"] if node and node["name"] else None
         key = node["public_key"] if node else prefix
@@ -62,18 +62,20 @@ class PrivateMixin:
             if name and w.name != "@" + name:
                 self.rename_query(w.name, name, key)
                 w = self.windows.get("@" + name, w)
-        if not name: self.lookup_sender_name(prefix)
+        if not name and via is None: self.lookup_sender_name(prefix)
+        w.node = via                                           # replies go back through the node this person wrote to (None = the main node)
         who = w.name[1:]
         bits = []
         if extra.get("snr") is not None: bits.append(f"SNR {extra['snr']}")
         hops = extra.get("hops")
         if hops is not None: bits.append("direct" if hops in (0, 255) else f"{hops} hops")
         self.chat_line(w, who, text, "text", f"({', '.join(bits)})" if bits else "", event="private")
-        self.addons.dispatch("on_message", {"channel": w.name, "channel_idx": None, "nick": who, "text": text, "dm": True,
+        self.addons.dispatch("on_message", {"channel": w.name, "channel_idx": None, "nick": who, "text": text, "dm": True, "node": via,
                                              "snr": extra.get("snr"), "hops": hops, "raw": extra.get("raw")})
 
     def send_dm(self, w, text):
         key = w.key or (self.nodes.find_by_name(w.name[1:]) or {}).get("public_key")
+        if getattr(w, "node", None) and key: return self.send_extra_dm(w, key, text)      # this person is on an extra node
         if not self.connected or not key:
             self.status_line(f"*** Can't message {w.name[1:]}: " + ("not connected." if not self.connected else "that node's key isn't known yet."), "error")
             return

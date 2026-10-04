@@ -30,6 +30,7 @@ DEFAULT_SETTINGS = {
     "log_enabled": True,         # keep one .txt log per window in logs/
     "log_history": 200,          # how many log lines to show again after a restart
     "addons": {}, "addons_enabled": {},
+    "extra_nodes": [],            # Options > More nodes: [{label, mode, port / host / ble, enabled}]
 }
 
 # Classic Windows / mIRC palette

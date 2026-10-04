@@ -27,7 +27,7 @@ COMMANDS = {        # command: (what it does, needs a place)
     "contact": "who runs this bot",
 }
 ALIASES = {"solarforecast": "sf", "overhead": "airplanes"}
-VERSION = "1.0.4"
+VERSION = "1.0.5"
 
 
 class Addon(AddonBase):

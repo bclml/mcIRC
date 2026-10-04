@@ -36,7 +36,7 @@ def parse_command(text, commands, prefix=""):
 
 
 def norm_channel(name):
-    n = (name or "").strip().lower()
+    n = re.sub(r"\s*\[[^\]]*\]$", "", (name or "").strip().lower())      # 'Public [915]' (a window of an extra node) is still 'public'
     if n in ("public", "#public", "0"): return "public"
     return n if n.startswith("#") else "#" + n if n else ""
 

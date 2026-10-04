@@ -37,6 +37,7 @@ import gui_themes
 import gui_skins
 import gui_echo
 import gui_rescue
+import gui_multinode
 import gui_sounds
 from gui_private import PrivateMixin
 from gui_menus import MenusMixin
@@ -241,7 +242,7 @@ class QueueLogHandler(logging.Handler):
         if "[DIAGNOSTIC]" not in msg: self.q.put(("log", record.levelno, msg))
 
 
-class App(PrivateMixin, MenusMixin, CommandsMixin):
+class App(PrivateMixin, MenusMixin, CommandsMixin, gui_multinode.MultiNodeMixin):
     def __init__(self, root, demo=False):
         self.root, self.demo, self.connected = root, demo, False
         first_start = not os.path.exists(SETTINGS_PATH)          # a brand-new setup: the default addons get installed below
@@ -255,6 +256,7 @@ class App(PrivateMixin, MenusMixin, CommandsMixin):
         self.commands, self.map_layers = {}, {}   # filled by addons
         self.signal_traces = []                    # paths the radio really heard (map: Show signals)
         self.packet_log = []                       # every packet the listener heard: kind, route, signal (MeshCore tools: packet monitor)
+        self.extra_nodes = {}                      # label -> gui_multinode.ExtraNode (Options > More nodes)
         self._name_lookups = {}                   # key prefix -> time of the last radio lookup (rate limit)
         self.worker = CoreWorker(self)
         self.nodes = NodeStore(":memory:") if demo else NodeStore()
@@ -419,8 +421,11 @@ class App(PrivateMixin, MenusMixin, CommandsMixin):
         w.frame.grid(row=0, column=0, sticky="nsew")
         gui_platform.bind_right_click(w.text, lambda e, w=w: self._chat_menu(e, w))      # right-click a name in the text
         self.windows[name] = w
+        base, node_label = gui_multinode.split_tag(name)
+        w.node = node_label if node_label and not name.startswith("@") else None      # windows of an extra node carry its label: 'Public [915]'
         if in_tree and hasattr(self, "tree") and not name.startswith("@") and self.tree.exists("Channels"):   # the tree holds Status + channels only; people/repeaters/rooms live on the top bar
-            self.tree.insert("Channels", "end", iid=name, text=name)
+            if node_label: self.tree.insert(self.node_parent(node_label), "end", iid=name, text=base)
+            else: self.tree.insert("Channels", "end", iid=name, text=name)
         if name.startswith("@"): self._add_button(name)   # the switchbar is for direct messages only
         return w
 
@@ -736,8 +741,10 @@ class App(PrivateMixin, MenusMixin, CommandsMixin):
         self.apply_settings()
         self.status_line("*** Connecting to the node...", "info")
         self.worker.start(self.settings)
+        self.start_extra_nodes()
 
     def disconnect(self):
+        self.stop_extra_nodes()
         if self.worker.running:
             was = self.connected
             self.worker.stop()
@@ -781,6 +788,7 @@ class App(PrivateMixin, MenusMixin, CommandsMixin):
         for w in self.windows.values():
             if w.log: w.log.stamp("Session Close")
         was = self.connected
+        self.stop_extra_nodes()
         self.worker.stop()
         self.adverts.interrupt()                     # don't leave the advert listener holding the radio's port after the window is gone
         if was: self.reboot_node_after_disconnect(wait=8)
@@ -819,6 +827,7 @@ class App(PrivateMixin, MenusMixin, CommandsMixin):
         if threading.current_thread() is not threading.main_thread():  # addons may call this from worker threads
             self.q.put(("call", lambda: self.send_to(channel, text)))
             return
+        if isinstance(channel, str) and self.send_extra_channel(channel, text): return      # a window of an extra node: its own radio
         idx = channel if isinstance(channel, int) else channel_index(channel)
         name = display_for_index(idx) if idx is not None else str(channel)
         if idx is None or not self.connected:

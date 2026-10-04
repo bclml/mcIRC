@@ -1,7 +1,7 @@
 {
   "name": "channel_list",
   "title": "Channel list",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Answers 'channel list' with the channels you keep in its list (add / remove / rename / reorder them in Options). Off until you switch it on.",
   "requires": [],
   "files": {

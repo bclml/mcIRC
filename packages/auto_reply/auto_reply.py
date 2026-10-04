@@ -18,7 +18,7 @@ DEFAULT_RULES = [{"name": "Test", "enabled": True, "triggers": "test, t", "match
                   "reply": "@{sender} Test received, {hops} hops", "reply_to": "", "cooldown": 20}]
 
 
-def norm(name): return (name or "").strip().lstrip("#").lower()
+def norm(name): return re.sub(r"\s*\[[^\]]*\]$", "", (name or "").strip()).lstrip("#").lower()      # ('#weather [915]' = #weather on an extra node)
 def split_list(text): return [x.strip() for x in (text or "").split(",") if x.strip()]
 
 
@@ -45,7 +45,7 @@ def match_rule(rule, text):
 
 class Addon(AddonBase):
     title = "Auto reply"
-    version = "1.1.3"
+    version = "1.1.4"
     author = "bclml"
     description = "Keyword rules: answer chosen words on chosen channels with your own text, to the channels you pick."
 

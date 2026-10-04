@@ -21,7 +21,7 @@ def answer_text(channels, intro="Channels:"):
 
 class Addon(AddonBase):
     title = "Channel list"
-    version = "1.0.0"
+    version = "1.0.1"
     author = "mcIRC"
     description = "Answers 'channel list' with the channels you keep in its list (add / remove / rename / reorder them in Options). Off until you switch it on."
     tick_seconds = 0

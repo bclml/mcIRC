@@ -20,7 +20,7 @@ from tkinter import filedialog
 
 
 class OptionsDialog(tk.Toplevel):
-    PAGES = {"Connect": "_page_connect", "Node memory": "_page_nodes", "Map": "_page_map", "Display": "_page_display", "Sounds": "_page_sounds"}
+    PAGES = {"Connect": "_page_connect", "More nodes": "_page_more_nodes", "Node memory": "_page_nodes", "Map": "_page_map", "Display": "_page_display", "Sounds": "_page_sounds"}
 
     def __init__(self, app):
         super().__init__(app.root, bg=BG)
@@ -41,7 +41,7 @@ class OptionsDialog(tk.Toplevel):
         self.frames = {}
         self.node_pages = NodePages(self)
         node_frames = self.node_pages.build(self.stage)
-        order = ["Connect", *node_frames, "Node memory", "Map", "Display", "Sounds"]
+        order = ["Connect", "More nodes", *node_frames, "Node memory", "Map", "Display", "Sounds"]
         for name in order:
             self.tree.insert("", "end", iid=name, text=name)
             self.frames[name] = node_frames[name] if name in node_frames else getattr(self, self.PAGES[name])(tk.Frame(self.stage, bg=BG))
@@ -120,6 +120,11 @@ class OptionsDialog(tk.Toplevel):
     def _node_action(self):
         if self.apply(): self.app.sync_nodes_now(then=self._update_node_stats)
 
+    def _page_more_nodes(self, f):
+        import gui_multinode_ui
+        self.more_nodes = gui_multinode_ui.NodesPage(self, f)
+        return f
+
     def _page_sounds(self, f):
         self._head(f, "Notification sounds")
         tk.Checkbutton(f, text="Play sounds (only when you are not looking at that window)", variable=self.vars["sounds_enabled"], bg=BG).pack(anchor="w", pady=(0, 6))
@@ -173,6 +178,7 @@ class OptionsDialog(tk.Toplevel):
             messagebox.showerror("Options", "Please check the numeric fields.", parent=self)
             return False
         s.update(new)
+        if hasattr(self, "more_nodes"): s["extra_nodes"] = self.more_nodes.items()
         self.app.apply_settings()
         return True
 

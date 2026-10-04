@@ -396,7 +396,10 @@ def _trace(args, attempt, outcome, started, detail=""):
     try: TRACE(args, attempt + 1, outcome, time.time() - started, detail)
     except Exception: pass
 
-def execute_mesh_command(args_list, timeout=30, retries=2, retry_delay=2):
+def execute_mesh_command(args_list, timeout=30, retries=2, retry_delay=2, lock=None, health=None):
+    """Runs meshcli with these arguments.  lock / health: the radio's own (extra nodes - gui_multinode.py); default the main node's."""
+    lock = lock or MESH_LOCK
+    health = health or HEALTH
     launch = cli_cmd()
     last_err = None
     gen = _CANCEL_GEN[0]
@@ -404,7 +407,7 @@ def execute_mesh_command(args_list, timeout=30, retries=2, retry_delay=2):
         if _CANCEL_GEN[0] != gen: raise Cancelled("cancelled")
         started = time.time()
         try:
-            with MESH_LOCK:
+            with lock:
                 if _CANCEL_GEN[0] != gen: raise Cancelled("cancelled")
                 result = _run_cli(launch + args_list, timeout=timeout, gen=gen)
         except Cancelled:
@@ -427,11 +430,21 @@ def execute_mesh_command(args_list, timeout=30, retries=2, retry_delay=2):
             _trace(args_list, attempt, "FAILED", started, hit)
         else:
             _trace(args_list, attempt, "ok", started, f"{len(result.stdout)} chars")
-            HEALTH.success()
+            health.success()
             return result
         if attempt < retries: _nap(retry_delay, gen)
-    HEALTH.failure(last_err)
+    health.failure(last_err)
     raise last_err
+
+def channel_map(conn_args, lock=None, health=None, retries=1):
+    """{channel name: index} of any node (the main node's resolve_channel_indices fills the module-wide map instead)."""
+    result = execute_mesh_command(conn_args + [".get_channels"], retries=retries, lock=lock, health=health)
+    combined = f"{result.stdout}\n{result.stderr}"
+    starts = [i for i in (combined.find("["), combined.find("{")) if i != -1]
+    if not starts: raise ValueError("no JSON payload found in .get_channels output")
+    data, _ = json.JSONDecoder().raw_decode(combined[min(starts):])
+    return {c["channel_name"]: c["channel_idx"] for c in (data if isinstance(data, list) else [data]) if isinstance(c, dict) and c.get("channel_name")}
+
 
 def resolve_channel_indices(attempts=3, retries=2, quiet=False):
     """Fetches the node's real channel list (name -> index) via `.get_channels` — the leading dot
@@ -562,6 +575,15 @@ def fetch_incoming_messages():
     # lines count as "something", it used to be written on nearly every poll.  Set MCIRC_DEBUG_RAW=1 to get it back when a message format has to be inspected.
     if os.environ.get("MCIRC_DEBUG_RAW") and combined.strip() not in ("", "[]"):
         logging.info(f"[DIAGNOSTIC] Raw .sync_msgs output: {combined!r}")
+    for kind, idx, text, nick, extra in parse_messages(combined):
+        _emit(kind, idx, text, nick=nick, **extra)
+        if kind == "in": found.append(extra["raw"])
+    return found
+
+
+def parse_messages(combined):
+    """The messages in a `.sync_msgs` answer -> [(kind, channel_idx, text, nick, extra)]: kind 'dm' (nick = the sender's key prefix) or 'in'."""
+    out = []
     for line in combined.splitlines():
         line = line.strip()
         # BUG FIX: confirmed live that `.sync_msgs` prints ALL fetched messages as a single JSON
@@ -577,10 +599,9 @@ def fetch_incoming_messages():
             if not isinstance(data, dict): continue
             if data.get("type") == "PRIV":  # direct message: only the sender's key prefix is known here
                 prefix = data.get("pubkey_prefix", "")
-                _emit("dm", -1, (data.get("text") or "").strip(), nick=prefix, snr=data.get("SNR"), hops=data.get("path_len"), raw=data, pubkey=prefix)
+                out.append(("dm", -1, (data.get("text") or "").strip(), prefix, {"snr": data.get("SNR"), "hops": data.get("path_len"), "raw": data, "pubkey": prefix}))
                 continue
             if data.get("type") != "CHAN": continue
             sender, body = split_sender(data.get("text", ""))
-            _emit("in", data.get("channel_idx", DEFAULT_CHANNEL_IDX), body, nick=sender, snr=data.get("SNR"), hops=data.get("path_len"), raw=data)
-            found.append(data)
-    return found
+            out.append(("in", data.get("channel_idx", DEFAULT_CHANNEL_IDX), body, sender, {"snr": data.get("SNR"), "hops": data.get("path_len"), "raw": data}))
+    return out

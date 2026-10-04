@@ -12,7 +12,7 @@ MAX_CHARS = 115
 
 
 def norm(ch):
-    n = (ch or "").strip().lower()
+    n = re.sub(r"\s*\[[^\]]*\]$", "", (ch or "").strip().lower())      # ('Public [915]' = Public on an extra node)
     if n in ("public", "#public"): return "public"
     return n if n.startswith("#") else "#" + n if n else ""
 
@@ -48,7 +48,7 @@ def _wrap(text, limit):
 
 class Addon(AddonBase):
     title = "Bot help"
-    version = "1.0.3"
+    version = "1.0.4"
     author = "mcIRC"
     description = ("Answers 'bothelp' with the bot commands that work in that channel (Weather bot, Fun bot, Auto reply, ...), and can announce "
                    "'Type bothelp for a list of commands.' once a day at a set time. Off until you switch it on.")

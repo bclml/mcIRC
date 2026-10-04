@@ -19,6 +19,16 @@ class AddonSettingsWindow(tk.Toplevel):
         head.pack(fill="x", padx=10, pady=(8, 2))
         tk.Label(head, text=f"{title}  {ver}", bg=BG, font=(gui_platform.UI_FONT_NAME, 11, "bold"), anchor="w").pack(anchor="w")
         if desc: tk.Label(head, text=desc, bg=BG, fg="#555", wraplength=660, justify="left", anchor="w").pack(anchor="w")
+        self.node_vars = {}
+        extra = [c["label"] for c in app.settings.get("extra_nodes", []) if c.get("label")]
+        if extra:                                              # more than one node: which ones this addon works on
+            row = tk.Frame(self, bg=BG)
+            row.pack(fill="x", padx=10, pady=(4, 0))
+            tk.Label(row, text="Use on these nodes:", bg=BG).pack(side="left")
+            on = set(app.addons.nodes_for(name))
+            for label in ["main"] + extra:
+                self.node_vars[label] = tk.BooleanVar(value=label in on)
+                tk.Checkbutton(row, text="main node" if label == "main" else label, variable=self.node_vars[label], bg=BG).pack(side="left")
         buttons = tk.Frame(self, bg=BG)
         buttons.pack(side="bottom", fill="x", padx=10, pady=8)
         ttk.Button(buttons, text="Cancel", command=self.destroy).pack(side="right")
@@ -46,6 +56,9 @@ class AddonSettingsWindow(tk.Toplevel):
         self.transient(parent or app.root)
 
     def apply(self):
+        if self.node_vars:
+            self.app.settings.setdefault("addons", {}).setdefault(self.name, {})["_nodes"] = [k for k, v in self.node_vars.items() if v.get()]
+            self.app.save()
         if self.page is None: return True
         try: self.app.addons._call(self.name, "apply_options")
         except Exception as e:

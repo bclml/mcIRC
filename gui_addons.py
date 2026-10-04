@@ -248,7 +248,16 @@ class AddonManager:
             tb = traceback.format_exc().strip().splitlines()
             self.app.status_line(f"*** Addon '{name}' error in {hook}(): {tb[-1]}", "error")
 
+    def nodes_for(self, name):
+        """The nodes an addon works on: 'main' and/or extra node labels (its settings window, 'Use on these nodes')."""
+        return list(self.app.settings.get("addons", {}).get(name, {}).get("_nodes", ["main"]))
+
     def dispatch(self, hook, *args):
+        if hook == "on_message" and args and isinstance(args[0], dict):
+            node = args[0].get("node") or "main"
+            for name in list(self.loaded):
+                if node in self.nodes_for(name): self._call(name, hook, *args)
+            return
         for name in list(self.loaded): self._call(name, hook, *args)
 
     def tick(self, now):

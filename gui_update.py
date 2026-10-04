@@ -8,7 +8,7 @@ Safety rules (the whole point of this module):
   * Files the user may have edited (EDITABLE, e.g. emergency_agent.py with its channel names and regions) are only
     replaced if they still match a version this updater wrote earlier; otherwise the new version is saved next to it
     as <name>.new and the user's file is kept."""
-import fnmatch, hashlib, io, json, os, shutil, time, zipfile
+import fnmatch, hashlib, io, json, os, re, shutil, time, zipfile
 
 from gui_addons import BASE_DIR, BRANCH, RAW, REPO, _http_get, vkey
 
@@ -27,10 +27,19 @@ def local_version(base=BASE_DIR):
     except OSError: return "0.0.0"
 
 
+REQUIRED = ("scripts/start_mcirc.ps1", "assets/mcIRC.ico", "assets/mcIRC.png")      # Run_GUI.bat and the window icon need these; see repair()
+
+
+def _safe_rel(rel):
+    """A path that stays inside the install folder: plain names joined by '/', never '..', '.', a drive letter, a backslash or an absolute path."""
+    return bool(rel) and all(p not in (".", "..") and re.fullmatch(r"[A-Za-z0-9._ -]+", p) for p in rel.split("/"))
+
+
 def updatable(rel):
+    if not _safe_rel(rel): return False
     if rel in EXACT: return True
-    if "/" not in rel: return fnmatch.fnmatch(rel, "gui_*.py")
-    return rel.startswith(("packages/", "docs/")) and ".." not in rel.split("/")
+    if "/" not in rel: return fnmatch.fnmatch(rel, "gui_*.py")                     # gui_*.py only at the top level
+    return any(fnmatch.fnmatch(rel, g) for g in GLOBS if "/" in g)                # packages/, docs/, assets/, scripts/ at any depth
 
 
 def _sha(data): return hashlib.sha256(data).hexdigest()
@@ -47,6 +56,30 @@ def check(get=_http_get, raw=RAW):
     remote = get(raw + "VERSION").decode("utf-8").strip()
     local = local_version()
     return {"local": local, "remote": remote, "newer": vkey(remote) > vkey(local)}
+
+
+def missing_required(base=BASE_DIR):
+    return [r for r in REQUIRED if not os.path.exists(os.path.join(base, *r.split("/")))]
+
+
+def repair(get=_http_get, zip_url=ZIP_URL, base=BASE_DIR):
+    """Versions up to 1.4.9 could not deliver assets/ and scripts/ (their updater only knew packages/ and docs/), so an app updated that way can be
+    missing files that Run_GUI.bat and the window icon need.  This downloads the newest version and writes ONLY those missing files; nothing that
+    exists is touched.  Returns the files written."""
+    need = missing_required(base)
+    if not need: return []
+    zf = zipfile.ZipFile(io.BytesIO(get(zip_url, timeout=90)))
+    names = [n for n in zf.namelist() if not n.endswith("/")]
+    root = names[0].split("/")[0] + "/"
+    wrote = []
+    for rel in need:
+        if root + rel in names and updatable(rel):
+            path = os.path.join(base, *rel.split("/"))
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            with open(path + ".tmp", "wb") as f: f.write(zf.read(root + rel))
+            os.replace(path + ".tmp", path)
+            wrote.append(rel)
+    return wrote
 
 
 def apply_update(get=_http_get, zip_url=ZIP_URL, base=BASE_DIR, state_path=STATE_PATH, progress=lambda text: None):

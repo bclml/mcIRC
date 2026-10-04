@@ -540,11 +540,9 @@ def fetch_incoming_messages():
         return found
     if PENDING_SENDS: flush_pending_sends()          # the radio just answered: send what was waiting
     combined = f"{result.stdout}\n{result.stderr}"
-    # TEMPORARY DIAGNOSTIC: log every non-trivial .sync_msgs response verbatim, so a real incoming
-    # message's actual JSON shape is visible in the log instead of having to guess at field names
-    # blind (get_channels already surprised us once - same risk here). Harmless to leave since it
-    # only logs when there's actually something more than an empty "[]" response.
-    if combined.strip() not in ("", "[]"):
+    # Debugging aid, OFF by default: the verbatim .sync_msgs response contains the TEXT of every message (private ones too) and, because meshcli's own INFO
+    # lines count as "something", it used to be written on nearly every poll.  Set MCIRC_DEBUG_RAW=1 to get it back when a message format has to be inspected.
+    if os.environ.get("MCIRC_DEBUG_RAW") and combined.strip() not in ("", "[]"):
         logging.info(f"[DIAGNOSTIC] Raw .sync_msgs output: {combined!r}")
     for line in combined.splitlines():
         line = line.strip()

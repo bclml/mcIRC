@@ -45,10 +45,13 @@ if (-not $py) {
 }
 
 if ($needInstall) {
-    if ($testing) { Add-Content -Path $env:MCIRC_LAUNCHER_TEST -Value "WOULD INSTALL packages with $py"; exit 0 }
-    $cmd = "`"$py`" -m pip install -r `"$here\requirements.txt`""
+    if ($testing -and -not $env:MCIRC_TEST_PIPARGS) { Add-Content -Path $env:MCIRC_LAUNCHER_TEST -Value "WOULD INSTALL packages with $py"; exit 0 }
+    $pipArgs = if ($env:MCIRC_TEST_PIPARGS) { $env:MCIRC_TEST_PIPARGS } else { "install -r `"$here\requirements.txt`"" }       # (tests swap in a harmless pip command)
+    $cmd = "`"$py`" -m pip $pipArgs"
     Say "First start: mcIRC will now install the Python packages it needs (meshcore-cli, pyserial, ...). A window shows the progress; it takes a minute. Press OK to start." 'Information'
-    Start-Process -FilePath $env:ComSpec -ArgumentList "/c $cmd & if errorlevel 1 (echo. & echo Installing failed - see the message above. & pause)" -Wait
+    # cmd strips the first and last quote of a /c line that starts with a quote and has more than two: wrap everything in one more pair and use /s so exactly that pair is removed
+    $style = if ($testing) { 'Hidden' } else { 'Normal' }
+    Start-Process -FilePath $env:ComSpec -ArgumentList "/s /c `"$cmd & if errorlevel 1 (echo. & echo Installing failed - see the message above. & pause)`"" -WindowStyle $style -Wait
     if (-not (HasPackages $py)) { Say "The packages could not be installed.`n`nOpen a command prompt in the mcIRC folder and run:`n    pip install -r requirements.txt`nThen try again." 'Error'; exit 3 }
 }
 
@@ -61,6 +64,6 @@ if ($wanted -contains '--make-shortcut') {
 $pyw = Join-Path (Split-Path $py -Parent) 'pythonw.exe'
 if (-not (Test-Path $pyw)) { $pyw = $py }
 $argList = '"' + (Join-Path $here 'mcIRC.py') + '"'
-if ($wanted.Count) { $argList += ' ' + ($wanted -join ' ') }
+if ($wanted.Count) { $argList += ' ' + (($wanted | ForEach-Object { if ($_ -match '\s') { '"' + $_ + '"' } else { $_ } }) -join ' ') }
 if ($testing) { Add-Content -Path $env:MCIRC_LAUNCHER_TEST -Value "START: $pyw $argList"; exit 0 }
 Start-Process -FilePath $pyw -ArgumentList $argList -WorkingDirectory $here

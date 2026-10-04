@@ -259,7 +259,9 @@ class App(PrivateMixin, MenusMixin, CommandsMixin):
         self.addons.load_all()
         self.resolve_key_windows()
         root.after(100, self.drain)
-        if not demo and self.settings["check_updates"]: root.after(8000, self.auto_update_check)
+        if not demo and self.settings["check_updates"]:
+            root.after(8000, self.auto_update_check)
+            root.after(15000, self.auto_repair)
         root.after(1000, self.tick)
         if demo: self.load_demo()
         elif self.settings["auto_connect"]: self.connect()
@@ -598,6 +600,13 @@ class App(PrivateMixin, MenusMixin, CommandsMixin):
             self.save()
             if r["newer"]: self.status_line(f"*** Update available: version {r['remote']} (you have {r['local']}) - Help > Check for updates.", "warn")
         self.bg(gui_update.check, done)
+
+    def auto_repair(self):
+        """Restore files that an update by an older version of mcIRC could not deliver (scripts/, assets/); silent unless something was restored."""
+        if not gui_update.missing_required(): return
+        def done(r):
+            if r and not isinstance(r, Exception): self.status_line(f"*** Restored {len(r)} program file(s) that an earlier update missed ({', '.join(r)}).", "info")
+        self.bg(gui_update.repair, done)
 
     def _h_lastport(self, port):
         if self.settings.get("last_port") != port:

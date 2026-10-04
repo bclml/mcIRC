@@ -32,21 +32,21 @@ R = lambda **kw: {"name": kw.pop("name", "r"), "enabled": True, "match": "exact"
 
 # ---------- default rule ----------
 a, sent, _ = make()
-check("default rule: 'test' answered in the same channel", talk(a, sent, "Public", "test") == [("Public", "@Bob Test received, 2 hops")])
+check("default rule: 'test' answered in the same channel", talk(a, sent, "Public", "test") == [("Public", "@[Bob] Test received, 2 hops")])
 check("'t' + case-insensitive; chat ignored", talk(a, sent, "#drivebc", "T", nick="Al") != [] and talk(a, sent, "Public", "testing 123") == [] and talk(a, sent, "Public", "hello") == [])
 check("direct messages ignored", talk(a, sent, "@Bob", "test", dm=True) == [])
-check("hops 255 means direct (0 hops)", talk(a, sent, "Public", "test", nick="Di", hops=255)[0][1] == "@Di Test received, 0 hops")
+check("hops 255 means direct (0 hops)", talk(a, sent, "Public", "test", nick="Di", hops=255)[0][1] == "@[Di] Test received, 0 hops")
 
 # ---------- the #kod-bot behaviour, now just two rules ----------
 kod = [R(name="Test here", triggers="test, t", listen="#kod-bot", reply="@{sender} Test received, {hops} hops"),
        R(name="Test elsewhere", triggers="test, t", reply="@{sender} Test should be made in #kod-bot")]
 a, sent, _ = make(kod)
-check("rules: test on #kod-bot -> normal reply there", talk(a, sent, "#kod-bot", "test") == [("#kod-bot", "@Bob Test received, 2 hops")])
-check("rules: test elsewhere -> told to use #kod-bot (first match wins, later skipped)", talk(a, sent, "Public", "test") == [("Public", "@Bob Test should be made in #kod-bot")] and len(talk(a, sent, "#kod-bot", "test", nick="Z")) == 1)
+check("rules: test on #kod-bot -> normal reply there", talk(a, sent, "#kod-bot", "test") == [("#kod-bot", "@[Bob] Test received, 2 hops")])
+check("rules: test elsewhere -> told to use #kod-bot (first match wins, later skipped)", talk(a, sent, "Public", "test") == [("Public", "@[Bob] Test should be made in #kod-bot")] and len(talk(a, sent, "#kod-bot", "test", nick="Z")) == 1)
 
 # ---------- channels: heard on / reply to ----------
 a, sent, _ = make([R(triggers="!traffic", listen="Public, #bot-van", reply_to="#drivebc", reply="@{sender} see #drivebc")])
-check("heard on Public -> reply goes to a DIFFERENT channel", talk(a, sent, "Public", "!traffic") == [("#drivebc", "@Bob see #drivebc")])
+check("heard on Public -> reply goes to a DIFFERENT channel", talk(a, sent, "Public", "!traffic") == [("#drivebc", "@[Bob] see #drivebc")])
 check("not heard on an unlisted channel", talk(a, sent, "#weather", "!traffic") == [])
 a, sent, _ = make([R(triggers="x", listen=" public ,  #BOT-van ")])
 check("listen list ignores case, spaces and '#'", talk(a, sent, "Public", "x") != [] and talk(a, sent, "#bot-van", "x", nick="B") != [] and talk(a, sent, "#kod-bot", "x", nick="C") == [])
@@ -55,8 +55,8 @@ check("reply to several channels, capped at 3", [c for c, _ in talk(a, sent, "Pu
 
 # ---------- match styles + placeholders ----------
 a, sent, _ = make([R(triggers="!say", match="starts with", reply="@{sender} you said: {text} ({keyword})")])
-check("starts with: {text} is the rest, {keyword} the match", talk(a, sent, "Public", "!say hello there") == [("Public", "@Bob you said: hello there (!say)")])
-check("starts with: must be a whole word", talk(a, sent, "Public", "!sayonara") == [] and talk(a, sent, "Public", "!say", nick="K")[0][1] == "@K you said:  (!say)")
+check("starts with: {text} is the rest, {keyword} the match", talk(a, sent, "Public", "!say hello there") == [("Public", "@[Bob] you said: hello there (!say)")])
+check("starts with: must be a whole word", talk(a, sent, "Public", "!sayonara") == [] and talk(a, sent, "Public", "!say", nick="K")[0][1] == "@[K] you said:  (!say)")
 a, sent, _ = make([R(triggers="traffic, road closed", match="contains", reply="check #drivebc, {sender}")])
 check("contains: whole words/phrases anywhere", talk(a, sent, "Public", "any Traffic on hwy 1?") != [] and talk(a, sent, "Public", "is the road closed today", nick="M") != [] and talk(a, sent, "Public", "trafficking", nick="N") == [])
 a, sent, _ = make([R(triggers="!t, !traffic", match="starts with", reply="LONG", cooldown=0), ])

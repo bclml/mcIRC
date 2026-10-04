@@ -283,6 +283,8 @@ class App(PrivateMixin, MenusMixin, CommandsMixin):
         t.add_command(label="Addons...", command=self.open_addons)
         t.add_command(label="This node's settings...", command=lambda: self.open_options("Node: radio"))
         t.add_command(label="Reset radio via USB...", command=self.reset_radio_now)
+        if gui_platform.IS_WIN:
+            t.add_command(label="Create desktop shortcut (mcIRC icon)", command=lambda: make_shortcuts(lambda text: messagebox.showinfo("mcIRC shortcut", text, parent=self.root)))
         t.add_command(label="Open logs folder", command=lambda: (os.makedirs(LOG_DIR, exist_ok=True), gui_platform.open_path(LOG_DIR)))
         self.addon_menu = tk.Menu(m, tearoff=0)
         h = tk.Menu(m, tearoff=0)
@@ -821,13 +823,27 @@ class App(PrivateMixin, MenusMixin, CommandsMixin):
         self.select_window("Public")
 
 
+def make_shortcuts(say):
+    """Create the 'mcIRC' shortcut (logo icon, no console window) on the Desktop and next to mcIRC.py.  `say` gets the result text."""
+    made, problems = [], []
+    for folder in (gui_platform.desktop_folder(), os.path.dirname(os.path.abspath(__file__))):
+        if not folder: continue
+        try: made.append(gui_platform.create_shortcut(folder))
+        except Exception as e: problems.append(str(e))
+    say(("Created: " + "; ".join(made)) if made else "No shortcut could be created: " + "; ".join(problems))
+    return bool(made)
+
+
 def main():
+    gui_platform.hide_own_console()          # double-clicked mcIRC.py: don't leave an empty console window open
     if sys.stderr is None or sys.stdout is None:   # started with pythonw (no console window): keep tracebacks in a file
         os.makedirs(LOG_DIR, exist_ok=True)
         sys.stdout = sys.stderr = open(os.path.join(LOG_DIR, "gui_errors.txt"), "a", encoding="utf-8", buffering=1)
     ap = argparse.ArgumentParser()
     ap.add_argument("--demo", action="store_true", help="fill the UI with fake data; never touches the radio")
+    ap.add_argument("--make-shortcut", action="store_true", help="(Windows) put an mcIRC shortcut with the logo on the Desktop and in this folder, then exit")
     args = ap.parse_args()
+    if args.make_shortcut: return make_shortcuts(print)
     if args.demo: os.environ["MCIRC_NO_LOG_FILE"] = "1"      # demo mode must never write to the bot's real log
     holder, lock = {}, None
     if not args.demo:   # one copy at a time: two would fight over the radio port

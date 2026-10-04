@@ -1,0 +1,8 @@
+# Windows batch files must keep Windows line endings even when GitHub's "Download ZIP" is used; shell scripts must keep Unix ones
+*.bat   text eol=crlf
+*.cmd   text eol=crlf
+*.ps1   text eol=crlf
+*.sh    text eol=lf
+*.command text eol=lf
+*.ico   binary
+*.png   binary

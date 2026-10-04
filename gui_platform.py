@@ -157,3 +157,58 @@ def tk_missing_hint():
     if not IS_WIN and not IS_MAC: return "Tk is not installed for Python. Install it with:  sudo apt install python3-tk   (Fedora: sudo dnf install python3-tkinter, Arch: sudo pacman -S tk)"
     if IS_MAC: return "Tk is not available in this Python. Use the python.org installer or:  brew install python-tk"
     return "Tk is not available in this Python - reinstall Python and tick 'tcl/tk and IDLE'."
+
+
+def hide_own_console():
+    """Windows: when mcIRC.py is started by double-clicking, python.exe opens a console window just for it, which would stay open as long as mcIRC runs.
+    If mcIRC is the only program attached to that console, let go of it (the window then closes, also in Windows Terminal) and point stdout / stderr nowhere,
+    so mcIRC's own startup code sends error text to logs/gui_errors.txt like it does under pythonw.  Does nothing when started from a terminal, a .bat
+    file, pythonw, or on other systems.  Returns True if it detached."""
+    if not IS_WIN: return False
+    try:
+        import ctypes
+        k32 = ctypes.windll.kernel32
+        if not k32.GetConsoleWindow(): return False
+        pids = (ctypes.c_uint * 4)()
+        if k32.GetConsoleProcessList(pids, 4) != 1: return False       # somebody else (cmd.exe, PowerShell, ...) is using this console
+        if not k32.FreeConsole(): return False
+        sys.stdout = sys.stderr = None
+        return True
+    except Exception:
+        return False
+
+
+def pythonw_path():
+    """The windowless Python that is running this program (python.exe -> pythonw.exe next to it), or None."""
+    exe = sys.executable
+    if os.path.basename(exe).lower() == "python.exe":
+        w = os.path.join(os.path.dirname(exe), "pythonw.exe")
+        if os.path.isfile(w): return w
+    return exe if os.path.basename(exe).lower() == "pythonw.exe" else None
+
+
+def desktop_folder():
+    """The user's real Desktop folder (it may be redirected to OneDrive)."""
+    try:
+        r = subprocess.run(["powershell", "-NoProfile", "-Command", "[Environment]::GetFolderPath('Desktop')"], capture_output=True, text=True, timeout=30,
+                           creationflags=NO_WINDOW)
+        return r.stdout.strip() or None
+    except Exception:
+        return None
+
+
+def create_shortcut(folder, extra_args="", name="mcIRC"):
+    """Windows: write the shortcut file `<name>.lnk` in `folder`; it starts mcIRC without a console window, with the mcIRC logo as its icon.  It points at the Python that is
+    running now, so it uses the right packages.  Returns the path, or raises RuntimeError with the reason."""
+    if not IS_WIN: raise RuntimeError("shortcuts with an icon are a Windows feature")
+    target = pythonw_path()
+    if not target: raise RuntimeError("could not find pythonw.exe next to the running Python")
+    base = os.path.dirname(os.path.abspath(__file__))
+    path = os.path.join(folder, name + ".lnk")
+    env = dict(os.environ, MCIRC_LNK=path, MCIRC_TARGET=target, MCIRC_ARGS=f'"{os.path.join(base, "mcIRC.py")}"' + (" " + extra_args if extra_args else ""),
+               MCIRC_DIR=base, MCIRC_ICON=os.path.join(ASSETS, "mcIRC.ico") + ",0")
+    ps = ("$s = (New-Object -ComObject WScript.Shell).CreateShortcut($env:MCIRC_LNK); $s.TargetPath = $env:MCIRC_TARGET; $s.Arguments = $env:MCIRC_ARGS; "
+          "$s.WorkingDirectory = $env:MCIRC_DIR; $s.IconLocation = $env:MCIRC_ICON; $s.Description = 'mcIRC - mIRC-style chat client for MeshCore'; $s.Save()")
+    r = subprocess.run(["powershell", "-NoProfile", "-Command", ps], capture_output=True, text=True, timeout=60, env=env, creationflags=NO_WINDOW)
+    if r.returncode != 0 or not os.path.isfile(path): raise RuntimeError((r.stderr or r.stdout or "Windows could not create the shortcut").strip()[:300])
+    return path

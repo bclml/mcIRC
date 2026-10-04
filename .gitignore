@@ -31,3 +31,6 @@ diagnostics/
 .venv/
 venv/
 uv.lock.bak
+
+# Windows shortcuts made by "Create desktop shortcut" hold this PC's paths
+*.lnk

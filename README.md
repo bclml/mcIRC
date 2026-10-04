@@ -59,7 +59,7 @@ Known differences: macOS ignores button colours (the "red when unread" switchbar
 
 1. Clone this repo (or download it) into its own folder
 2. `pip install -r requirements.txt`  (or with uv: `uv run mcIRC.py` does this for you)
-3. Double-click **`mcIRC.exe`** (or `Run_GUI.bat`); no console window stays open. Both need Python on your PATH, the same as `python mcIRC.py`. Try it without a radio first: `python mcIRC.py --demo`
+3. Double-click **`Run_GUI.bat`**. It finds Python on your PC (the project's `.venv`, the one on PATH, the `py` launcher or the usual install folders, preferring one that already has the packages), installs the packages from `requirements.txt` on the first start, and opens mcIRC with no console window. If Python is missing it tells you and opens the download page. Want an icon with the logo? **Tools > Create desktop shortcut** (or double-click `Make_Shortcut.bat`) puts an "mcIRC" shortcut on your Desktop. Try it without a radio first: `python mcIRC.py --demo`
 4. Options > Connect > *Scan for devices...* > pick your node > OK, then File > Connect
 
 ## Features

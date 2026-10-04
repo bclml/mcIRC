@@ -1,9 +1,4 @@
 @echo off
-rem Starts the GUI without a console window (pythonw); falls back to a minimized console if pythonw is missing.
-cd /d "%~dp0"
-where pythonw >nul 2>&1
-if %errorlevel%==0 (
-    start "" pythonw mcIRC.py %*
-) else (
-    start "" /min python mcIRC.py %*
-)
+rem Starts mcIRC - double-click this file.  It finds Python, installs the packages on the first start, and opens mcIRC without a console window.
+rem (Run_GUI.bat --make-shortcut puts an mcIRC shortcut with the logo on your Desktop.)
+start "" powershell -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File "%~dp0scripts\start_mcirc.ps1" %*

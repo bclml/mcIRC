@@ -29,7 +29,7 @@ class OptionsDialog(tk.Toplevel):
         self.geometry("720x540")
         self.transient(app.root)
         keys = ("mode", "port", "baud", "ble_target", "tcp_host", "tcp_port", "node_name", "location", "poll_seconds", "node_lat", "node_lon", "node_prune_days",
-                "node_sync_minutes", "radio_capacity", "prune_radio", "reboot_on_disconnect", "auto_reset_radio", "advert_listen", "advert_notices", "show_time", "font_size", "auto_connect", "log_enabled", "log_history", "check_updates",
+                "node_sync_minutes", "radio_capacity", "prune_radio", "reboot_on_disconnect", "auto_reset_radio", "advert_listen", "advert_notices", "watch_repeats", "resend_unheard", "show_time", "font_size", "auto_connect", "log_enabled", "log_history", "check_updates",
                 "theme", "skin", "highlight_words", "sounds_enabled", "sound_private", "sound_mention", "sound_highlight", "sound_channel", "sound_custom")
         self.vars = {k: (tk.BooleanVar if isinstance(s[k], bool) else tk.StringVar)(value=s[k] if isinstance(s[k], bool) else str(s[k])) for k in keys}
         body = tk.Frame(self, bg=BG)
@@ -109,6 +109,8 @@ class OptionsDialog(tk.Toplevel):
         tk.Label(f, text="(0 = never forget)", bg=BG, fg="#555").pack(anchor="w")
         self._row(f, "Read the radio every (min):", "node_sync_minutes", 6)
         self._row(f, "Radio capacity (contacts):", "radio_capacity", 6)
+        tk.Checkbutton(f, text="After sending to a channel, listen for repeaters passing it on (shows 'heard 2 repeats'; USB and WiFi)", variable=self.vars["watch_repeats"], bg=BG).pack(anchor="w")
+        tk.Checkbutton(f, text="...and send it once more when no repeater was heard", variable=self.vars["resend_unheard"], bg=BG).pack(anchor="w", padx=(20, 0))
         tk.Checkbutton(f, text="Listen for adverts between polls (new nodes appear at once; USB and WiFi)", variable=self.vars["advert_listen"], bg=BG).pack(anchor="w", pady=(6, 0))
         tk.Checkbutton(f, text="Say in the Status window when a node is heard for the first time", variable=self.vars["advert_notices"], bg=BG).pack(anchor="w")
         tk.Checkbutton(f, text="Also delete forgotten nodes from the radio itself", variable=self.vars["prune_radio"], bg=BG).pack(anchor="w", pady=4)

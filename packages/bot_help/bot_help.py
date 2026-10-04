@@ -48,7 +48,7 @@ def _wrap(text, limit):
 
 class Addon(AddonBase):
     title = "Bot help"
-    version = "1.0.2"
+    version = "1.0.3"
     author = "mcIRC"
     description = ("Answers 'bothelp' with the bot commands that work in that channel (Weather bot, Fun bot, Auto reply, ...), and can announce "
                    "'Type bothelp for a list of commands.' once a day at a set time. Off until you switch it on.")
@@ -76,7 +76,7 @@ class Addon(AddonBase):
         if not found: return                                     # no bot answers here: stay quiet
         self.last_any = self.last_by[who] = now
         for i, part in enumerate(help_lines(found)):
-            self.api.after(5000 + i * 5000, lambda p=part: self.api.reply(msg, p))      # wait for the repeats of the question to die down first
+            self.api.after(5000 + i * 9000, lambda p=part: self.api.reply(msg, p))      # wait for the repeats of the question to die down first
 
     # ---- the daily announcement ----
     def announce_channels(self):

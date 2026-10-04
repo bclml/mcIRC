@@ -63,7 +63,7 @@ class FakeApi:
     def after(self, ms, fn): timed.append(ms); fn()
     def reply(self, msg, text): timed.append(text)
 parts = mc.send_parts(FakeApi(), {}, "McConnell Creek BC: 16C mostly clear, wind 5 km/h SW, 54% RH | " + ", ".join(f"Day{i} 16/10C fog 20%rain" for i in range(3)), label=True)
-ok("the first part waits 5 s (the question is still being repeated), the next 5 s later", [t for t in timed if isinstance(t, int)] == [5000, 10000], timed)
+ok("the first part waits 5 s (the question is still being repeated), the next 9 s later", [t for t in timed if isinstance(t, int)] == [5000, 14000], timed)
 ok("every part names the place", all(p.startswith("McConnell Creek BC: ") for p in parts) and all(len(p) <= mc.MAX_CHARS for p in parts), parts)
 
 # ---- answers from canned data

@@ -35,6 +35,7 @@ from gui_switchbar import SwitchBar
 from gui_update_ui import UpdateDialog, CatalogDialog, LINKS, open_link
 import gui_themes
 import gui_skins
+import gui_echo
 import gui_sounds
 from gui_private import PrivateMixin
 from gui_menus import MenusMixin
@@ -121,10 +122,26 @@ class ChatWindow:
         at_bottom = t.yview()[1] >= 0.999
         t.config(state="normal")
         for text, tag in parts: t.insert("end", safe_text(text), tag)
+        self._marks = getattr(self, "_marks", 0) + 1
+        mark = f"line{self._marks}"
+        t.mark_set(mark, "end-1c")                        # the end of this line: a note can be added there later ("heard 2 repeats")
+        t.mark_gravity(mark, "left")
         t.insert("end", "\n")
         t.config(state="disabled")
         if at_bottom: t.see("end")
         if self.log: self.log.append("".join(text for text, _ in parts))
+        return mark
+
+    def add_note(self, mark, note, tag="meta"):
+        """Add a short note at the end of an earlier line (the mark write() returned)."""
+        t = self.text
+        try:
+            t.config(state="normal")
+            t.insert(mark, "  " + note, tag)
+        except Exception:
+            pass
+        finally:
+            t.config(state="disabled")
 
     def apply_theme(self, theme, font): gui_themes.style_text(self.text, theme, font)
 
@@ -232,6 +249,7 @@ class App(PrivateMixin, MenusMixin, CommandsMixin):
         self.windows, self.current, self.history, self.hist_pos = {}, None, [], 0
         self.log_dir = tempfile.mkdtemp(prefix="meshlogs_") if demo else LOG_DIR   # demo mode must never touch the real logs
         self.commands, self.map_layers = {}, {}   # filled by addons
+        self.signal_traces = []                    # paths the radio really heard (map: Show signals)
         self._name_lookups = {}                   # key prefix -> time of the last radio lookup (rate limit)
         self.worker = CoreWorker(self)
         self.nodes = NodeStore(":memory:") if demo else NodeStore()
@@ -466,7 +484,7 @@ class App(PrivateMixin, MenusMixin, CommandsMixin):
         body, me, word = (split_mentions(text, tag, self.settings["node_name"], words, w.nicks) if not mine else ([(text, tag)], False, False))
         parts = self.stamp() + [("<", "text"), (nick, (nick_tag, "nickname")), ("> ", "text")] + body
         if suffix: parts.append((f"  {suffix}", "meta"))
-        w.write(parts)
+        mark = w.write(parts)
         w.nicks.add(nick)
         self.mark_unread(w, "msg")
         if w is self.current: self.refresh_nicks()
@@ -474,6 +492,7 @@ class App(PrivateMixin, MenusMixin, CommandsMixin):
             watching = w is self.current and self.root.focus_displayof() is not None
             kind = "private" if event == "private" else "mention" if me else "highlight" if word else "channel"
             if not watching: gui_sounds.notify(self.settings, kind, self.root.bell)
+        return mark
 
     # ---- queue handlers (GUI thread) ----------------------------------------------------------
     def drain(self):
@@ -800,9 +819,35 @@ class App(PrivateMixin, MenusMixin, CommandsMixin):
         w = self.windows.get(name)
         if ea.HEALTH.is_down:                      # don't make people wait a minute to learn what we already know
             return self.unsent(w, text, "the radio is not answering")
-        if w: self.chat_line(w, self.settings["node_name"], text, "self")
+        mark = self.chat_line(w, self.settings["node_name"], text, "self") if w else None
+        if self.settings.get("watch_repeats", True) and gui_echo.supported(ea.CONNECTION_ARGS):
+            return self.send_watched(idx, cmd, text, w, mark)
         self.bg(lambda: ea.execute_mesh_command(ea.CONNECTION_ARGS + cmd),
                 lambda r: isinstance(r, Exception) and self.unsent(w, text, ea.explain_failure(str(r))))
+
+    def send_watched(self, idx, cmd, text, w, mark):
+        """Send through gui_echo: counts the repeaters that pass the message on and notes it on the line ('heard 2 repeats'); sends once
+        more when none was heard (Options > Connect).  Falls back to the normal send if the helper could not send at all."""
+        args = list(ea.CONNECTION_ARGS)
+        def on_event(ev):
+            if ev.get("event") == "repeat": self.q.put(("call", lambda e=ev: self.note_signal("out", e.get("path", ""), idx)))
+        def work():
+            r = gui_echo.send_watched(args, idx, text, resend=self.settings.get("resend_unheard", True), on_event=on_event)
+            if not r["sent"]: ea.execute_mesh_command(ea.CONNECTION_ARGS + cmd)        # the helper sent nothing: the usual way
+            return r
+        def done(r):
+            if isinstance(r, Exception): return self.unsent(w, text, ea.explain_failure(str(r)))
+            note = gui_echo.describe(r)
+            if note and w is not None and mark: w.add_note(mark, f"({note})")
+        self.bg(work, done)
+
+    def note_signal(self, direction, path, idx=None):
+        """A path the radio really heard (a repeat of our message, or an incoming packet): kept for a while for the map's signal view."""
+        if not path: return
+        self.signal_traces.append({"t": time.time(), "dir": direction, "path": path, "idx": idx})
+        del self.signal_traces[:-200]
+        mw = getattr(self, "map_win", None)
+        if mw is not None and mw.winfo_exists() and hasattr(mw, "signal_arrived"): mw.signal_arrived()
 
     def command(self, line):
         cmd, _, arg = line.partition(" ")

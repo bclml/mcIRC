@@ -157,7 +157,7 @@ def town_name(lat, lon, get=http_json):
     return f"{name[:22]} {region}".strip()
 
 
-def send_parts(api, msg, text, max_parts=3, first_delay=5000, gap=5000, label=False):
+def send_parts(api, msg, text, max_parts=3, first_delay=5000, gap=9000, label=False):      # (gap: mcIRC listens ~8 s after each message for its repeats)
     """Answer `msg` with `text` in mesh-sized parts.  The first part waits a few seconds: answering at once collides with the repeaters
     still repeating the question.  With label=True later parts start with the text before the first ': ' (the place: 'Hope BC: Mon 14/8C ...')
     so each one makes sense on its own."""

@@ -1,7 +1,7 @@
 {
   "name": "bot_help",
   "title": "Bot help",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "Answers 'bothelp' with the bot commands that work in that channel (Weather bot, Fun bot, Auto reply, ...), and can announce 'Type bothelp for a list of commands.' once a day at a set time. Off until you switch it on.",
   "requires": [],
   "files": {

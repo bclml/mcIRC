@@ -17,6 +17,8 @@ DEFAULT_SETTINGS = {
     "prune_radio": False,        # also delete forgotten nodes from the radio itself
     "reboot_on_disconnect": True,  # reboot the node when mcIRC disconnects or closes (Options > Connect)
     "auto_reset_radio": False,   # if the radio stops answering for ~5 minutes, restart it by pulsing the USB reset line (CP210x / CH340 / FTDI boards only)
+    "watch_repeats": True,        # after sending to a channel, listen a few seconds for repeaters passing it on ("heard 2 repeats"; USB and WiFi)
+    "resend_unheard": True,       # ...and send it once more when no repeater was heard
     "advert_listen": True,       # between polls, listen for adverts so new / changed nodes show up at once (USB and WiFi)
     "advert_notices": True,      # say in the Status window when a node is heard for the first time
     "show_time": True, "font_size": 10, "auto_connect": False,

@@ -132,20 +132,26 @@ class NodePages:
             self.say("\n".join(lines))
             for l in lines: self.app.status_line("*** Node settings - " + l, "info" if l.startswith("OK") else "error")
             renamed = any(label == "name" and ok for label, ok, _ in results)
-            if renamed and messagebox.askyesno("Node renamed", f"Other nodes and phones only learn the new name '{new['name']}' from your next advert.\n\n"
-                                               "Send a flood advert now? (one short transmission that repeaters pass on)", parent=self.dlg):
-                self.act("floodadv")
-            if radio_changed and messagebox.askyesno("Reboot node", "The new radio settings only take effect after a reboot. Reboot the node now?", parent=self.dlg):
-                self.reboot(confirm=False)
-            else: self.read()
+            if renamed or radio_changed:
+                text = (("The new radio settings only take effect after a reboot. " if radio_changed else "")
+                        + (f"Other nodes and phones learn the new name '{new['name']}' from your next advert. " if renamed else ""))
+                text += "\n\nReboot the node now" + (" and then send a flood advert (one short transmission that repeaters pass on)?" if renamed else "?")
+                if messagebox.askyesno("Reboot node", text, parent=self.dlg):
+                    self.reboot(confirm=False, then=(lambda: self.act("floodadv")) if renamed else None)
+                    return
+            self.read()
         self.app.bg(lambda: cfg.write_node(old, new), done)
 
     def act(self, name):
         if not self.app.require_connection(): return
         self.app.bg(lambda: cfg.action(name), lambda r: self.app.status_line(f"*** Node: {name} - {r}", "error" if isinstance(r, Exception) else "info"))
 
-    def reboot(self, confirm=True):
+    def reboot(self, confirm=True, then=None):
         if not self.app.require_connection(): return
         if confirm and not messagebox.askyesno("Reboot node", "Reboot the node now? Chat is interrupted for about 20 seconds.", parent=self.dlg): return
         self.say("Rebooting the node, waiting for it to come back (about 20s)...")
-        self.app.bg(cfg.reboot_and_wait, lambda r: self.say(f"Reboot failed: {r}") if isinstance(r, Exception) else self.fill(r))
+        def done(r):
+            if isinstance(r, Exception): return self.say(f"Reboot failed: {r}")
+            self.fill(r)
+            if then: then()
+        self.app.bg(cfg.reboot_and_wait, done)

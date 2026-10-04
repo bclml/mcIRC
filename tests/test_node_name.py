@@ -31,19 +31,40 @@ with mock.patch.object(gui_dialogs.messagebox, "showerror", lambda *a, **k: None
     dlg.apply()
 ok("pressing OK / Apply keeps the new name (it used to save the old one back)", app.settings["node_name"] == "mcIRC_bot", app.settings["node_name"])
 ok("the node's empty position does not wipe the position set in Options", (app.settings["node_lat"], app.settings["node_lon"]) != (0.0, 0.0))
-# ---- after a rename is written, mcIRC offers a flood advert (others only learn the new name from an advert); nothing is sent without a yes
+# ---- after a rename: one question - reboot, then a flood advert so others learn the name; nothing happens without a yes
 pages = dlg.node_pages
 pages.old = dict(pages.old or {})
-sent, asked = [], []
+asked, done = [], []
 app.connected = True
-app.bg = lambda fn, done: done(fn())
+app.bg = lambda fn, d: d(fn())
 import gui_nodecfg
-with mock.patch.object(gui_nodecfg, "write_node", lambda old, new: ([("name", True, "ok")], False)),         mock.patch.object(pages, "collect", lambda: dict(pages.old, name="Third_name")), mock.patch.object(pages, "read", lambda: None),         mock.patch.object(pages, "act", lambda name: sent.append(name)),         mock.patch.object(gui_dialogs.messagebox, "askyesno", lambda title, text, **k: asked.append(title) or False):
-    pages.write()
-ok("after a rename mcIRC asks before sending an advert", asked == ["Node renamed"] and sent == [], (asked, sent))
-with mock.patch.object(gui_nodecfg, "write_node", lambda old, new: ([("name", True, "ok")], False)),         mock.patch.object(pages, "collect", lambda: dict(pages.old, name="Third_name")), mock.patch.object(pages, "read", lambda: None),         mock.patch.object(pages, "act", lambda name: sent.append(name)),         mock.patch.object(gui_dialogs.messagebox, "askyesno", lambda title, text, **k: True):
-    pages.write()
-ok("...and on yes it sends a flood advert", sent == ["floodadv"], sent)
+def write_with(answer):
+    with mock.patch.object(gui_nodecfg, "write_node", lambda old, new: ([("name", True, "ok")], False)),             mock.patch.object(pages, "collect", lambda: dict(pages.old, name="Third_name")), mock.patch.object(pages, "read", lambda: done.append("read")),             mock.patch.object(pages, "reboot", lambda confirm=True, then=None: (done.append("reboot"), then and then())),             mock.patch.object(pages, "act", lambda name: done.append(name)),             mock.patch.object(gui_dialogs.messagebox, "askyesno", lambda title, text, **k: asked.append(text) or answer):
+        pages.write()
+write_with(False)
+ok("after a rename mcIRC asks once, mentioning the reboot and the advert", len(asked) == 1 and "Reboot the node now" in asked[0] and "flood advert" in asked[0], asked)
+ok("...on no: nothing is sent, the settings are just read back", done == ["read"], done)
+asked.clear(); done.clear()
+write_with(True)
+ok("...on yes: reboot first, then the flood advert", done == ["reboot", "floodadv"], done)
+
+# ---- reboot on disconnect / close (Options > Connect, on by default)
+import meshcore_io as ea
+calls = []
+ea_exec = lambda args, **k: calls.append(list(args))
+with mock.patch.object(ea, "execute_mesh_command", ea_exec), mock.patch.object(ea, "CONNECTION_ARGS", ["-s", "COMX"]):
+    assert not app.worker.running          # (demo: no connection thread)
+    ok("on by default", app.settings.get("reboot_on_disconnect", True) is True)
+    started = app.reboot_node_after_disconnect(wait=3)
+    ok("disconnecting reboots the node", started and calls == [["-s", "COMX", "reboot"]], calls)
+    calls.clear(); app.settings["reboot_on_disconnect"] = False
+    ok("...not when switched off", app.reboot_node_after_disconnect(wait=1) is False and calls == [])
+    app.settings["reboot_on_disconnect"] = True
+    hung = lambda args, **k: __import__("time").sleep(30)
+with mock.patch.object(ea, "execute_mesh_command", hung), mock.patch.object(ea, "CONNECTION_ARGS", ["-s", "COMX"]):
+    import time as _t
+    t0 = _t.time(); app.reboot_node_after_disconnect(wait=2)
+    ok("closing never waits long for a silent node", _t.time() - t0 < 4, _t.time() - t0)
 root.destroy()
 print("\nALL PASSED" if not fails else f"\n{len(fails)} FAILED: {fails}")
 sys.exit(1 if fails else 0)

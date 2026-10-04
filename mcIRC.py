@@ -710,8 +710,28 @@ class App(PrivateMixin, MenusMixin, CommandsMixin):
 
     def disconnect(self):
         if self.worker.running:
+            was = self.connected
             self.worker.stop()
-            self.status_line("*** Disconnecting..." if self.connected else "*** Cancelling the connection attempt...", "info")
+            self.status_line("*** Disconnecting..." if was else "*** Cancelling the connection attempt...", "info")
+            if was and self.reboot_node_after_disconnect(): self.status_line("*** Rebooting the node (Options > Connect to switch this off).", "info")
+
+    def reboot_node_after_disconnect(self, wait=0.0):
+        """Options: 'Reboot the node when disconnecting or closing mcIRC'.  Runs once the connection thread has let go of the port;
+        waits at most `wait` seconds (closing the window must never hang on a silent node).  True if a reboot was started."""
+        args = ea.CONNECTION_ARGS
+        if not args or not self.settings.get("reboot_on_disconnect", True): return False
+        worker = self.worker
+        def go():
+            deadline = time.time() + 15
+            while worker.running and time.time() < deadline: time.sleep(0.2)
+            try:
+                with ea.MESH_LOCK: ea.execute_mesh_command(args + ["reboot"], timeout=10, retries=0)
+            except Exception:
+                pass                                    # the node drops the link while it restarts
+        t = threading.Thread(target=go, daemon=True)
+        t.start()
+        if wait: t.join(wait)
+        return True
 
     def open_options(self, page="Connect"):
         d = OptionsDialog(self)
@@ -731,8 +751,10 @@ class App(PrivateMixin, MenusMixin, CommandsMixin):
         self.save()
         for w in self.windows.values():
             if w.log: w.log.stamp("Session Close")
+        was = self.connected
         self.worker.stop()
         self.adverts.interrupt()                     # don't leave the advert listener holding the radio's port after the window is gone
+        if was: self.reboot_node_after_disconnect(wait=8)
         for n in list(self.addons.loaded): self.addons.unload(n)
         self.root.destroy()
 

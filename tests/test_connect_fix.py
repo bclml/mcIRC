@@ -73,6 +73,7 @@ io.resolve_channel_indices = lambda *a, **k: True
 io.fetch_incoming_messages = lambda: []
 gui_nodecfg.read_node = lambda: {"info": {"name": "N"}, "ver": {}, "core": {}, "radio": {}}
 app.settings["last_port"] = "COM4"; app.settings["poll_seconds"] = 1; app.settings["node_sync_minutes"] = 9999
+app.settings["reboot_on_disconnect"] = False        # this test pretends COM4 is the node: never send a real reboot there
 app.node_sync_worker = lambda: None
 
 states()   # drop the demo's startup messages

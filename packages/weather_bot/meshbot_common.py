@@ -105,7 +105,7 @@ def resolve_place(arg, nodes=None, default=None, get=http_json, near=None):
     m = COORDS.match(a)
     if m:
         lat, lon = float(m.group(1)), float(m.group(2))
-        if -90 <= lat <= 90 and -180 <= lon <= 180: return lat, lon, f"{lat:.2f},{lon:.2f}"
+        if -90 <= lat <= 90 and -180 <= lon <= 180: return lat, lon, town_name(lat, lon, get) or f"{lat:.2f},{lon:.2f}"
     if US_ZIP.match(a):
         d = get(f"https://api.zippopotam.us/us/{a}")
         p = d["places"][0]
@@ -136,6 +136,36 @@ def resolve_place(arg, nodes=None, default=None, get=http_json, near=None):
             same = [r for r in res if distance_km(close["latitude"], close["longitude"], r["latitude"], r["longitude"]) < 40]
             x = max(same, key=lambda r: r.get("population") or 0)        # the city itself rather than one of its neighbourhoods
     return x["latitude"], x["longitude"], x["name"].split(" British Columbia")[0][:20]
+
+
+_last_osm = 0.0
+
+
+def town_name(lat, lon, get=http_json):
+    """The town at these coordinates ('Hope BC'), from OpenStreetMap; None if there is none (open sea) or the lookup fails."""
+    global _last_osm
+    wait = 1.1 - (time.time() - _last_osm)                 # OpenStreetMap allows one lookup per second
+    if wait > 0: time.sleep(wait)
+    _last_osm = time.time()
+    try: d = get("https://nominatim.openstreetmap.org/reverse", {"lat": lat, "lon": lon, "format": "json", "zoom": 10, "addressdetails": 1})
+    except Exception: return None
+    a = d.get("address") or {}
+    name = next((a[k] for k in ("city", "town", "village", "hamlet", "municipality") if a.get(k)), None)
+    if not name: return None
+    name = re.sub(r"^Area [A-Z]+ \((.*)\)$", r"\1", name).split("/")[0].strip()      # BC regional district areas: 'Area F (McConnell Creek/...)'
+    region = (a.get("ISO3166-2-lvl4") or "").split("-")[-1]
+    return f"{name[:22]} {region}".strip()
+
+
+def send_parts(api, msg, text, max_parts=3, first_delay=5000, gap=5000, label=False):
+    """Answer `msg` with `text` in mesh-sized parts.  The first part waits a few seconds: answering at once collides with the repeaters
+    still repeating the question.  With label=True later parts start with the text before the first ': ' (the place: 'Hope BC: Mon 14/8C ...')
+    so each one makes sense on its own."""
+    label = text.split(": ", 1)[0] if label and ": " in text[:34] else ""
+    parts = split_message(text, limit=MAX_CHARS - (len(label) + 2 if label else 0), max_parts=max_parts)
+    if label: parts = [p if not i or p.startswith(label) else f"{label}: {p}" for i, p in enumerate(parts)]
+    for i, part in enumerate(parts): api.after(first_delay + i * gap, lambda p=part: api.reply(msg, p))
+    return parts
 
 
 PROVINCES = {"british columbia": "bc", "alberta": "ab", "saskatchewan": "sk", "manitoba": "mb", "ontario": "on", "quebec": "qc",

@@ -27,7 +27,7 @@ COMMANDS = {        # command: (what it does, needs a place)
     "contact": "who runs this bot",
 }
 ALIASES = {"solarforecast": "sf", "overhead": "airplanes"}
-VERSION = "1.0.2"
+VERSION = "1.0.3"
 
 
 class Addon(AddonBase):
@@ -90,8 +90,7 @@ class Addon(AddonBase):
             text = f"{cmd}: that service is not answering right now, try later"
         else: text = result
         self.answers += 1
-        for i, part in enumerate(mc.split_message(text, max_parts=int(self.cfg("max_parts", 3)))):
-            self.api.after(i * 3000, lambda p=part: self.api.reply(msg, p))      # a few seconds apart: one message at a time on the mesh
+        mc.send_parts(self.api, msg, text, max_parts=int(self.cfg("max_parts", 3)), label=True)
 
     def place(self, arg):
         home = None

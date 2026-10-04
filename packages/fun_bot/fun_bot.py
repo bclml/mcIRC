@@ -65,7 +65,7 @@ def world_cup(arg, get=mc.http_json):
 
 class Addon(AddonBase):
     title = "Fun bot"
-    version = "1.0.1"
+    version = "1.0.2"
     author = "mcIRC"
     description = ("dice, roll, magic8, joke, dadjoke, hacker, catfact and wc (World Cup scores and tables) - each switched on for the channels you "
                    "choose. Off until you switch it on.")
@@ -120,8 +120,7 @@ class Addon(AddonBase):
             self.api.log(f"{cmd} failed: {result}", "warn")
             text = f"{cmd}: not reachable right now, try later"
         else: text = result
-        for i, part in enumerate(mc.split_message(text, max_parts=2)):
-            self.api.after(i * 3000, lambda p=part: self.api.reply(msg, p))
+        mc.send_parts(self.api, msg, text, max_parts=2)
 
     # ---- options ----
     def build_options(self, parent):

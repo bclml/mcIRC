@@ -53,6 +53,19 @@ class Nodes:
     def all(self): return [{"name": "VE7RPT Seymour", "lat": 49.36, "lon": -122.95}, {"name": "No position", "lat": 0, "lon": 0}]
 ok("the name of a known node or repeater", mc.resolve_place("seymour", nodes=Nodes(), get=fake_get)[:2] == (49.36, -122.95))
 
+# ---- coordinates are answered with the town's name; replies wait for the question's repeats and name the place in every part
+OSM = {"address": {"city": "Area F (McConnell Creek/Hatzic Prairie)", "ISO3166-2-lvl4": "CA-BC"}}
+mc._last_osm = 0
+ok("coordinates -> the town there", mc.resolve_place("49.3956 -122.2033", get=lambda url, params=None, *a, **k: OSM)[2] == "McConnell Creek BC")
+ok("...open sea keeps the coordinates", mc.resolve_place("48.0,-125.5", get=lambda *a, **k: {"error": "Unable to geocode"})[2] == "48.00,-125.50")
+timed = []
+class FakeApi:
+    def after(self, ms, fn): timed.append(ms); fn()
+    def reply(self, msg, text): timed.append(text)
+parts = mc.send_parts(FakeApi(), {}, "McConnell Creek BC: 16C mostly clear, wind 5 km/h SW, 54% RH | " + ", ".join(f"Day{i} 16/10C fog 20%rain" for i in range(3)), label=True)
+ok("the first part waits 5 s (the question is still being repeated), the next 5 s later", [t for t in timed if isinstance(t, int)] == [5000, 10000], timed)
+ok("every part names the place", all(p.startswith("McConnell Creek BC: ") for p in parts) and all(len(p) <= mc.MAX_CHARS for p in parts), parts)
+
 # ---- answers from canned data
 OM = {"current": {"temperature_2m": 12.4, "relative_humidity_2m": 80, "weather_code": 61, "wind_speed_10m": 9, "wind_direction_10m": 225},
       "daily": {"time": ["2026-10-04", "2026-10-05", "2026-10-06"], "weather_code": [61, 3, 0], "temperature_2m_max": [14, 13, 16],

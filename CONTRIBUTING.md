@@ -28,6 +28,12 @@ people choose from and download inside the app.
 4. Never commit secrets, `gui_settings.json`, `nodes.db`, `logs/`, `backup/` or installed addons (`.gitignore` covers these).
 5. Open a pull request using the template and describe what it does and how you tested it.
 
+## Run the tests
+
+`python tests/run_tests.py` runs the whole suite (about 3 minutes). On Linux without a display use `xvfb-run -a python tests/run_tests.py`; run a single test with `python tests/run_tests.py test_updater`.
+The tests use fake radios only, never touch a real node, your settings or the bot's real log, and run automatically on GitHub (Windows and Linux) for every push and pull request.
+Please add or update a test when you fix a bug.
+
 ## Ground rules
 
 - Be kind and constructive. Disagree with the idea, not the person.

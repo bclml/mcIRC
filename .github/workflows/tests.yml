@@ -1,0 +1,40 @@
+name: tests
+
+# Runs the whole test suite (tests/run_tests.py) on Windows and Linux for every push and pull request.
+# The tests use fake radios only: no hardware, no real settings, nothing is written to the bot's real log.
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    name: ${{ matrix.os }} / Python ${{ matrix.python }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: windows-latest, python: "3.13" }
+          - { os: ubuntu-latest, python: "3.10" }
+          - { os: ubuntu-latest, python: "3.13" }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Tk and a virtual display (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y python3-tk xvfb
+      - name: Install the packages mcIRC needs
+        run: python -m pip install -r requirements.txt
+      - name: Tests (Linux)
+        if: runner.os == 'Linux'
+        run: xvfb-run -a python tests/run_tests.py
+      - name: Tests (Windows)
+        if: runner.os == 'Windows'
+        run: python tests/run_tests.py

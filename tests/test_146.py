@@ -120,6 +120,11 @@ mine = [p for p in pts if p[0] == 49.1 and "Silver Skagit" in p[2]]      # (othe
 ok("map: label (up to 40 chars) on the pin, details in the info box", mine and mine[0][2] == "INCIDENT - Silver Skagit Road (Hope)" and mine[0][5] == "Long details\nsecond line", mine)
 ok("map: 3-item layer entries still work", any(p[2] == "Plain item" and p[5] == "Plain item" for p in pts))
 ok("map info box is tall enough for details", int(app.map_win.info.cget("height")) >= 10)
+for inst in [x for x in (globals().get("a"), globals().get("a2"), globals().get("a3")) if x is not None]:      # stop every feed thread before exiting
+    if not hasattr(inst, "loop"): continue
+    inst._stop_feeds()
+    if getattr(inst, "thread", None): inst.thread.join(timeout=10)
+app.map_win.destroy(); root.update()
 root.destroy()
 print("\nALL PASSED" if not fails else f"\n{len(fails)} FAILED: {fails}")
 sys.exit(1 if fails else 0)

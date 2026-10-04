@@ -42,6 +42,7 @@ class Addon(AddonBase):
         if self.thread and self.thread.is_alive(): return
         ea.reload_active_alerts_from_log()
         ea.reload_critical_alert_ids_from_log()
+        self._stop_req = False
         self.thread = threading.Thread(target=self._run, daemon=True)
         self.thread.start()
 
@@ -73,6 +74,7 @@ class Addon(AddonBase):
     def _run(self):
         async def main():
             self.loop = asyncio.get_running_loop()
+            if getattr(self, "_stop_req", False): return          # stopped before the feeds even began
             self.tasks = [asyncio.ensure_future(c()) for c in (ea.traffic_loop, ea.weather_loop)]
             await asyncio.gather(*self.tasks, return_exceptions=True)
         try: asyncio.run(main())
@@ -80,6 +82,7 @@ class Addon(AddonBase):
         self.loop = None
 
     def _stop_feeds(self):
+        self._stop_req = True
         loop = self.loop
         if loop is None: return
         try: loop.call_soon_threadsafe(lambda: [t.cancel() for t in self.tasks])

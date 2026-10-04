@@ -27,7 +27,7 @@ COMMANDS = {        # command: (what it does, needs a place)
     "contact": "who runs this bot",
 }
 ALIASES = {"solarforecast": "sf", "overhead": "airplanes"}
-VERSION = "1.0.1"
+VERSION = "1.0.2"
 
 
 class Addon(AddonBase):
@@ -41,6 +41,16 @@ class Addon(AddonBase):
     def on_load(self):
         self.started, self.answers, self._home, self._rain_said = time.time(), 0, None, 0.0
         self.limiter = mc.Limiter(per_user=int(self.api.get("cooldown", 30)), gap=5)
+        if hasattr(self.api, "add_bot_commands"): self.api.add_bot_commands(self.help_for)      # (mcIRC 1.5.2 and later)
+
+    USAGE = {"wx": "wx <place>", "gwx": "gwx <place>", "aqi": "aqi <place>", "sf": "sf <place>", "rain": "rain <place>", "satpass": "satpass iss"}
+
+    def help_for(self, channel, dm=False):
+        """For 'bothelp': the commands answered in this channel right now."""
+        if not self.cfg("enabled", False): return []
+        if (dm and not self.cfg("answer_dm", False)) or (not dm and not mc.channel_ok(channel, self.channels())): return []
+        p, off = self.cfg("prefix", ""), self.cfg("off", [])
+        return [p + self.USAGE.get(c, c) for c in COMMANDS if c not in off]
 
     def on_unload(self): pass
 

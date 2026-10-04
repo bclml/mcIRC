@@ -45,11 +45,12 @@ def match_rule(rule, text):
 
 class Addon(AddonBase):
     title = "Auto reply"
-    version = "1.1.2"
+    version = "1.1.3"
     author = "bclml"
     description = "Keyword rules: answer chosen words on chosen channels with your own text, to the channels you pick."
 
     def on_load(self):
+        if hasattr(self.api, "add_bot_commands"): self.api.add_bot_commands(self.help_for)
         self.last_by_key, self.last_any = {}, 0.0
         self.rules = []
         self.button = self.api.add_toolbar_button("", self.toggle)
@@ -57,6 +58,16 @@ class Addon(AddonBase):
         self.api.add_command("autoreply", self._command, "autoreply on|off - switch the auto reply on or off")
 
     # ---- the responder ----
+    def help_for(self, channel, dm=False):
+        """For 'bothelp': the words that get an answer in this channel."""
+        if dm or not self.api.get("enabled", True): return []
+        here, words = norm(channel), []
+        for r in self.api.get("rules", DEFAULT_RULES):
+            listen = {norm(c) for c in split_list(r.get("listen", ""))}
+            if r.get("enabled", True) and (not listen or here in listen):
+                words += [w for w in split_list(r.get("triggers", "")) if w not in words]
+        return words
+
     def on_message(self, msg):
         if msg.get("dm") or not self.api.get("enabled", True): return
         here, now = norm(msg["channel"]), time.time()

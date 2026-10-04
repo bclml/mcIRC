@@ -14,7 +14,7 @@
     {
       "name": "auto_reply",
       "title": "Auto reply",
-      "version": "1.1.2",
+      "version": "1.1.3",
       "author": "bclml",
       "description": "Keyword rules: answer the words you choose on the channels you choose, with your own reply text, sent to the channels you pick. Comes with a 'test' rule.",
       "path": "packages/auto_reply",
@@ -50,7 +50,7 @@
     {
       "name": "weather_bot",
       "title": "Weather bot",
-      "version": "1.0.1",
+      "version": "1.0.2",
       "author": "bclml",
       "description": "Answers weather commands in the channels you choose (default #weather): wx <place> (city, postal code, ZIP, node name or lat,lon), gwx, aqi, sun, moon, solar, sf, hfcond, satpass, airplanes, rain, aurora, channels, status, contact. Free data, no API keys. Off until you switch it on; rate-limited. satpass needs 'pip install sgp4'.",
       "path": "packages/weather_bot",
@@ -59,11 +59,20 @@
     {
       "name": "fun_bot",
       "title": "Fun bot",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "author": "bclml",
       "description": "dice, roll, magic8, joke, dadjoke, hacker, catfact and wc (World Cup scores and tables), each switched on for the channels you choose. Off until you switch it on; rate-limited.",
       "path": "packages/fun_bot",
       "tested": "2026-10-04 with app 1.5.2: every data source checked live; answering checked with canned data and a stand-in radio (not over the air yet)"
+    },
+    {
+      "name": "bot_help",
+      "title": "Bot help",
+      "version": "1.0.0",
+      "author": "bclml",
+      "description": "Answers 'bothelp' with the bot commands that work in that channel (Weather bot, Fun bot, Auto reply, ...), and can announce 'Type bothelp for a list of commands.' once a day at a set time. Off until you switch it on; rate-limited.",
+      "path": "packages/bot_help",
+      "tested": "2026-10-04 with app 1.5.2 with a stand-in radio (not over the air yet)"
     }
   ]
 }

@@ -31,24 +31,24 @@ stranger.close()
 # ================= USB detection =================
 class P:
     def __init__(s, d, desc, vid): s.device, s.description, s.vid, s.pid, s.manufacturer = d, desc, vid, 1, ""
-io.serial.tools.list_ports.comports = lambda: [P("COM4", "Silicon Labs CP210x", 0x10C4), P("COM10", "USB Serial Device", 0x303A)]
+io.serial.tools.list_ports.comports = lambda: [P("COM97", "Silicon Labs CP210x", 0x10C4), P("COM98", "USB Serial Device", 0x303A)]
 probes = []
 def fake_probe(args, timeout=25, retries=1):
     probes.append((args[1], timeout, retries))
-    return {"ok": True, "name": "N", "model": "M", "fw": "1", "max_contacts": 350} if args[1] == "COM4" else {"ok": False, "why": "not a companion"}
+    return {"ok": True, "name": "N", "model": "M", "fw": "1", "max_contacts": 350} if args[1] == "COM97" else {"ok": False, "why": "not a companion"}
 io.probe_device = fake_probe
-check("remembered port is used immediately, no probing", io.auto_detect_usb_port(prefer="COM10") == ["-s", "COM10"] and probes == [])
-check("remembered port that is no longer plugged in is ignored", io.auto_detect_usb_port(prefer="COM99") == ["-s", "COM4"] and probes[0][0] == "COM4")
+check("remembered port is used immediately, no probing", io.auto_detect_usb_port(prefer="COM98") == ["-s", "COM98"] and probes == [])
+check("remembered port that is no longer plugged in is ignored", io.auto_detect_usb_port(prefer="COM99") == ["-s", "COM97"] and probes[0][0] == "COM97")
 probes.clear()
-check("probes during detection are quick (12s, no retries)", io.auto_detect_usb_port() == ["-s", "COM4"] and probes == [("COM4", 12, 0)], str(probes))
+check("probes during detection are quick (12s, no retries)", io.auto_detect_usb_port() == ["-s", "COM97"] and probes == [("COM97", 12, 0)], str(probes))
 probes.clear()
 check("cancel before the first probe -> stops without probing", io.auto_detect_usb_port(should_stop=lambda: True) is None and probes == [])
 io.probe_device = lambda a, timeout=25, retries=1: (probes.append(a[1]), {"ok": False, "why": "no"})[1]
 probes.clear(); stops = iter([False, True, True])
-check("cancel between probes stops the loop", io.auto_detect_usb_port(should_stop=lambda: next(stops)) is None and probes == ["COM4"], str(probes))
+check("cancel between probes stops the loop", io.auto_detect_usb_port(should_stop=lambda: next(stops)) is None and probes == ["COM97"], str(probes))
 io.probe_device = fake_probe
-check("build_connection_args passes the remembered port through", io.build_connection_args("usb", "auto", prefer_port="COM10") == ["-s", "COM10"])
-check("an explicit port always wins", io.build_connection_args("usb", "COM4", prefer_port="COM10") == ["-s", "COM4"])
+check("build_connection_args passes the remembered port through", io.build_connection_args("usb", "auto", prefer_port="COM98") == ["-s", "COM98"])
+check("an explicit port always wins", io.build_connection_args("usb", "COM97", prefer_port="COM98") == ["-s", "COM97"])
 
 # ================= worker lifecycle (demo App, simulated radio) =================
 root = tk.Tk(); app = g.App(root, demo=True)
@@ -67,20 +67,20 @@ def slow_build(*a, prefer_port="", should_stop=None):
     while not gate.is_set() and time.time() - t0 < 5:    # a detection that takes a while
         if should_stop and should_stop(): return None
         time.sleep(0.05)
-    return ["-s", "COM4"]
+    return ["-s", "COM97"]
 io.build_connection_args = slow_build
 io.resolve_channel_indices = lambda *a, **k: True
 io.fetch_incoming_messages = lambda: []
 gui_nodecfg.read_node = lambda: {"info": {"name": "N"}, "ver": {}, "core": {}, "radio": {}}
-app.settings["last_port"] = "COM4"; app.settings["poll_seconds"] = 1; app.settings["node_sync_minutes"] = 9999
-app.settings["reboot_on_disconnect"] = False        # this test pretends COM4 is the node: never send a real reboot there
+app.settings["last_port"] = "COM97"; app.settings["poll_seconds"] = 1; app.settings["node_sync_minutes"] = 9999
+app.settings["reboot_on_disconnect"] = False        # this test pretends COM97 is the node: never send a real reboot there
 app.node_sync_worker = lambda: None
 
 states()   # drop the demo's startup messages
 app.worker.start(app.settings); time.sleep(0.6)
 k = kinds(states())
 check("normal connect: connecting -> connected -> remembers the port", k[0] == "state:connecting" and "state:connected" in k and "lastport" in k, str(k))
-check("the remembered port was offered to detection", calls == ["COM4"])
+check("the remembered port was offered to detection", calls == ["COM97"])
 app.worker.stop(); time.sleep(1.6)
 check("disconnect after connecting -> stopped, thread ends", "state:stopped" in kinds(states()) and not app.worker.running)
 

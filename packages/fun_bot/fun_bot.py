@@ -65,7 +65,7 @@ def world_cup(arg, get=mc.http_json):
 
 class Addon(AddonBase):
     title = "Fun bot"
-    version = "1.0.0"
+    version = "1.0.1"
     author = "mcIRC"
     description = ("dice, roll, magic8, joke, dadjoke, hacker, catfact and wc (World Cup scores and tables) - each switched on for the channels you "
                    "choose. Off until you switch it on.")
@@ -73,6 +73,15 @@ class Addon(AddonBase):
 
     def on_load(self):
         self.limiter = mc.Limiter(per_user=int(self.api.get("cooldown", 20)), gap=5)
+        if hasattr(self.api, "add_bot_commands"): self.api.add_bot_commands(self.help_for)      # (mcIRC 1.5.2 and later)
+
+    USAGE = {"dice": "dice 3d6", "magic8": "magic8 <question>", "wc": "wc [group]"}
+
+    def help_for(self, channel, dm=False):
+        """For 'bothelp': the commands answered in this channel right now."""
+        if not self.api.get("enabled", False) or (dm and not self.api.get("answer_dm", False)): return []
+        p = self.api.get("prefix", "")
+        return [p + self.USAGE.get(c, c) for c in COMMANDS if self.where(c) and (dm or mc.channel_ok(channel, self.where(c)))]
 
     def on_unload(self): pass
 

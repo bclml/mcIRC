@@ -38,7 +38,7 @@ class AddonAPI:
     def __init__(self, app, name):
         self._app, self.name = app, name
         self.display = name   # the addon's human title once it is instantiated (shown in menus)
-        self._commands, self._menu, self._layers, self._buttons = [], [], [], []
+        self._commands, self._menu, self._layers, self._buttons, self._helps = [], [], [], [], []
 
     # -- settings (persisted in gui_settings.json under "addons") --
     def get(self, key, default=None): return self._app.settings.setdefault("addons", {}).get(self.name, {}).get(key, default)
@@ -131,7 +131,26 @@ class AddonAPI:
         self._app.map_layers[key] = (provider, color)
         self._layers.append(key)
 
+    # -- bots: what each one answers, so 'bothelp' can list it --
+    def add_bot_commands(self, provider):
+        """provider(channel, dm) -> ['wx <place>', 'moon', ...]: the commands this addon answers right now in that channel (dm: private message)."""
+        entry = (self, provider)
+        if not hasattr(self._app, "bot_helps"): self._app.bot_helps = []
+        self._app.bot_helps.append(entry)
+        self._helps.append(entry)
+    def bot_commands(self, channel, dm=False):
+        """{addon title: [commands]} for everything the loaded bots answer in `channel` (only bots that answer something there)."""
+        out = {}
+        for api, provider in list(getattr(self._app, "bot_helps", [])):
+            try: cmds = list(provider(channel, dm) or [])
+            except Exception: cmds = []
+            if cmds: out[api.display] = cmds
+        return out
+
     def _cleanup(self):
+        for e in self._helps:
+            if e in getattr(self._app, "bot_helps", []): self._app.bot_helps.remove(e)
+        self._helps = []
         for c in self._commands: self._app.commands.pop(c, None)
         for label in self._menu:
             try: self._app.addon_menu.delete(label)

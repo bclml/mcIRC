@@ -479,6 +479,13 @@ def _resolve_channel_idx(source):
 # so restart persistence keeps working for every channel, not just whichever used to be index 1.
 _LOG_LINE_RE_TMPL = r'Broadcasting {} to Channel Index \d+:\s*\[(.*?)\]\s*(.*?)(?:\s\{{id:([^}}]*)\}})?$'
 
+def _weather_guid(src, ttl):
+    """The key a weather warning gets in scrape_weather_warnings (EC_REGION_<region>_<kinds>), rebuilt from an older log line that has no {id:}."""
+    if not src.startswith("Weather Warning:"): return None
+    region = src.replace("Weather Warning:", "").strip()
+    kinds = sorted(k.strip() for k in ttl.split(";") if k.strip() and not k.strip().upper().endswith(" ENDED"))
+    return f"EC_REGION_{region}_{'_'.join(kinds)}" if kinds else None
+
 def reload_active_alerts_from_log():
     if not os.path.exists(LOG_FILE_PATH): return
     logging.info("Syncing active data profiles from log traces...")
@@ -491,14 +498,16 @@ def reload_active_alerts_from_log():
                 nm = new_re.search(line)
                 if nm:
                     src, ttl, guid = nm.group(1).strip(), nm.group(2).strip(), nm.group(3)
+                    guid = guid or _weather_guid(src, ttl)
                     if "5-Day Summary:" not in ttl and "3-Day Forecast:" not in ttl:
                         key = f"{src}|{guid}" if guid else f"{src}|{ttl}"
                         temp_active[key] = (src, ttl)
                 cm = clear_re.search(line)
                 if cm:
                     src, ttl, guid = cm.group(1).strip(), cm.group(2).strip(), cm.group(3)
-                    key = f"{src}|{guid}" if guid else f"{src}|{ttl}"
-                    if key in temp_active: del temp_active[key]
+                    for g in {guid, _weather_guid(src, ttl)} - {None}:
+                        temp_active.pop(f"{src}|{g}", None)
+                    temp_active.pop(f"{src}|{ttl}", None)
         for key, (src, ttl) in temp_active.items():
             if src.startswith("Weather Warning:"): active_weather_alerts[key] = (src, ttl)
             else: active_traffic_alerts[key] = (src, ttl)
@@ -565,8 +574,9 @@ def broadcast_via_cli(source, title, description, is_clear=False, forced_region=
         logging.error(f"Mesh CLI broadcast failed: {err}")
         io.queue_for_retry(chan_idx, msg, "clear" if is_clear else "new", guid, is_clear)       # sent later if the radio comes back in time
 
-def handle_weather_broadcast(source, title, body, is_clear=False, specific_region=None):
-    broadcast_via_cli(source, title, body, is_clear, specific_region)
+def handle_weather_broadcast(source, title, body, is_clear=False, specific_region=None, guid=None):
+    # guid is logged as {id:...} so a restart recognises the warning again (without it every restart broadcast NEW + CLEARED)
+    broadcast_via_cli(source, title, body, is_clear, specific_region, guid=guid)
 
 async def broadcast_critical_all_channels(msg_body, label="ALERT", kind=None):
     """Sends msg_body, verbatim, to #public FIRST — that's where most listeners actually are, per
@@ -788,7 +798,7 @@ async def process_scraped_alerts(current_scan_dict, state_dict, skip_clear_sourc
         if key not in state_dict:
             state_dict[key] = (src, t)
             guid = key.split("|", 1)[1]
-            if src.startswith("Weather Warning:"): handle_weather_broadcast(src, t, d, False, src.replace("Weather Warning: ", "").strip())
+            if src.startswith("Weather Warning:"): handle_weather_broadcast(src, t, d, False, src.replace("Weather Warning: ", "").strip(), guid=guid)
             else: broadcast_via_cli(src, t, d, False, guid=guid)
             await asyncio.sleep(BROADCAST_PACING_SECONDS)
 
@@ -1190,6 +1200,7 @@ async def scrape_weather_warnings():
                     # part after the comma (the individual sub-zone/city name) is deliberately
                     # dropped, per request.
                     kind = t_txt.split(",")[0].strip()
+                    if kind.upper().endswith(" ENDED"): continue      # "YELLOW ADVISORY - FOG ENDED" is the all-clear, not an active warning
                     if kind: region_kinds.add(kind)
             except requests.exceptions.Timeout:
                 logging.warning(f"Server throttle noticed on Environment Canada feed for {region} ({feed_url}). Skipping to protect pipeline.")

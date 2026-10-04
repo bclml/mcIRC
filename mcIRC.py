@@ -589,6 +589,8 @@ class App(PrivateMixin, MenusMixin, CommandsMixin):
             mins = max(1, int((time.time() - info["since"]) / 60))
             waiting = len(ea.PENDING_SENDS)
             self.status_line(f"*** The radio is answering again (it was silent for about {mins} min)." + (f" Sending {waiting} queued alert(s)..." if waiting else ""), "info")
+        elif ev == "rescue_reboot":
+            self.status_line(f"*** The radio on {info['port']} was stuck in its CLI rescue console - sent 'reboot', it is starting normally again.", "warn")
         elif ev == "reset":
             self.status_line(f"*** Restarting the radio on {info['port']} ({info['how']}, {info['chip']}) by pulsing its reset line...", "warn")
         elif ev == "reset_refused":

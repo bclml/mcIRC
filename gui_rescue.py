@@ -64,6 +64,7 @@ class RescueDialog(tk.Toplevel):
     def __init__(self, app):
         super().__init__(app.root, bg=BG)
         self.app, self.port, self.reader = app, None, None
+        app.rescue_open = True                         # (mcIRC's automatic 'reboot out of rescue mode' stays away while this is open)
         self.title("CLI rescue console")
         self.geometry("760x520")
         conn = io.CONNECTION_ARGS or (["-s", app.settings.get("last_port", "")] if app.settings.get("last_port") else None)
@@ -145,6 +146,7 @@ class RescueDialog(tk.Toplevel):
             self.after(1500, self.close)
 
     def close(self):
+        self.app.rescue_open = False
         p, self.port = self.port, None
         if p is not None:
             try: p.close()

@@ -55,15 +55,41 @@ def pulse_reset(port):
 class Recovery:
     """Used by the connection thread after every poll."""
     def __init__(self, app):
-        self.app, self.last_reset, self.count = app, 0.0, 0
+        self.app, self.last_reset, self.count, self.last_rescue = app, 0.0, 0, 0.0
 
     def maybe(self):
         s = self.app.settings
+        if io.HEALTH.fails >= 1 and self.rescue_check(): return True      # fell into CLI rescue mode: just reboot it, at once
         if not s.get("auto_reset_radio", True): return False
         h = io.HEALTH
         if not h.is_down or h.fails < RESET_AFTER_FAILURES: return False
         if self.count >= MAX_PER_SESSION or time.time() - self.last_reset < COOLDOWN: return False
         return self.reset("automatic")
+
+    def rescue_check(self):
+        """The node sometimes lands in its CLI rescue console (the port only echoes text, so nothing it says makes sense to mcIRC).
+        If that is what is going on, send 'reboot' - it then starts normally.  Not while you use Tools > CLI rescue console yourself."""
+        args = io.CONNECTION_ARGS
+        if getattr(self.app, "rescue_open", False) or not args or args[0] != "-s" or len(args) < 2: return False
+        if time.time() - self.last_rescue < 60: return False             # look at most once a minute
+        self.last_rescue = time.time()
+        if not io.MESH_LOCK.acquire(True, 30): return False
+        try:
+            import gui_rescue
+            port = gui_rescue.open_port(args[1])
+            try:
+                if not gui_rescue.in_rescue(port): return False
+                port.write(b"reboot\r")
+                time.sleep(0.5)
+            finally:
+                port.close()
+        except Exception:
+            return False
+        finally:
+            io.MESH_LOCK.release()
+        self.app.q.put(("health", "rescue_reboot", {"port": args[1]}))
+        time.sleep(BOOT_WAIT)
+        return True
 
     def reset(self, how="manual"):
         ok, why = reset_allowed(io.CONNECTION_ARGS)

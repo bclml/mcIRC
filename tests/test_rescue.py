@@ -77,7 +77,34 @@ with mock.patch.object(gui_rescue.messagebox, "askyesno", lambda *a, **k: True):
 ok("...and are sent after a yes", dlg.port.sent == [b"rebuild\r"], dlg.port.sent)
 dlg.port.sent.clear(); dlg.send("ls UserData/")
 ok("harmless commands go straight out", dlg.port.sent == [b"ls UserData/\r"])
+# ---- stuck in rescue mode by mistake: mcIRC reboots it at the first failed poll
+import gui_health
 dlg.close(); root.update()
+rec = gui_health.Recovery(app)
+io.CONNECTION_ARGS = ["-s", "COMX"]
+io.HEALTH.fails = 1
+stuck = FakePort(); stuck.close = lambda: None
+with mock.patch.object(gui_rescue, "open_port", lambda port: stuck), mock.patch("time.sleep"):
+    acted = rec.maybe()
+ok("a node in rescue mode gets 'reboot' at the first failure", acted is True and b"reboot\r" in stuck.sent, stuck.sent)
+events = []
+while not app.q.empty():
+    it = app.q.get_nowait()
+    if it[0] == "health": events.append(it[1])
+ok("...and the Status window says so", "rescue_reboot" in events, events)
+stuck.sent.clear()
+with mock.patch.object(gui_rescue, "open_port", lambda port: stuck), mock.patch("time.sleep"):
+    rec.maybe()
+ok("it looks at most once a minute", stuck.sent == [])
+silent = FakePort(); silent.write = lambda b: silent.sent.append(b); silent.close = lambda: None
+rec.last_rescue = 0
+with mock.patch.object(gui_rescue, "open_port", lambda port: silent), mock.patch("time.sleep"):
+    ok("a node that is simply silent is not sent 'reboot' text", rec.rescue_check() is False and b"reboot\r" not in silent.sent)
+rec.last_rescue = 0; app.rescue_open = True
+with mock.patch.object(gui_rescue, "open_port", lambda port: stuck), mock.patch("time.sleep"):
+    ok("...nor while you use the rescue console yourself", rec.rescue_check() is False)
+app.rescue_open = False; io.HEALTH.fails = 0; io.CONNECTION_ARGS = None
+
 root.destroy()
 print("\nALL PASSED" if not fails else f"\n{len(fails)} FAILED: {fails}")
 sys.exit(1 if fails else 0)

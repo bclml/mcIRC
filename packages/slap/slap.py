@@ -10,7 +10,7 @@ MIN_GAP = 10          # seconds between two slaps: the mesh is a tiny shared cha
 
 class Addon(AddonBase):
     title = "Slap"
-    version = "1.0.0"
+    version = "1.0.1"
     author = "mcIRC"
     description = "/slap Nick slaps Nick around a bit with a large trout (change the fish in Options). Only sends when you type the command."
     tick_seconds = 0
@@ -28,11 +28,9 @@ class Addon(AddonBase):
     def cmd_slap(self, arg):
         nick = re.sub(r"[\[\]@]", "", arg).strip()
         if not nick: return self.api.log("Usage: /slap <nick>", "warn")
-        channel = self.api.current_channel()
-        if channel is None: return self.api.log("Open a channel window first - /slap sends to the channel in front.", "warn")
         if time.time() - self._last < MIN_GAP: return self.api.log(f"Easy there - one slap every {MIN_GAP} seconds.", "warn")
+        if not self.api.send_current(self.line(nick[:32])): return self.api.log("Open a channel or private window first - /slap sends to the window in front.", "warn")
         self._last = time.time()
-        self.api.send(channel, self.line(nick[:32]))
 
     def build_options(self, parent):
         self.v_item = tk.StringVar(value=self.api.get("item", "a large trout"))

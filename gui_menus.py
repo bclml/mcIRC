@@ -80,7 +80,7 @@ class MenusMixin:
         if not mine:
             m.add_command(label=f"Private message with {nick}", command=lambda: self._open_query_by_name(nick))
             m.add_command(label=f"Reply to {nick}", command=lambda: self._reply_to(nick))
-            fun = [(label, cmd) for label, cmd in (("Slap {} with a large trout", "slap"), ("Send {} dolphins", "dolphins")) if cmd in self.commands and not w.name.startswith("@")]
+            fun = [(label, cmd) for label, cmd in (("Slap {} with a large trout", "slap"), ("Send {} dolphins", "dolphins")) if cmd in self.commands]
             if fun: m.add_separator()
             for label, cmd in fun: m.add_command(label=label.format(nick), command=lambda c=cmd: self.commands[c][0](nick))
             m.add_separator()

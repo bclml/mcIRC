@@ -137,6 +137,20 @@ with mock.patch.object(tk, "Menu", FakeMenu):
     t.update(); app._chat_menu(ev, w)
 labels = [l for l, _ in shown[0].items]
 ok("with the addons loaded the menu offers the trout and the dolphins", "Slap Alice with a large trout" in labels and "Send Alice dolphins" in labels, labels)
+dms = []
+app.select_window("@Alice"); slap._last = dol._last = 0
+with mock.patch.object(app, "send_dm", lambda win, text: dms.append((win.name, text))), mock.patch.object(app, "send_to", lambda *a: dms.append(("CHANNEL!",) + a)):
+    app.commands["slap"][0]("Alice")
+    ok("in a private window /slap goes to that person, not to a channel", dms == [("@Alice", "slaps @[Alice] around a bit with a large trout")], dms)
+dmw = app.windows["@Alice"]
+app.chat_line(dmw, "Alice", "hi there", "text"); root.update()
+dstart = dmw.text.search("Alice", "1.0"); dx, dy, _, _ = dmw.text.bbox(dstart)
+shown.clear()
+with mock.patch.object(tk, "Menu", FakeMenu):
+    app._chat_menu(mock.Mock(x=dx + 2, y=dy + 2, x_root=0, y_root=0), dmw)
+dlabels = [l for l, _ in shown[0].items] if shown else []
+ok("the slap and dolphins entries are in the menu of a private window too", "Slap Alice with a large trout" in dlabels and "Send Alice dolphins" in dlabels, dlabels)
+app.select_window("Public")
 sapi._cleanup(); dapi._cleanup()
 ok("unloading the addons removes the commands", "slap" not in app.commands and "dolphins" not in app.commands)
 

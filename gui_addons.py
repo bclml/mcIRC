@@ -65,6 +65,13 @@ class AddonAPI:
         """Display name of the channel window in front ('#drivebc', 'Public'), or None for Status / private windows."""
         w = self._app.current
         return w.name if w is not None and w is not self._app.status and not w.name.startswith("@") else None
+    def send_current(self, text):
+        """Send `text` to the window in front: its channel, or the person of a private window.  False (nothing sent) for the Status window."""
+        w = self._app.current
+        if w is None or w is self._app.status: return False
+        if w.name.startswith("@"): self._app.send_dm(w, text)
+        else: self._app.send_to(w.name, text)
+        return True
     def channels(self):
         """Names of the channel windows mcIRC knows right now (for pickers): 'Public', '#drivebc', ..."""
         return [n for n in self._app.windows if n != "Status" and not n.startswith("@")]

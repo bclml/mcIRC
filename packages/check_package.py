@@ -47,6 +47,8 @@ def main(folder):
             check(f"compiles: {src}", False, str(e))
     addon_file = sources.get(f"addons/{name}.py")
     if not addon_file: return
+    for dest, path in sources.items():                    # helper modules the package installs next to the app can be imported, as after a real install
+        if "/" not in dest and os.path.dirname(path) not in sys.path: sys.path.insert(0, os.path.dirname(path))
     try:
         spec = importlib.util.spec_from_file_location(f"check_{name}", addon_file)
         mod = importlib.util.module_from_spec(spec)

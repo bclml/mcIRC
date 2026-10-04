@@ -131,6 +131,10 @@ class NodePages:
             lines = [f"{'OK' if ok else 'FAILED'}: {label} - {detail}" for label, ok, detail in results]
             self.say("\n".join(lines))
             for l in lines: self.app.status_line("*** Node settings - " + l, "info" if l.startswith("OK") else "error")
+            renamed = any(label == "name" and ok for label, ok, _ in results)
+            if renamed and messagebox.askyesno("Node renamed", f"Other nodes and phones only learn the new name '{new['name']}' from your next advert.\n\n"
+                                               "Send a flood advert now? (one short transmission that repeaters pass on)", parent=self.dlg):
+                self.act("floodadv")
             if radio_changed and messagebox.askyesno("Reboot node", "The new radio settings only take effect after a reboot. Reboot the node now?", parent=self.dlg):
                 self.reboot(confirm=False)
             else: self.read()

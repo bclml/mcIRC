@@ -31,6 +31,19 @@ with mock.patch.object(gui_dialogs.messagebox, "showerror", lambda *a, **k: None
     dlg.apply()
 ok("pressing OK / Apply keeps the new name (it used to save the old one back)", app.settings["node_name"] == "mcIRC_bot", app.settings["node_name"])
 ok("the node's empty position does not wipe the position set in Options", (app.settings["node_lat"], app.settings["node_lon"]) != (0.0, 0.0))
+# ---- after a rename is written, mcIRC offers a flood advert (others only learn the new name from an advert); nothing is sent without a yes
+pages = dlg.node_pages
+pages.old = dict(pages.old or {})
+sent, asked = [], []
+app.connected = True
+app.bg = lambda fn, done: done(fn())
+import gui_nodecfg
+with mock.patch.object(gui_nodecfg, "write_node", lambda old, new: ([("name", True, "ok")], False)),         mock.patch.object(pages, "collect", lambda: dict(pages.old, name="Third_name")), mock.patch.object(pages, "read", lambda: None),         mock.patch.object(pages, "act", lambda name: sent.append(name)),         mock.patch.object(gui_dialogs.messagebox, "askyesno", lambda title, text, **k: asked.append(title) or False):
+    pages.write()
+ok("after a rename mcIRC asks before sending an advert", asked == ["Node renamed"] and sent == [], (asked, sent))
+with mock.patch.object(gui_nodecfg, "write_node", lambda old, new: ([("name", True, "ok")], False)),         mock.patch.object(pages, "collect", lambda: dict(pages.old, name="Third_name")), mock.patch.object(pages, "read", lambda: None),         mock.patch.object(pages, "act", lambda name: sent.append(name)),         mock.patch.object(gui_dialogs.messagebox, "askyesno", lambda title, text, **k: True):
+    pages.write()
+ok("...and on yes it sends a flood advert", sent == ["floodadv"], sent)
 root.destroy()
 print("\nALL PASSED" if not fails else f"\n{len(fails)} FAILED: {fails}")
 sys.exit(1 if fails else 0)

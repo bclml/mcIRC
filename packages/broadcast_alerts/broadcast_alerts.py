@@ -15,7 +15,7 @@ class Addon(AddonBase):
     # (The "test" auto-reply is its own addon now: Auto reply.)
     SOURCES = [k for k in ea.TX_SOURCES if k != "Test reply"]   # alert types with a switch on the Alerts tab
     title = "BC traffic bot"
-    version = "1.2.0"
+    version = "1.2.1"
     author = "built in"
     description = ("Traffic / ferry / transit / weather / earthquake / tsunami alerts. Keeps the map's DriveBC and earthquake layers up to date; "
                    "broadcasting them to the mesh is OFF until you switch it on.")
@@ -80,7 +80,10 @@ class Addon(AddonBase):
         self.loop = None
 
     def _stop_feeds(self):
-        if self.loop: self.loop.call_soon_threadsafe(lambda: [t.cancel() for t in self.tasks])
+        loop = self.loop
+        if loop is None: return
+        try: loop.call_soon_threadsafe(lambda: [t.cancel() for t in self.tasks])
+        except RuntimeError: pass          # the feeds' loop had just finished on its own: nothing left to stop
 
     # ---- settings / mute ----
     def apply_settings(self):

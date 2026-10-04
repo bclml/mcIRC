@@ -72,6 +72,18 @@ class AddonAPI:
         """Display name of the channel window in front ('#drivebc', 'Public'), or None for Status / private windows."""
         w = self._app.current
         return w.name if w is not None and w is not self._app.status and not w.name.startswith("@") else None
+    def reply(self, msg, text):
+        """Answer a message where it came from: its channel, or the person for a direct message (msg as given to on_message)."""
+        if msg.get("dm"):
+            w = self._app.windows.get(msg["channel"])
+            if w is not None: self._app.q.put(("call", lambda: self._app.send_dm(w, text)))
+        else:
+            self._app.send_to(msg["channel"], text)
+    def node_position(self):
+        """(lat, lon, node name) from Options > Node, for "near me" answers; lat/lon are 0 when not set."""
+        s = self._app.settings
+        try: return float(s.get("node_lat") or 0), float(s.get("node_lon") or 0), s.get("node_name", "")
+        except (TypeError, ValueError): return 0.0, 0.0, s.get("node_name", "")
     def send_current(self, text):
         """Send `text` to the window in front: its channel, or the person of a private window.  False (nothing sent) for the Status window."""
         w = self._app.current

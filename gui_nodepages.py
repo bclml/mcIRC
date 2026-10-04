@@ -91,7 +91,8 @@ class NodePages:
             f"Max TX power: {i.get('max_tx_power', '?')} dBm"))
         self.say("Settings read from the node.")
         self.app.adopt_node_info(node)
-        if "radio_capacity" in self.dlg.vars: self.dlg.vars["radio_capacity"].set(str(self.app.settings["radio_capacity"]))
+        for k in ("radio_capacity", "node_name", "node_lat", "node_lon"):      # the other Options pages show these too: OK must not save the old values back
+            if k in self.dlg.vars: self.dlg.vars[k].set(str(self.app.settings[k]))
 
     # ---- writing ----
     def collect(self):

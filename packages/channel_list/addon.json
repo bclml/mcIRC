@@ -1,0 +1,11 @@
+{
+  "name": "channel_list",
+  "title": "Channel list",
+  "version": "1.0.0",
+  "description": "Answers 'channel list' with the channels you keep in its list (add / remove / rename / reorder them in Options). Off until you switch it on.",
+  "requires": [],
+  "files": {
+    "channel_list.py": "addons/channel_list.py",
+    "meshbot_common.py": "meshbot_common.py"
+  }
+}

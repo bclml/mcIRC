@@ -73,6 +73,15 @@
       "description": "Answers 'bothelp' with the bot commands that work in that channel (Weather bot, Fun bot, Auto reply, ...), and can announce 'Type bothelp for a list of commands.' once a day at a set time. Choose which bots it lists. Off until you switch it on; rate-limited.",
       "path": "packages/bot_help",
       "tested": "2026-10-04 with app 1.5.2 with a stand-in radio (not over the air yet)"
+    },
+    {
+      "name": "channel_list",
+      "title": "Channel list",
+      "version": "1.0.0",
+      "author": "bclml",
+      "description": "Answers 'channel list' with the channels you keep in its list (add / remove / rename / reorder them in Options; starts with 13 BC channels). Off until you switch it on; one answer per person per minute.",
+      "path": "packages/channel_list",
+      "tested": "2026-10-04 with app 1.5.3 with a stand-in radio (not over the air yet)"
     }
   ]
 }

@@ -65,6 +65,34 @@ with mock.patch.object(ea.requests, "get", lambda *a, **k: R()), mock.patch.obje
     asyncio.run(ea.scrape_weather_warnings())
 scan = proc.call_args[0][0]
 ok("an '... ENDED' notice is not counted as an active warning", list(scan) == ["EC_REGION_Vancouver Island_YELLOW ADVISORY - FOG"], scan)
+# ---- the Sunday reminder on Public: once a week, even when mcIRC restarts during that hour
+import datetime as _dt
+open(log.name, "a", encoding="utf-8").write("2026-10-04 12:21:05 - INFO - Sent weekly public-channel reminder (#drivebc, #weather).\n")
+ea.last_weekly_ad_sent = None
+with mock.patch.object(ea, "LOG_FILE_PATH", log.name): ea.reload_weekly_ad_from_log()
+sunday = _dt.datetime(2026, 10, 4, 12, 31)
+ok("after a restart the reminder knows it already went out this week", ea.last_weekly_ad_sent == (sunday.isocalendar()[0], sunday.isocalendar()[1]), ea.last_weekly_ad_sent)
+calls = []
+class FakeDT(_dt.datetime):
+    @classmethod
+    def now(cls, tz=None): return sunday
+with mock.patch.object(ea.datetime, "datetime", FakeDT), mock.patch.object(ea, "execute_mesh_command", lambda *a, **k: calls.append(a)),         mock.patch.object(ea, "tx_allowed", lambda kind: True):
+    ea.check_weekly_channel_ad()
+ok("...so it is not sent again", calls == [], calls)
+# ---- the weekly reminder is opt-in: an install that had it on (the old default) gets it switched off once; a later 'on' is kept
+import importlib.util
+spec = importlib.util.spec_from_file_location("ba_t", os.path.join(ROOT, "packages", "broadcast_alerts", "broadcast_alerts.py"))
+ba = importlib.util.module_from_spec(spec); spec.loader.exec_module(ba)
+store = {"sources": {"DriveBC": True, "Weekly reminder": True}}
+class API:
+    def get(self, k, d=None): return store.get(k, d)
+    def set(self, k, v): store[k] = v
+a = ba.Addon(API()); a.apply_settings()
+ok("an old install's 'weekly reminder on' is switched off once", ea.TX["sources"]["Weekly reminder"] is False and store["sources"]["Weekly reminder"] is False and store["weekly_opt_in"])
+store["sources"]["Weekly reminder"] = True; a.apply_settings()
+ok("...after that, switching it on yourself is kept", ea.TX["sources"]["Weekly reminder"] is True)
+store.clear(); a.apply_settings()
+ok("a fresh install has it off", ea.TX["sources"]["Weekly reminder"] is False and ea.TX["sources"]["DriveBC"] is True)
 os.unlink(log.name)
 print("\nALL PASSED" if not fails else f"\n{len(fails)} FAILED: {fails}")
 sys.exit(1 if fails else 0)

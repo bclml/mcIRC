@@ -682,6 +682,22 @@ async def check_earthquake_warnings():
     except Exception as e:
         logging.error(f"Earthquake feed check failed: {e}")
 
+def reload_weekly_ad_from_log():
+    """The weekly reminder's "already sent this week" used to live only in memory, so every restart during Sunday 12:00-13:00 sent it
+    again.  The log line it writes says when it last went out."""
+    global last_weekly_ad_sent
+    if not os.path.exists(LOG_FILE_PATH): return
+    try:
+        with open(LOG_FILE_PATH, "r", encoding="utf-8", errors="ignore") as f:
+            for line in f:
+                if "Sent weekly public-channel reminder" in line:
+                    try: d = datetime.datetime.strptime(line[:19], "%Y-%m-%d %H:%M:%S")
+                    except ValueError: continue
+                    last_weekly_ad_sent = (d.isocalendar()[0], d.isocalendar()[1])
+    except Exception as e:
+        logging.warning(f"Weekly reminder log check failed: {e}")
+
+
 def check_weekly_channel_ad():
     """Every Sunday around noon, sends a two-part reminder on the public channel (0): first a
     plain heads-up line, then a second message listing all 5 category channels currently in use.
@@ -1261,6 +1277,7 @@ async def main():
 
     reload_active_alerts_from_log()
     reload_critical_alert_ids_from_log()
+    reload_weekly_ad_from_log()
     ans = input("\nShould region scopes be used to transmit alerts? (yes/no): ").strip().lower()
     if ans in ['yes', 'y']:
         USE_SCOPES = True

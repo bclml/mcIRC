@@ -15,7 +15,7 @@ class Addon(AddonBase):
     # (The "test" auto-reply is its own addon now: Auto reply.)
     SOURCES = [k for k in ea.TX_SOURCES if k != "Test reply"]   # alert types with a switch on the Alerts tab
     title = "BC traffic bot"
-    version = "1.2.1"
+    version = "1.2.2"
     author = "built in"
     description = ("Traffic / ferry / transit / weather / earthquake / tsunami alerts. Keeps the map's DriveBC and earthquake layers up to date; "
                    "broadcasting them to the mesh is OFF until you switch it on.")
@@ -42,6 +42,7 @@ class Addon(AddonBase):
         if self.thread and self.thread.is_alive(): return
         ea.reload_active_alerts_from_log()
         ea.reload_critical_alert_ids_from_log()
+        if hasattr(ea, "reload_weekly_ad_from_log"): ea.reload_weekly_ad_from_log()      # restarts never repeat the weekly reminder
         self._stop_req = False
         self.thread = threading.Thread(target=self._run, daemon=True)
         self.thread.start()
@@ -93,7 +94,11 @@ class Addon(AddonBase):
         g = self.api.get
         ea.TX["muted"] = g("muted", True)         # broadcasting is OFF unless the user turned it on (an existing "muted" setting is kept)
         saved = g("sources", {})
-        for k in self.SOURCES: ea.TX["sources"][k] = saved.get(k, True)
+        if not g("weekly_opt_in", False) and saved.get("Weekly reminder", True):      # the Sunday reminder on Public is opt-in now (it was on by default)
+            saved = dict(saved, **{"Weekly reminder": False})
+            self.api.set("sources", saved)
+            self.api.set("weekly_opt_in", True)
+        for k in self.SOURCES: ea.TX["sources"][k] = saved.get(k, k != "Weekly reminder")
         ea.USE_SCOPES = g("use_scopes", False)
         ea.REGION_SCOPES = {"Lower Mainland": g("scope_lm", ""), "Vancouver Island": g("scope_vi", ""), "Sunshine Coast": g("scope_sc", "")}
         ea.TRANSLINK_API_KEY = g("translink_key", "").strip() or os.environ.get("TRANSLINK_API_KEY", "").strip() or None
@@ -133,7 +138,7 @@ class Addon(AddonBase):
                   "scope_lm": tk.StringVar(value=g("scope_lm", "")), "scope_vi": tk.StringVar(value=g("scope_vi", "")),
                   "scope_sc": tk.StringVar(value=g("scope_sc", ""))}
         saved = g("sources", {})
-        self.src = {k: tk.BooleanVar(value=saved.get(k, True)) for k in self.SOURCES}
+        self.src = {k: tk.BooleanVar(value=saved.get(k, k != "Weekly reminder")) for k in self.SOURCES}
         self.broadcast = tk.BooleanVar(value=not g("muted", True))
         bg = parent["bg"]
         tk.Label(f, text="BC traffic bot", bg=bg, font=(gui_platform.DIALOG_FONT_NAME, 9, "bold")).pack(anchor="w")

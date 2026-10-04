@@ -80,19 +80,12 @@ class PrivateMixin:
         w.key = key
         if io.HEALTH.is_down: return self.unsent(w, text, "the radio is not answering")
         self.chat_line(w, self.settings["node_name"], text, "self")
-        def attempt():
-            res = io.execute_mesh_command(io.CONNECTION_ARGS + ["msg", key, text])
-            out = f"{res.stdout}\n{res.stderr}"
-            return [l.strip() for l in out.splitlines() if re.search(r"unknown destination|\berror\b", l, re.IGNORECASE)]
         def work():
-            bad = attempt()
-            if bad and "unknown destination" in bad[-1].lower():      # the radio does not hold this contact (list cleared, or never added): take it from the radio's pending list if it is there, then try once more
-                try: io.execute_mesh_command(io.CONNECTION_ARGS + ["add_pending", key], retries=0)
-                except Exception: pass
-                bad = attempt()
-            if bad:
-                if "unknown destination" in bad[-1].lower(): raise RuntimeError("the radio does not have this contact - it is added again when its next advert is heard (or add it on the radio)")
-                raise RuntimeError(bad[-1])      # the line that names the problem (the last line is usually just meshcli's "Connected" notice)
+            res = io.execute_mesh_command(io.CONNECTION_ARGS + ["msg", key, text])
+            out = f"{res.stdout}
+{res.stderr}"
+            bad = [l.strip() for l in out.splitlines() if re.search(r"unknown destination|err_code_not_found|error", l, re.IGNORECASE)]
+            if bad: raise RuntimeError(bad[-1])      # the line that names the problem (the last line is usually just meshcli's "Connected" notice)
         self.bg(work, lambda r: isinstance(r, Exception) and self.unsent(w, text, io.explain_failure(str(r))))
 
     # ---- turning "@3ddcdf84" into the real name ----

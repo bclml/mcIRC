@@ -127,4 +127,5 @@ for inst in [x for x in (globals().get("a"), globals().get("a2"), globals().get(
 app.map_win.destroy(); root.update()
 root.destroy()
 print("\nALL PASSED" if not fails else f"\n{len(fails)} FAILED: {fails}")
-sys.exit(1 if fails else 0)
+sys.stdout.flush()
+os._exit(1 if fails else 0)      # (the alert feeds' background threads can crash Python 3.10's shutdown after the checks are done)

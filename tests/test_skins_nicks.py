@@ -78,6 +78,20 @@ with mock.patch.object(tk, "Menu", FakeMenu):
     app._chat_menu(mock.Mock(x=1000, y=1000, x_root=0, y_root=0), w)       # empty area -> no menu
 ok("right-click away from a name shows nothing", not shown)
 
+# ---- lines restored from the log of an earlier session are clickable too
+class FakeLog:
+    path = ""
+    def tail(self, n): return ["[17:26] <VA7HU - T-Deck> hello there", "Session Close: Sat Oct 03"]
+    def stamp(self, *a): pass
+    def append(self, *a): pass
+old = mcIRC.ChatWindow(root, "#old", "t", app.font, FakeLog(), 10, app.theme, "Me")
+old.frame.pack(); root.update()
+i = old.text.search("VA7HU", "1.0")
+ok("a name in an old (restored) line carries the nickname tag", i and "nickname" in old.text.tag_names(i))
+nick_range = old.text.tag_ranges("nickname")
+ok("...covering exactly the name", len(nick_range) == 2 and old.text.get(nick_range[0], nick_range[1]) == "VA7HU - T-Deck", [str(r) for r in nick_range])
+old.frame.destroy()
+
 # ---- the addons add their entries when installed
 def load_addon(name):
     spec = importlib.util.spec_from_file_location("addon_" + name, os.path.join(ROOT, "packages", name, name + ".py"))

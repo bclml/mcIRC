@@ -100,6 +100,8 @@ class ChatWindow:
                     line = safe_text(line)
                     start, cut = t.index("end-1c"), (line.find("> ") + 2 if "> " in line else 0)
                     t.insert("end", line + "\n", "hist")
+                    lt, gt = line.find("<"), line.find("> ")
+                    if 0 <= lt < gt: t.tag_add("nickname", f"{start}+{lt + 1}c", f"{start}+{gt}c")      # old lines get the right-click on names too
                     for m in MENTION.finditer(line, cut):      # old lines get the same @mention highlighting as new ones
                         mine = bool(my_name) and _plain(m.group(1) or m.group(2) or "") == _plain(my_name)
                         t.tag_add("mention_me" if mine else "mention", f"{start}+{m.start()}c", f"{start}+{m.end()}c")

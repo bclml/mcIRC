@@ -82,9 +82,8 @@ class PrivateMixin:
         self.chat_line(w, self.settings["node_name"], text, "self")
         def work():
             res = io.execute_mesh_command(io.CONNECTION_ARGS + ["msg", key, text])
-            out = f"{res.stdout}
-{res.stderr}"
-            bad = [l.strip() for l in out.splitlines() if re.search(r"unknown destination|err_code_not_found|error", l, re.IGNORECASE)]
+            out = f"{res.stdout}"+chr(10)+f"{res.stderr}"
+            bad = [l.strip() for l in out.splitlines() if re.search(r"unknown destination|err_code_not_found|\berror\b", l, re.IGNORECASE)]
             if bad: raise RuntimeError(bad[-1])      # the line that names the problem (the last line is usually just meshcli's "Connected" notice)
         self.bg(work, lambda r: isinstance(r, Exception) and self.unsent(w, text, io.explain_failure(str(r))))
 

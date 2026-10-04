@@ -538,7 +538,7 @@ class App(PrivateMixin, MenusMixin, CommandsMixin):
             note = " (waiting for approval - the radio is in manual-add mode)" if kind == "new_contact" else ""
             self.status_line(f"*** New {what.lower()} heard: {c.get('adv_name') or key[:8]}{note}", "info")
         self.resolve_key_windows()                                 # a private window that only had a key gets its real name now
-        for attr, update in (("map_win", "refresh"), ("nodes_win", "fill")):      # open map / node list show it straight away
+        for attr, update in (("map_win", "request_refresh"), ("nodes_win", "fill")):      # open map / node list show it straight away
             w = getattr(self, attr, None)
             try:
                 if w is not None and w.winfo_exists(): getattr(w, update)()
@@ -680,6 +680,19 @@ class App(PrivateMixin, MenusMixin, CommandsMixin):
         try: self.q.put(("nodes", sync_nodes(self.nodes, s["node_prune_days"], s["prune_radio"])))
         except ea.Cancelled: raise
         except Exception as e: logging.error(f"Node sync failed: {e}")
+
+    def restore_nodes_now(self, then=None):
+        """Put the nodes mcIRC remembers back on the radio (after its contact list was cleared)."""
+        if not self.require_connection(): return
+        def done(r):
+            if isinstance(r, Exception): self.status_line(f"*** Putting nodes back on the radio failed: {r}", "error")
+            else:
+                self.status_line(f"*** Put {r['added']} of {r['wanted']} remembered node(s) back on the radio ({r['on_radio']}/{self.settings['radio_capacity']} now).", "info")
+                self.sync_nodes_now(then=then)
+                return
+            if then: then()
+        self.status_line("*** Putting remembered nodes back on the radio - this takes a minute or two...", "info")
+        self.bg(lambda: gui_nodes.restore_to_radio(self.nodes, self.settings["radio_capacity"]), done)
 
     def sync_nodes_now(self, then=None):
         if not self.require_connection(): return

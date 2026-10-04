@@ -84,6 +84,12 @@ class PrivateMixin:
             res = io.execute_mesh_command(io.CONNECTION_ARGS + ["msg", key, text])
             out = f"{res.stdout}"+chr(10)+f"{res.stderr}"
             bad = [l.strip() for l in out.splitlines() if re.search(r"unknown destination|err_code_not_found|\berror\b", l, re.IGNORECASE)]
+            if bad and re.search(r"unknown destination|err_code_not_found", bad[-1], re.IGNORECASE):      # the radio does not have this contact: put it back from mcIRC's memory and try once more
+                row = self.nodes.find_by_prefix(key)
+                if row and gui_nodes.add_to_radio([row]):
+                    res = io.execute_mesh_command(io.CONNECTION_ARGS + ["msg", key, text])
+                    out = res.stdout + chr(10) + res.stderr
+                    bad = [l.strip() for l in out.splitlines() if re.search(r"unknown destination|err_code_not_found|\berror\b", l, re.IGNORECASE)]
             if bad: raise RuntimeError(bad[-1])      # the line that names the problem (the last line is usually just meshcli's "Connected" notice)
         self.bg(work, lambda r: isinstance(r, Exception) and self.unsent(w, text, io.explain_failure(str(r))))
 

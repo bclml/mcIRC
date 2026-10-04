@@ -148,6 +148,44 @@ def remove_from_radio(keys):
     return removed
 
 
+def _add_args(rows):
+    """meshcli arguments that add these remembered nodes to the radio.  The radio learns the key, type and name; the path is reset so messages go out as a flood until a route is learned."""
+    args = []
+    for r in rows:
+        name = (r["name"] or "").strip() or r["public_key"][:8]
+        if name.startswith("-"): name = r["public_key"][:8]               # (meshcli would take it for an option)
+        args += ["add_contact", r["public_key"], str(int(r["type"] or 1)), name[:31], "reset_path", r["public_key"]]
+    return args
+
+
+def add_to_radio(rows):
+    """Puts remembered nodes back on the radio itself (e.g. after its contact list was cleared).  Returns how many were sent; a batch that fails is logged and skipped."""
+    done = 0
+    for i in range(0, len(rows), 5):
+        batch = rows[i:i + 5]
+        try:
+            with ea.MESH_LOCK: ea.execute_mesh_command(ea.CONNECTION_ARGS + _add_args(batch), timeout=120, retries=0)
+            done += len(batch)
+        except Exception as e:
+            logging.error(f"Putting nodes back on the radio failed: {e}")
+    return done
+
+
+def restore_to_radio(store, capacity):
+    """Pushes the nodes mcIRC remembers but the radio does not have back onto the radio (newest first, as many as fit).
+    -> {'added', 'wanted', 'on_radio'}.  Their 'last seen' times are kept: being put back is not the same as being heard."""
+    on_radio = set(fetch_radio_contacts())
+    want = [r for r in store.all() if r["public_key"] not in on_radio][:max(0, capacity - len(on_radio))]
+    seen = {r["public_key"]: r["last_seen"] for r in want}
+    added = add_to_radio(want)
+    after = fetch_radio_contacts()
+    store.update_from_radio(after)
+    with store.lock:
+        store.db.executemany("UPDATE nodes SET last_seen=? WHERE public_key=?", [(t, k) for k, t in seen.items()])
+        store.db.commit()
+    return {"added": added, "wanted": len(want), "on_radio": len(after)}
+
+
 def sync(store, prune_days, also_remove_from_radio):
     """One full cycle: read the radio, remember everything, forget the stale. Returns a summary dict."""
     contacts = fetch_radio_contacts()

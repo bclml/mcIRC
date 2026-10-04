@@ -29,7 +29,7 @@ def ago(ts):
 class MapWindow(tk.Toplevel):
     def __init__(self, master, app):
         super().__init__(master, bg=BG)
-        self.app, self.markers, self._sig, self._job = app, [], None, None
+        self.app, self.markers, self._sig, self._job, self._soon = app, [], None, None, None
         self.title("Map - nodes and layers")
         self.geometry("1000x640")
         self.show_type = {t: tk.BooleanVar(value=True) for t in TYPE_NAMES}
@@ -124,22 +124,47 @@ class MapWindow(tk.Toplevel):
         if not self.winfo_exists(): return
         self._sync_layer_boxes()
         pts = self.points()
-        sig = hash(tuple(pts))
+        sig = hash(tuple(p[:5] for p in pts))                 # the info text ("seen 3 min ago") changes every minute and must not trigger a redraw
         if force or sig != self._sig:
             self._sig = sig
             (self._draw_tiles if tkintermapview else self._draw_plain)(pts)
+        else:
+            self._update_info(pts)
         if self._job: self.after_cancel(self._job)
         self._job = self.after(REFRESH_MS, self.refresh)
 
+    def request_refresh(self):
+        """Ask for a refresh soon; many requests in a burst (adverts arriving) become one."""
+        if self._soon is None: self._soon = self.after(2000, self._refresh_now)
+
+    def _refresh_now(self):
+        self._soon = None
+        self.refresh()
+
     # ---- drawing ----
+    def _update_info(self, pts):
+        for m, p in zip(self.markers, pts):
+            if getattr(m, "key", None) == p[:5]: m.data = p[5]
+
     def _draw_tiles(self, pts):
-        for m in self.markers: m.delete()
-        self.markers = []
-        for lat, lon, label, fill, outline, info in pts:
-            m = self.map.set_marker(lat, lon, text=label, marker_color_circle=outline, marker_color_outside=fill,
-                                    command=lambda marker: self.info.config(text=marker.data))
-            m.data = info
-            self.markers.append(m)
+        """Only the markers that changed are removed or added, so the map does not blink every time something is heard."""
+        old = {}
+        for m in self.markers: old.setdefault(m.key, []).append(m)
+        markers = []
+        for p in pts:
+            lat, lon, label, fill, outline, info = p
+            reuse = old.get(p[:5])
+            if reuse:
+                m = reuse.pop()
+                m.data = info
+            else:
+                m = self.map.set_marker(lat, lon, text=label, marker_color_circle=outline, marker_color_outside=fill,
+                                        command=lambda marker: self.info.config(text=marker.data))
+                m.data, m.key = info, p[:5]
+            markers.append(m)
+        for left in old.values():
+            for m in left: m.delete()
+        self.markers = markers
 
     def _draw_plain(self, pts):
         c = self.map

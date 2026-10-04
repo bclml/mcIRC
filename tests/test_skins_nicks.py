@@ -78,6 +78,23 @@ with mock.patch.object(tk, "Menu", FakeMenu):
     app._chat_menu(mock.Mock(x=1000, y=1000, x_root=0, y_root=0), w)       # empty area -> no menu
 ok("right-click away from a name shows nothing", not shown)
 
+# ---- the real right-click event reaches the menu, on the name and on an @[mention] in the text
+app.chat_line(w, "Carol", "hello @[Alice] and @Dave", "text"); root.update()
+def right_click_at(word, nth=0):
+    i = "1.0"
+    for _ in range(nth + 1): i = t.search(word, i, stopindex="end"); i = f"{i}+{len(word)}c" if _ < nth else i
+    t.see(i); root.update()
+    bx, by, _, _ = t.bbox(i)
+    shown.clear()
+    with mock.patch.object(tk, "Menu", FakeMenu):
+        t.event_generate("<Button-3>", x=bx + 3, y=by + 3); root.update()
+    return [l for l, _ in shown[0].items] if shown else []
+ok("a real right-click event on a name opens the menu", "Reply to Carol" in right_click_at("Carol"))
+ok("a real right-click on a highlighted @[mention] in the text opens the menu for that person", "Reply to Alice" in right_click_at("@[Alice]"))
+ok("...also for a plain @name", "Reply to Dave" in right_click_at("@Dave"))
+t.tag_add("sel", "1.0", "end"); root.update()
+ok("...even while text is selected", "Reply to Carol" in right_click_at("Carol")); t.tag_remove("sel", "1.0", "end")
+
 # ---- lines restored from the log of an earlier session are clickable too
 class FakeLog:
     path = ""

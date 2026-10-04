@@ -1,5 +1,6 @@
 """Right-click menus for the window tree, the private-message buttons and the nick list, plus closing / reopening windows."""
 import gui_platform
+import re
 import os
 import time
 import tkinter as tk
@@ -7,6 +8,8 @@ from tkinter import messagebox, simpledialog
 
 from gui_logs import file_name, LOG_DIR
 from gui_nodes import TYPE_NAMES
+
+MENTION = re.compile(r"@\[([^\]]+)\]|@([^\s,:;!?()\[\]]+)")      # same pattern mcIRC.py uses to highlight mentions
 
 
 class MenusMixin:
@@ -62,9 +65,15 @@ class MenusMixin:
         """Right-click on a name in the chat text: private chat, reply, node info, and the fun commands addons provide."""
         t = w.text
         idx = t.index(f"@{e.x},{e.y}")
-        if "nickname" not in t.tag_names(idx): return
-        start, end = t.tag_prevrange("nickname", f"{idx}+1c")
-        nick = t.get(start, end).strip()
+        nick = ""
+        for tag in ("nickname", "mention", "mention_me"):          # the <name> that wrote a line, or an @[name] mentioned in its text
+            if tag in t.tag_names(idx):
+                start, end = t.tag_prevrange(tag, f"{idx}+1c")
+                nick = t.get(start, end).strip()
+                if tag != "nickname":
+                    m = MENTION.fullmatch(nick)
+                    nick = ((m.group(1) or m.group(2)) if m else "").strip()
+                break
         if not nick: return
         mine = nick == self.settings["node_name"]
         m = tk.Menu(self.root, tearoff=0)

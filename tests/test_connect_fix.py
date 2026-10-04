@@ -22,7 +22,9 @@ time.sleep(0.3); check("...and the first copy is told to raise its window", rais
 lock.close(); time.sleep(0.2)
 check("nothing running -> notify finds nobody", gui_single.notify_existing() is False)
 lock2 = gui_single.acquire(lambda: None); check("after the first exits, a new copy can start", lock2 is not None); lock2.close()
-stranger = __import__("socket").socket(); stranger.bind(("127.0.0.1", 47999)); stranger.listen(1)
+import socket as _s; stranger = _s.socket()
+if os.name != "nt": stranger.setsockopt(_s.SOL_SOCKET, _s.SO_REUSEADDR, 1)      # (a connection from the checks above may still be in TIME_WAIT)
+stranger.bind(("127.0.0.1", 47999)); stranger.listen(1)
 check("an unrelated program on the port is not mistaken for mcIRC", gui_single.notify_existing() is False)
 stranger.close()
 

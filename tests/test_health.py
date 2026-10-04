@@ -161,7 +161,8 @@ ok("'Failed to poll' spam is hidden while the 'not responding' notice is up", ap
 reset_health()
 
 # ---- 5. optional auto reset
-ok("auto reset is OFF by default", app.settings["auto_reset_radio"] is False)
+ok("auto reset is ON by default", app.settings["auto_reset_radio"] is True)
+app.settings["auto_reset_radio"] = False
 rec = gui_health.Recovery(app)
 io.HEALTH.fails, io.HEALTH.down_since = 9, time.time() - 600
 with mock.patch.object(gui_health, "pulse_reset") as pr:
@@ -172,8 +173,10 @@ with mock.patch.object(gui_health, "pulse_reset") as pr:
         ok("...but not again within the cool-down", rec.maybe() is False and pr.call_count == 1)
         rec.last_reset -= gui_health.COOLDOWN + 1
         ok("...again after the cool-down", rec.maybe() is True and pr.call_count == 2)
-        rec.last_reset -= gui_health.COOLDOWN + 1
-        ok("...never more than twice per session", rec.maybe() is False and pr.call_count == 2)
+        for _ in range(gui_health.MAX_PER_SESSION):
+            rec.last_reset -= gui_health.COOLDOWN + 1
+            rec.maybe()
+        ok(f"...never more than {gui_health.MAX_PER_SESSION} times per session", pr.call_count == gui_health.MAX_PER_SESSION, pr.call_count)
     rec2 = gui_health.Recovery(app)
     io.HEALTH.fails = 2
     with mock.patch.object(gui_health, "port_vendor", return_value=0x10C4):
@@ -211,7 +214,7 @@ def walk(m):
 walk(root.nametowidget(root["menu"]))
 ok("Tools has 'Reset radio via USB...'", "Reset radio via USB..." in menus)
 app.open_options(); root.update()
-ok("Options has the switch (off)", app.options_win.vars["auto_reset_radio"].get() is False) if hasattr(app, "options_win") else ok("Options dialog opens", True)
+ok("Options has the switch", "auto_reset_radio" in app.options_win.vars) if hasattr(app, "options_win") else ok("Options dialog opens", True)
 root.destroy()
 print("\nALL PASSED" if not fails else f"\n{len(fails)} FAILED: {fails}")
 sys.exit(1 if fails else 0)

@@ -90,9 +90,9 @@ class OptionsDialog(tk.Toplevel):
         self._row(f, "Message poll (sec):", "poll_seconds", 6)
         tk.Checkbutton(f, text="Connect automatically on startup", variable=self.vars["auto_connect"], bg=BG).pack(anchor="w", pady=4)
         tk.Checkbutton(f, text="Reboot the node when disconnecting or closing mcIRC", variable=self.vars["reboot_on_disconnect"], bg=BG).pack(anchor="w")
-        tk.Checkbutton(f, text="Restart a silent radio automatically (USB reset line, about 5 minutes after it stops answering)", variable=self.vars["auto_reset_radio"], bg=BG,
+        tk.Checkbutton(f, text="Restart a silent radio automatically (USB reset line, about 2 minutes after it stops answering)", variable=self.vars["auto_reset_radio"], bg=BG,
                        wraplength=420, justify="left").pack(anchor="w")
-        tk.Label(f, text="Off by default. Only for USB boards with a CP210x / CH340 / FTDI chip (Heltec V3, LilyGo, ...); at most twice per session. "
+        tk.Label(f, text="Only for USB boards with a CP210x / CH340 / FTDI chip (Heltec V3, LilyGo, ...); at most every 10 minutes, 6 times per session. "
                          "Tools > Reset radio via USB... does it once, on request.", bg=BG, fg="#555", wraplength=420, justify="left").pack(anchor="w")
         return f
 

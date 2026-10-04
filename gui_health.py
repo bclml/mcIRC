@@ -10,9 +10,9 @@ import time
 import meshcore_io as io
 
 UART_BRIDGE_VENDORS = {0x10C4: "Silicon Labs CP210x", 0x1A86: "WCH CH340/CH9102", 0x0403: "FTDI"}
-COOLDOWN = 30 * 60              # never reset more than once in half an hour
-MAX_PER_SESSION = 2
-RESET_AFTER_FAILURES = 6        # consecutive failed commands (about 4-5 minutes of silence)
+COOLDOWN = 10 * 60              # never reset more than once in 10 minutes
+MAX_PER_SESSION = 6             # a board that keeps hanging is not reset forever
+RESET_AFTER_FAILURES = 3        # consecutive failed commands: as soon as the radio counts as "not responding" (about 2 minutes)
 BOOT_WAIT = 10                  # seconds for the board to start up again
 
 
@@ -59,7 +59,7 @@ class Recovery:
 
     def maybe(self):
         s = self.app.settings
-        if not s.get("auto_reset_radio", False): return False
+        if not s.get("auto_reset_radio", True): return False
         h = io.HEALTH
         if not h.is_down or h.fails < RESET_AFTER_FAILURES: return False
         if self.count >= MAX_PER_SESSION or time.time() - self.last_reset < COOLDOWN: return False

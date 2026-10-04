@@ -17,6 +17,7 @@ import json
 import sys
 import time
 
+import gui_seriallines  # noqa: F401  - opens the USB port without holding the board's button down (must come before meshcore)
 from meshcore import MeshCore, EventType
 
 

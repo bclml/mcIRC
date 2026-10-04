@@ -12,6 +12,21 @@ import gui_platform
 NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
 UTF8 = dict(encoding="utf-8", errors="replace", env={**os.environ, "PYTHONUTF8": "1", "PYTHONIOENCODING": "utf-8"})   # meshcli must be able to print emoji/accents in replies (Windows console default can't)
 DEFAULT_CLI_PATH = gui_platform.meshcli_path()
+_INSTALLED_CLI = DEFAULT_CLI_PATH
+LAUNCHER = os.path.join(os.path.dirname(os.path.abspath(__file__)), "gui_meshcli.py")
+
+
+def cli_cmd():
+    """How meshcli is started: through gui_meshcli.py when this Python has meshcore-cli - it opens the USB port without holding the
+    board's button down (see gui_seriallines.py; that held button made Heltec nodes hibernate or enter 'CLI rescue').  Otherwise the
+    installed meshcli program as before."""
+    if DEFAULT_CLI_PATH == _INSTALLED_CLI and os.path.exists(LAUNCHER):
+        try:
+            import importlib.util
+            if importlib.util.find_spec("meshcore_cli") is not None: return [sys.executable, LAUNCHER]
+        except Exception:
+            pass
+    return [DEFAULT_CLI_PATH if os.path.exists(DEFAULT_CLI_PATH) else "meshcli"]
 
 BLE_SCAN_TIMEOUT = 10  # seconds to wait while scanning for the node over Bluetooth
 
@@ -382,7 +397,7 @@ def _trace(args, attempt, outcome, started, detail=""):
     except Exception: pass
 
 def execute_mesh_command(args_list, timeout=30, retries=2, retry_delay=2):
-    binary = DEFAULT_CLI_PATH if os.path.exists(DEFAULT_CLI_PATH) else "meshcli"
+    launch = cli_cmd()
     last_err = None
     gen = _CANCEL_GEN[0]
     for attempt in range(retries + 1):
@@ -391,7 +406,7 @@ def execute_mesh_command(args_list, timeout=30, retries=2, retry_delay=2):
         try:
             with MESH_LOCK:
                 if _CANCEL_GEN[0] != gen: raise Cancelled("cancelled")
-                result = _run_cli([binary] + args_list, timeout=timeout, gen=gen)
+                result = _run_cli(launch + args_list, timeout=timeout, gen=gen)
         except Cancelled:
             _trace(args_list, attempt, "CANCELLED", started)
             raise                                  # not a radio failure: no retry, not counted against the radio's health

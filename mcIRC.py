@@ -36,6 +36,7 @@ from gui_update_ui import UpdateDialog, CatalogDialog, LINKS, open_link
 import gui_themes
 import gui_skins
 import gui_echo
+import gui_rescue
 import gui_sounds
 from gui_private import PrivateMixin
 from gui_menus import MenusMixin
@@ -244,6 +245,8 @@ class App(PrivateMixin, MenusMixin, CommandsMixin):
     def __init__(self, root, demo=False):
         self.root, self.demo, self.connected = root, demo, False
         self.settings = load_settings()
+        if not self.settings.get("auto_reset_v2"):                 # restarting a silent radio is on by default now (also on existing installs, once)
+            self.settings["auto_reset_radio"], self.settings["auto_reset_v2"] = True, True
         if demo: self.settings.update(node_name="DemoNode", mode="usb", port="auto", tcp_host="", ble_target="", auto_connect=False)   # demo = fake everything
         self.q = queue.Queue()
         self.windows, self.current, self.history, self.hist_pos = {}, None, [], 0
@@ -314,6 +317,7 @@ class App(PrivateMixin, MenusMixin, CommandsMixin):
         t.add_command(label="Addons...", command=self.open_addons)
         t.add_command(label="This node's settings...", command=lambda: self.open_options("Node: radio"))
         t.add_command(label="Reset radio via USB...", command=self.reset_radio_now)
+        t.add_command(label="CLI rescue console...", command=lambda: self._open_single("rescue_win", lambda: gui_rescue.RescueDialog(self)))
         if gui_platform.IS_WIN:
             t.add_command(label="Create desktop shortcut (mcIRC icon)", command=lambda: make_shortcuts(lambda text: messagebox.showinfo("mcIRC shortcut", text, parent=self.root)))
         t.add_command(label="Open logs folder", command=lambda: (os.makedirs(LOG_DIR, exist_ok=True), gui_platform.open_path(LOG_DIR)))

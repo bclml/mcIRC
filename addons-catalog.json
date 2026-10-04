@@ -37,6 +37,15 @@
       "description": "/dolphins sends a pod of dolphins to the channel in front, or to one person (also in the right-click menu on a name). Only sends when you type or click it; one per 10 seconds.",
       "path": "packages/dolphins",
       "tested": "2026-10-04 with app 1.5.2 (no radio; sending is covered by tests with a fake radio)"
+    },
+    {
+      "name": "modern_look",
+      "title": "Modern look",
+      "version": "1.0.0",
+      "author": "bclml",
+      "description": "Flat, modern window chrome - toolbar, buttons, tabs, status bar, scrollbars and dialogs - in the colours of your skin or colour theme. Switch it off to get the classic look back. Never transmits anything.",
+      "path": "packages/modern_look",
+      "tested": "2026-10-04 with app 1.5.2 on Windows (demo mode and screenshots); Linux only in CI"
     }
   ]
 }

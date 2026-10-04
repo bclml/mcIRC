@@ -680,6 +680,7 @@ class App(PrivateMixin, MenusMixin, CommandsMixin):
         for w in self.windows.values(): w.apply_theme(self.theme, self.font)
         gui_themes.style_panes(self, self.theme)
         gui_skins.show_banner(self, self.skin)
+        if hasattr(self, "addons"): self.addons.dispatch("on_theme", self.theme)
 
     def node_sync_worker(self):
         """Runs on a worker thread: read the radio's contacts into long-term memory and forget stale ones."""

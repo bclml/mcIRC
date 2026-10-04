@@ -1,0 +1,10 @@
+{
+  "name": "modern_look",
+  "title": "Modern look",
+  "version": "1.0.0",
+  "description": "Flat, modern window chrome - toolbar, buttons, tabs, status bar, scrollbars and dialogs - in the colours of your skin or colour theme. Switch it off to get the classic look back.",
+  "requires": [],
+  "files": {
+    "modern_look.py": "addons/modern_look.py"
+  }
+}

@@ -205,7 +205,7 @@ class AddonsDialog(tk.Toplevel):
         self.t.bind("<Double-1>", lambda e: self.toggle())
         b = tk.Frame(self, bg=BG)
         b.pack(fill="x", padx=6, pady=(0, 6))
-        for text, cmd in (("Enable / disable", self.toggle), ("Reload", self.reload), ("Browse online catalog...", lambda: CatalogDialog(app)),
+        for text, cmd in (("Enable / disable", self.toggle), ("Reload", self.reload), ("Update", self.update_addons), ("Browse online catalog...", lambda: CatalogDialog(app)),
                           ("Install from file...", self.install_file), ("Install from folder...", self.install_folder), ("Uninstall", self.uninstall)):
             ttk.Button(b, text=text, command=cmd).pack(side="left", padx=2)
         ttk.Button(b, text="Close", command=self.destroy).pack(side="right")
@@ -256,6 +256,30 @@ class AddonsDialog(tk.Toplevel):
     def reload(self):
         n = self._sel()
         if n: self.app.addons.reload(n); self.fill()
+
+    def update_addons(self):
+        """Compare the installed addons with the online catalog and install the newer versions (settings are kept)."""
+        mgr = self.app.addons
+        installed = {n: mgr.installed_version(n) for n in mgr.discover()}
+        def check():
+            return ga.updates_available(installed, ga.fetch_catalog())
+        def checked(r):
+            if not self.winfo_exists(): return
+            if isinstance(r, Exception): return messagebox.showerror("Update addons", f"Could not reach the addon catalog:\n{r}", parent=self)
+            if not r: return messagebox.showinfo("Update addons", "All your addons are up to date.", parent=self)
+            lines = "\n".join(f"{name}: {old} -> {new}" for name, old, new, _ in r)
+            if not messagebox.askokcancel("Update addons", f"Newer versions are available:\n\n{lines}\n\nUpdate them now? Their settings are kept.", parent=self): return
+            self.app.bg(lambda: [ga.install_from_catalog(e) and name for name, _, _, e in r], lambda res: installed_done(res, r))
+        def installed_done(res, r):
+            if isinstance(res, Exception):
+                messagebox.showerror("Update addons", f"The update failed:\n{res}", parent=self if self.winfo_exists() else None)
+                return
+            for name, _, _, _ in r:
+                if name in mgr.loaded: mgr.reload(name)
+            if self.winfo_exists():
+                self.fill()
+                messagebox.showinfo("Update addons", "Updated: " + ", ".join(f"{name} {new}" for name, _, new, _ in r), parent=self)
+        self.app.bg(check, checked)
 
 
 class NodeListDialog(tk.Toplevel):

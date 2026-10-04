@@ -25,6 +25,7 @@ class AddonBase:
     def on_message(self, msg): """A chat message arrived. msg: dict(channel, channel_idx, nick, text, snr, hops, raw)."""
     def on_tick(self): """Called every `tick_seconds` seconds."""
     def on_demo(self): """Only in `--demo` mode: fill your windows / map layers with fake data."""
+    def on_theme(self, theme): """The colours changed (Options: colour theme or skin).  theme: dict of colours, see gui_themes.py."""
     def build_options(self, parent):
         """Return a tk.Frame (child of `parent`) to show as this addon's page in Options, or None."""
         return None
@@ -87,6 +88,15 @@ class AddonAPI:
     def after(self, ms, fn): self._app.root.after(ms, fn)
     @property
     def nodes(self): return self._app.nodes
+    @property
+    def theme(self):
+        """The colours in use right now (gui_themes.py keys: bg fg pane_bg pane_fg entry_bg sel_bg ...), skin colours included."""
+        return dict(self._app.theme)
+    def ui(self):
+        """The main window's parts, for addons that restyle the look: root, toolbar, statusbar, paned, tree, nicklist, entry, topic.  Change colours and relief only;
+        never destroy or re-pack them."""
+        a = self._app
+        return {k: getattr(a, k) for k in ("root", "toolbar", "statusbar", "paned", "tree", "nicklist", "entry", "topic") if hasattr(a, k)}
 
     # -- UI extension points (removed automatically when the addon is unloaded) --
     def add_command(self, name, fn, help=""):
@@ -354,6 +364,22 @@ def _update_installed(self, repo_root=BASE_DIR):
     return done
 
 
+def _installed_version(self, name):
+    """The version of an installed addon: the running one if it is loaded, else what the install record says."""
+    if name in self.loaded: return str(getattr(self.loaded[name][0], "version", "0"))
+    return str(read_installed().get(name, {}).get("version", "0"))
+
+
+def updates_available(installed, catalog):
+    """installed: {name: version}.  -> [(name, old, new, entry)] for catalog entries newer than what is installed."""
+    out = []
+    for e in catalog:
+        old = installed.get(e.get("name"))
+        if old is not None and vkey(e.get("version", "0")) > vkey(old): out.append((e["name"], old, e["version"], e))
+    return out
+
+
+AddonManager.installed_version = _installed_version
 AddonManager.install = _install
 AddonManager.uninstall = _uninstall
 AddonManager.update_installed = _update_installed

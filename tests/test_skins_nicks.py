@@ -65,7 +65,10 @@ class FakeMenu:
     def __init__(self, *a, **k): self.items = []
     def add_command(self, label=None, command=None, **k): self.items.append((label, command))
     def add_separator(self): pass
+    def add_cascade(self, label=None, menu=None, **k): self.items.append((label, menu))
     def tk_popup(self, *a): shown.append(self)
+def submenu(menu, label):
+    return next((m for l, m in menu.items if l == label and isinstance(m, FakeMenu)), None)
 ev = mock.Mock(x=x + 2, y=y + 2, x_root=0, y_root=0)
 with mock.patch.object(tk, "Menu", FakeMenu):
     app._chat_menu(ev, w)
@@ -137,8 +140,10 @@ def load_addon(name):
     spec = importlib.util.spec_from_file_location("addon_" + name, os.path.join(ROOT, "packages", name, name + ".py"))
     mod = importlib.util.module_from_spec(spec); spec.loader.exec_module(mod)
     api = AddonAPI(app, name); inst = mod.Addon(api); inst.on_load(); return inst, api
-slap, sapi = load_addon("slap")
-dol, dapi = load_addon("dolphins")
+for installed in ("slap", "dolphins"):                              # copies installed on this PC: only the packages are tested
+    if installed in app.addons.loaded: app.addons.unload(installed)
+dol, dapi = load_addon("dolphins")                                  # the trout slap is one of its fun actions now (the Slap addon is retired)
+slap = dol
 sent = []
 with mock.patch.object(app, "send_to", lambda ch, text: sent.append((ch, text))):
     app.entry.delete(0, "end")
@@ -147,13 +152,16 @@ with mock.patch.object(app, "send_to", lambda ch, text: sent.append((ch, text)))
     app.commands["dolphins"][0]("")
     app.commands["dolphins"][0]("Bob")                                 # also rate limited
     ok("/slap sends one mention-style line to the channel in front", len(sent) >= 1 and sent[0][0] == "Public" and sent[0][1] == "slaps @[Bob] around a bit with a large trout " + chr(0x1F41F), sent)
+    sent[:] = sent[:1]                                                 # (the pods below are inside the same 10 seconds)
     ok("a second slap inside 10 seconds is refused", len([s for s in sent if "slaps" in s[1]]) == 1)
     for _ in range(20):
         try: item = app.q.get_nowait()
         except Exception: break
         if item[0] == "call": item[1]()
     shown_text = app.windows["Public"].text.get("1.0", "end")
-    ok("the refusal is shown in the window in front, not only in Status", "[slap] Easy there" in shown_text, shown_text[-200:])
+    ok("the refusal is shown in the window in front, not only in Status", "[dolphins] Easy there" in shown_text, shown_text[-200:])
+    slap._last = dol._last = 0
+    sent.clear(); app.commands["dolphins"][0]("")
     ok("/dolphins sends a pod with 3 or 4 dolphins", any(3 <= s[1].count(chr(0x1F42C)) <= 4 for s in sent), sent)
     slap._last = dol._last = 0
     sent.clear(); app.commands["dolphins"][0]("Bob")
@@ -165,7 +173,14 @@ app.select_window("Public")
 with mock.patch.object(tk, "Menu", FakeMenu):
     t.update(); app._chat_menu(ev, w)
 labels = [l for l, _ in shown[0].items]
-ok("with the addons loaded the menu offers the trout and the dolphins", "Slap Alice with a large trout" in labels and "Send Alice dolphins" in labels, labels)
+fun = submenu(shown[0], "Fun")
+fun_labels = [l for l, _ in fun.items] if fun else []
+ok("with Dolphins loaded the menu has a Fun submenu: the trout, the dolphins and the rest", fun_labels[:2] == ["Slap with a large trout", "Send a pod of dolphins"] and len(fun_labels) >= 10, fun_labels)
+ok("...and no separate trout entry any more (it's in Fun)", "Slap Alice with a large trout" not in labels, labels)
+sent.clear(); dol._last = 0
+with mock.patch.object(app, "send_to", lambda ch, text: sent.append((ch, text))):
+    dict(fun.items)["Water balloon"]()
+ok("a Fun action sends its line about that person to the window in front", sent == [("Public", "launches a heat-seeking water balloon at @[Alice]'s head " + chr(0x1F388))], sent)
 dms = []
 app.select_window("@Alice"); slap._last = dol._last = 0
 with mock.patch.object(app, "send_dm", lambda win, text: dms.append((win.name, text))), mock.patch.object(app, "send_to", lambda *a: dms.append(("CHANNEL!",) + a)):
@@ -177,11 +192,12 @@ dstart = dmw.text.search("Alice", "1.0"); dx, dy, _, _ = dmw.text.bbox(dstart)
 shown.clear()
 with mock.patch.object(tk, "Menu", FakeMenu):
     app._chat_menu(mock.Mock(x=dx + 2, y=dy + 2, x_root=0, y_root=0), dmw)
-dlabels = [l for l, _ in shown[0].items] if shown else []
-ok("the slap and dolphins entries are in the menu of a private window too", "Slap Alice with a large trout" in dlabels and "Send Alice dolphins" in dlabels, dlabels)
+dfun = submenu(shown[0], "Fun") if shown else None
+ok("the Fun submenu is in the menu of a private window too", dfun is not None and "Send a pod of dolphins" in [l for l, _ in dfun.items])
 app.select_window("Public")
-sapi._cleanup(); dapi._cleanup()
+dapi._cleanup()
 ok("unloading the addons removes the commands", "slap" not in app.commands and "dolphins" not in app.commands)
+ok("...and the Fun entries", not getattr(app, "name_actions", []))
 
 root.destroy()
 shutil.rmtree(tmp, ignore_errors=True)

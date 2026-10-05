@@ -32,6 +32,7 @@ from gui_addons import AddonAPI
 root = tk.Tk()
 root.geometry("900x560")
 app = mcIRC.App(root, demo=True); root.update()
+if "dolphins" in app.addons.loaded: app.addons.unload("dolphins")      # the installed copy (an older version): only the package is tested
 api = AddonAPI(app, "dolphins")
 vals = {}
 api.get = lambda k, d=None: vals.get(k, d)
@@ -49,7 +50,7 @@ st = ttk.Style()
 ok("...with the picture as its background", any(e.startswith("DolphinBg") for e in st.element_names()), st.element_names())
 ok("...and every name in a box in the list's own colour", st.lookup(mod.STYLE, "background") == app.theme["pane_bg"], (st.lookup(mod.STYLE, "background"), app.theme["pane_bg"]))
 size1 = inst._size
-root.geometry("900x420"); settle(); time.sleep(0.35); settle()
+root.geometry("900x720"); settle(); time.sleep(0.35); settle()
 ok("resizing the window redraws the picture at the new size", inst._size != size1 and inst._size is not None, (size1, inst._size))
 
 own = os.path.join(tempfile.mkdtemp(), "mine.png")
@@ -97,6 +98,32 @@ with mock.patch.object(mod, "scene_module", lambda: (_ for _ in ()).throw(Import
 ok("Pillow there but the drawing file missing: a note to update, never the install question",
    len(asked) == 1 and any("Update" in t for _, t in logged) and not any("needs Pillow" in t for _, t in logged), logged)
 inst.apply_background(); settle()
+
+# ---- reloading the addon (an update) on the same window: the picture comes back, no Tk error
+errors = []
+root.report_callback_exception = lambda *exc: errors.append(exc[1])
+inst.on_unload(); settle()
+inst2 = mod.Addon(api); inst2.on_load(); settle()
+ok("after a reload (update) the picture comes back without an error", str(app.tree.cget("style")) == mod.STYLE and not errors, errors)
+inst = inst2
+
+# ---- fun actions: the right-click menu on a name, editable
+acts = mod.helper("dolphin_actions")
+ok("the fun actions start with the trout slap and the dolphins", [a["label"] for a in inst.actions()][:2] == ["Slap with a large trout", "Send a pod of dolphins"])
+ok("...all in the Fun submenu", [l for _, l, _, g in app.name_actions if g == "Fun"] == [a["label"] for a in inst.actions()])
+ok("a message without {nick} or too long for the mesh is refused", acts.problem("x", "no name here") and acts.problem("x", "@[{nick}] " + "a" * 120) and not acts.problem("x", "pats @[{nick}]"))
+ok("names can't break out of the mention", acts.line({"text": "pats @[{nick}]"}, "Bo]b @x") == "pats @[Bob x]")
+vals["actions"] = [{"label": "High five", "text": "gives @[{nick}] a high five ✋"}, {"label": "bad", "text": "no nick"}]
+inst.register_actions()
+ok("your own list replaces the defaults (broken entries left out)", [l for _, l, _, _ in app.name_actions] == ["High five"])
+sent = []
+with mock.patch.object(app, "send_to", lambda ch, text: sent.append((ch, text))):
+    app.select_window("Public"); inst._last = 0
+    inst.cmd_fun("high Bob")
+    inst.cmd_fun("1 Carol")                                   # inside the rate limit
+ok("/fun <name> <nick> sends it; a second one within 10 seconds is refused", sent == [("Public", "gives @[Bob] a high five ✋")], sent)
+vals.pop("actions")
+inst.register_actions()
 
 vals.update(bg_on=False)
 inst.apply_background(); settle()

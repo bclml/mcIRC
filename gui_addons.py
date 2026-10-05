@@ -38,7 +38,7 @@ class AddonAPI:
     def __init__(self, app, name):
         self._app, self.name = app, name
         self.display = name   # the addon's human title once it is instantiated (shown in menus)
-        self._commands, self._menu, self._layers, self._buttons, self._helps = [], [], [], [], []
+        self._commands, self._menu, self._layers, self._buttons, self._helps, self._actions = [], [], [], [], [], []
 
     # -- settings (persisted in gui_settings.json under "addons") --
     def get(self, key, default=None): return self._app.settings.setdefault("addons", {}).get(self.name, {}).get(key, default)
@@ -125,6 +125,21 @@ class AddonAPI:
         b.pack(side="left", padx=1, pady=2)
         self._buttons.append(b)
         return b
+    def add_name_action(self, label, fn, group=None):
+        """An entry in the right-click menu on a name in the chat: label ('{nick}' becomes the name), fn(nick) is called.
+        group: put it in a submenu with that title ('Fun') - for addons with many entries."""
+        entry = (self.name, label, fn, group)
+        if not hasattr(self._app, "name_actions"): self._app.name_actions = []
+        self._app.name_actions.append(entry)
+        self._actions.append(entry)
+    def clear_name_actions(self):
+        """Removes this addon's name-menu entries (to add an edited list again)."""
+        for e in self._actions:
+            if e in getattr(self._app, "name_actions", []): self._app.name_actions.remove(e)
+        self._actions = []
+    def has_command(self, name):
+        """True when a /command of that name exists already (another addon's, or mcIRC's own)."""
+        return name.lower() in self._app.commands
     def add_map_layer(self, label, provider, color="#d32f2f"):
         """Adds a toggle to the map.  provider() -> list of (lat, lon, label) tuples, called on each map refresh."""
         key = label if label not in self._app.map_layers else f"{self.display}: {label}"
@@ -187,6 +202,7 @@ class AddonAPI:
         for e in self._helps:
             if e in getattr(self._app, "bot_helps", []): self._app.bot_helps.remove(e)
         self._helps = []
+        self.clear_name_actions()
         for c in self._commands: self._app.commands.pop(c, None)
         for label in self._menu:
             try: self._app.addon_menu.delete(label)

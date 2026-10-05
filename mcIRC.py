@@ -14,6 +14,7 @@ import tkinter.font as tkfont
 from tkinter import ttk, messagebox
 
 import meshcore_io as ea
+import gui_addons as ga
 from gui_addons import AddonManager
 from gui_common import (BG, TEXT_BG, FONT_FAMILY, NICK_COLORS, CHANNELS, safe_text, load_settings, save_settings, SETTINGS_PATH,
                         channel_index, display_for_index)
@@ -645,12 +646,21 @@ class App(PrivateMixin, MenusMixin, CommandsMixin, gui_multinode.MultiNodeMixin)
     def auto_update_check(self):
         """Quietly look for a newer version (at most once a day); only speaks up if there is one."""
         if time.time() - self.settings["last_update_check"] < 86400: return
+        installed = {n: self.addons.installed_version(n) for n in self.addons.discover()}
+        def work():
+            r = gui_update.check()
+            try: r["addons"] = ga.updates_available(installed, ga.fetch_catalog())
+            except Exception: r["addons"] = []
+            return r
         def done(r):
             if isinstance(r, Exception): return   # offline / GitHub unreachable: stay silent
             self.settings["last_update_check"] = time.time()
             self.save()
             if r["newer"]: self.status_line(f"*** Update available: version {r['remote']} (you have {r['local']}) - Help > Check for updates.", "warn")
-        self.bg(gui_update.check, done)
+            if r["addons"]:
+                self.status_line("*** Addon update" + ("s" if len(r["addons"]) > 1 else "") + " available: "
+                                 + ", ".join(f"{name} {new}" for name, _, new, _ in r["addons"]) + " - Help > Check for updates.", "warn")
+        self.bg(work, done)
 
     def auto_repair(self):
         """Restore files that an update by an older version of mcIRC could not deliver (scripts/, assets/); silent unless something was restored."""

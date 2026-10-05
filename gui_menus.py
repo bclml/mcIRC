@@ -85,13 +85,32 @@ class MenusMixin:
         if not mine:
             m.add_command(label=f"Private message with {nick}", command=lambda: self._open_query_by_name(nick))
             m.add_command(label=f"Reply to {nick}", command=lambda: self._reply_to(nick))
-            fun = [(label, cmd) for label, cmd in (("Slap {} with a large trout", "slap"), ("Send {} dolphins", "dolphins")) if cmd in self.commands]
-            if fun: m.add_separator()
-            for label, cmd in fun: m.add_command(label=label.format(nick), command=lambda c=cmd: self.commands[c][0](nick))
+            self._name_actions_menu(m, nick)
             m.add_separator()
             m.add_command(label="Node info...", command=lambda: self.node_info(name=nick))
         m.add_command(label="Copy name", command=lambda: (self.root.clipboard_clear(), self.root.clipboard_append(nick)))
         m.tk_popup(e.x_root, e.y_root)
+
+    def _name_actions_menu(self, m, nick):
+        """Entries addons add for a name (api.add_name_action), grouped in submenus where they ask for one.  Older Slap / Dolphins
+        addons only have their /slap and /dolphins commands: those keep their entries."""
+        actions = list(getattr(self, "name_actions", []))
+        owners = {a[0] for a in actions}
+        legacy = [(label, cmd) for label, cmd in (("Slap {} with a large trout", "slap"), ("Send {} dolphins", "dolphins"))
+                  if cmd in self.commands and self.commands[cmd][2] not in owners]
+        if not actions and not legacy: return
+        m.add_separator()
+        for label, cmd in legacy: m.add_command(label=label.format(nick), command=lambda c=cmd: self.commands[c][0](nick))
+        subs = {}
+        for owner, label, fn, group in actions:
+            text = label.replace("{nick}", nick)
+            if group:
+                if group not in subs:
+                    subs[group] = tk.Menu(m, tearoff=0)
+                    m.add_cascade(label=group.replace("{nick}", nick), menu=subs[group])
+                subs[group].add_command(label=text, command=lambda f=fn: f(nick))
+            else:
+                m.add_command(label=text, command=lambda f=fn: f(nick))
 
     def _reply_to(self, nick):
         """Start the message line with @[nick] (MeshCore's mention format) and put the cursor after it."""

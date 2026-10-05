@@ -21,22 +21,13 @@
       "tested": "2026-10-03 with app 1.5.2"
     },
     {
-      "name": "slap",
-      "title": "Slap",
-      "version": "1.0.3",
-      "author": "bclml",
-      "description": "The IRC classic: /slap Nick slaps someone around a bit with a large trout (also in the right-click menu on a name). Only sends when you type or click it; one per 10 seconds.",
-      "path": "packages/slap",
-      "tested": "2026-10-04 with app 1.5.2 (no radio; sending is covered by tests with a fake radio)"
-    },
-    {
       "name": "dolphins",
       "title": "Dolphins",
-      "version": "1.1.1",
+      "version": "1.2.0",
       "author": "bclml",
-      "description": "/dolphins sends a pod of dolphins to the channel in front, or to one person (also in the right-click menu on a name). Only sends when you type or click it; one per 10 seconds. Also puts a picture behind the channel list - a pod of dolphins drawn by mcIRC, or your own picture - with each channel name in a box (on by default; needs Pillow - mcIRC offers to install it).",
+      "description": "Fun actions in the right-click menu on a name (Fun): slap with a large trout, send a pod of dolphins, water balloon, anvil, penguins, a fresh battery, ... - your own list, editable in its settings; /dolphins, /slap and /fun. Only sends when you click or type it; one per 10 seconds. Replaces the Slap addon. Also a picture behind the channel list - a pod of dolphins drawn by mcIRC, or your own - with each channel name in a box (on by default; needs Pillow - mcIRC offers to install it).",
       "path": "packages/dolphins",
-      "tested": "2026-10-04 with app 1.5.2 (no radio; sending is covered by tests with a fake radio). Channel-list picture: 2026-10-04 with app 2.0.2 on Windows, checked on screen"
+      "tested": "2026-10-04 with app 1.5.2 (no radio; sending is covered by tests with a fake radio). Channel-list picture: 2026-10-04 with app 2.0.2 on Windows, checked on screen. Fun actions: 2026-10-04 with app 2.0.3 (no radio; sending covered by tests)"
     },
     {
       "name": "modern_look",

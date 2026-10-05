@@ -1,5 +1,6 @@
-"""/dolphins [nick]: a little pod of dolphins for the channel in front.  Also: a picture behind the channel list (the window tree), with every
-channel name in its own box so it stays readable - your own picture, or a pod of dolphins drawn by dolphin_scene.py."""
+"""/dolphins [nick]: a little pod of dolphins for the channel in front.  Fun actions for a person - the trout slap, dolphins, water
+balloons, ... - in the right-click menu on a name (your own list, dolphin_actions.py).  And a picture behind the channel list (the window
+tree), with every channel name in its own box so it stays readable - your own picture, or a pod of dolphins drawn by dolphin_scene.py."""
 import os
 import random
 import re
@@ -56,20 +57,23 @@ def load_picture(path):
     return img.convert("RGB")
 
 
-def scene_module():
-    """dolphin_scene.py: installed next to mcIRC, or next to this file (a package being tried out)."""
+def helper(name):
+    """A helper module of this addon: installed next to mcIRC, or next to this file (a package being tried out)."""
+    import importlib
     try:
-        import dolphin_scene
-        return dolphin_scene
+        return importlib.import_module(name)
     except ImportError:
-        if not pillow_ok(): raise
+        if name == "dolphin_scene" and not pillow_ok(): raise
         import importlib.util
-        p = os.path.join(os.path.dirname(os.path.abspath(__file__)), "dolphin_scene.py")
+        p = os.path.join(os.path.dirname(os.path.abspath(__file__)), name + ".py")
         if not os.path.isfile(p): raise
-        spec = importlib.util.spec_from_file_location("dolphin_scene", p)
+        spec = importlib.util.spec_from_file_location(name, p)
         mod = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(mod)
         return mod
+
+
+def scene_module(): return helper("dolphin_scene")
 
 
 def pillow_ok():
@@ -104,29 +108,81 @@ PILLOW_NEEDED = ("The dolphin picture behind the channel list needs Pillow (a fr
 
 class Addon(AddonBase):
     title = "Dolphins"
-    version = "1.1.1"
+    version = "1.2.0"
     author = "mcIRC"
-    description = ("/dolphins sends a pod of dolphins to the channel in front; /dolphins Nick sends them to one person. "
-                   "Can also put a picture behind the channel list, with each channel name in a box.")
+    description = ("Fun actions in the right-click menu on a name - slap with a large trout, send dolphins, water balloon, ... "
+                   "(your own list); /dolphins, /slap and /fun.  A picture behind the channel list, each channel name in a box.")
     tick_seconds = 0
 
     def on_load(self):
         self._last = 0.0
         self._installing = False
         self._img = self._photo = self._job = None
-        self._size, self._elements = None, {}
+        self._size = None
         self._theme = dict(getattr(self.api, "theme", None) or {})
         self.api.add_command("dolphins", self.cmd_dolphins, "/dolphins [nick]: send a pod of dolphins")
-        self._bound = getattr(self._tree(), "_dolphin_bg_bound", False)
+        self.api.add_command("fun", self.cmd_fun, "/fun <number or name> <nick>: a fun action (no arguments: the list)")
+        if not self.api.has_command("slap"): self.api.add_command("slap", self.cmd_slap, "/slap <nick>: slap someone around a bit with a large trout")
+        self.register_actions()
+        self.api.after(3000, self._old_slap_note)
+        tree = self._tree()
+        if tree is not None:
+            tree._dolphin_owner = self                            # the copy of this addon that is running now (after an update: the new one)
+            if not getattr(tree, "_dolphin_owner_bound", False):  # one hook per window, calling whichever copy is current
+                tree.bind("<Configure>", lambda e, t=tree: getattr(t, "_dolphin_owner", None) is not None and t._dolphin_owner._resized(), add="+")
+                tree._dolphin_owner_bound = True
         self.api.after(0, self.apply_background)
 
     def on_unload(self):
         self.remove_background()
+        tree = self._tree()
+        if tree is not None and getattr(tree, "_dolphin_owner", None) is self: tree._dolphin_owner = None
 
     def on_theme(self, theme):
         self._theme = dict(theme or {})
         self._size = None                                       # redraw: the fade colour and the boxes follow the new colours
         self.apply_background()
+
+    # ---- fun actions: the right-click menu on a name, /fun and /slap ----
+    def actions(self):
+        acts = helper("dolphin_actions")
+        saved = self.api.get("actions", None)
+        return acts.clean(saved) if saved is not None else acts.defaults()
+
+    def register_actions(self):
+        self.api.clear_name_actions()
+        for a in self.actions(): self.api.add_name_action(a["label"], lambda nick, a=a: self.do_action(a, nick), group="Fun")
+
+    def do_action(self, action, nick):
+        nick = re.sub(r"[\[\]@]", "", nick).strip()[:32]
+        if not nick: return
+        if time.time() - self._last < MIN_GAP: return self.api.notice(f"Easy there - one every {MIN_GAP} seconds: the mesh is a small shared channel.", "warn")
+        if not self.api.send_current(helper("dolphin_actions").line(action, nick)):
+            return self.api.notice("Open a channel or private window first - it goes to the window in front.", "warn")
+        self._last = time.time()
+
+    def cmd_fun(self, arg):
+        acts = self.actions()
+        words = arg.split()
+        if len(words) < 2:
+            return self.api.notice("Fun actions: " + ", ".join(f"{i}. {a['label']}" for i, a in enumerate(acts, 1)) + "  - /fun <number or name> <nick>", "info")
+        a = helper("dolphin_actions").find(acts, " ".join(words[:-1]))
+        if a is None: return self.api.notice(f"No fun action called '{' '.join(words[:-1])}' - /fun lists them.", "warn")
+        self.do_action(a, words[-1])
+
+    def cmd_slap(self, arg):
+        if not arg.strip(): return self.api.notice("Usage: /slap <nick>", "warn")
+        acts = self.actions()
+        a = next((x for x in acts if "slap" in x["label"].lower()), None) or helper("dolphin_actions").defaults()[0]
+        self.do_action(a, arg)
+
+    def _old_slap_note(self):
+        """The Slap addon is replaced by these actions: say so once if it is still switched on."""
+        old_slap_on = self.api.has_command("slap") and "slap" not in self.api._commands       # /slap exists, but not ours: the Slap addon's
+        if self.api.get("slap_note_shown", False) or not old_slap_on: return
+        self.api.set("slap_note_shown", True)
+        self.api.log("The trout slap is now one of the Dolphins addon's fun actions (right-click a name > Fun). The Slap addon is no "
+                     "longer needed - remove it in Tools > Addons.", "info")
 
     def cmd_dolphins(self, arg):
         nick = re.sub(r"[\[\]@]", "", arg).strip()[:32]
@@ -153,10 +209,10 @@ class Addon(AddonBase):
             self.remove_background()
             return self.api.log(f"Can't use that picture for the channel list ({e}).", "warn")
         self._size = None
-        if not self._bound:
-            tree.bind("<Configure>", lambda e: self._img is not None and self._soon(), add="+")
-            self._bound = tree._dolphin_bg_bound = True          # (once per window, also across addon reloads)
         self._redraw()
+
+    def _resized(self):
+        if self._img is not None: self._soon()
 
     # ---- Pillow missing: a warning, a one-time offer to install it, and the Install Pillow button in the settings ----
     def need_pillow(self):
@@ -205,14 +261,23 @@ class Addon(AddonBase):
         pane_bg = t.get("pane_bg", "#ffffff")
         if hasattr(self._img, "scene"): pic = render(self._img.scene(w, h), w, h, "stretch", self.api.get("bg_fade", 0.15), pane_bg)
         else: pic = render(self._img, w, h, self.api.get("bg_fit", "cover"), self.api.get("bg_fade", 0.15), pane_bg)
-        self._photo = ImageTk.PhotoImage(pic, master=tree)
         st = ttk.Style(tree)
-        name = f"DolphinBg{w}x{h}.field"                         # an image element can't be changed once made: one per size (sizes repeat)
-        if name not in self._elements:
-            st.element_create(name, "image", self._photo, sticky="nsew")
-            self._elements[name] = self._photo
+        # an image element can't be changed once made: one per size (sizes repeat).  Tk keeps elements for the whole program, so they
+        # are kept on the list itself - an addon reload (update) reuses them; a name an older copy of the addon used is skipped
+        elements = tree.__dict__.setdefault("_dolphin_elements", {})
+        if (w, h) not in elements:
+            photo, n = ImageTk.PhotoImage(pic, master=tree), 0
+            while True:
+                name = f"DolphinBg{w}x{h}{'-' + str(n) if n else ''}.field"
+                try:
+                    st.element_create(name, "image", photo, sticky="nsew")
+                    break
+                except tk.TclError:
+                    n += 1
+            elements[(w, h)] = (name, photo)
         else:
-            self._elements[name].paste(pic)
+            elements[(w, h)][1].paste(pic)
+        name, self._photo = elements[(w, h)]
         st.layout(STYLE, [(name, {"sticky": "nswe", "children": [
             ("Treeview.padding", {"sticky": "nswe", "children": [("Treeview.treearea", {"sticky": "nswe"})]})]})])
         # every channel name sits in its own box - a row in the list's own colour - so it stays readable; the picture shows in the margin
@@ -275,6 +340,8 @@ class Addon(AddonBase):
         tk.Label(r, text="Fade (%):", bg=bg).pack(side="left")
         tk.Scale(r, from_=0, to=90, orient="horizontal", variable=self.v_fade, length=200, bg=bg, highlightthickness=0).pack(side="left")
         tk.Label(f, text="Each channel name sits in its own box, so it stays readable on a busy picture.", bg=bg, fg="#555").pack(anchor="w")
+        self.editor = helper("dolphin_actions").ActionsEditor(f, self.actions(), bg)
+        self.editor.f.pack(fill="x")
         return f
 
     def _browse(self):
@@ -286,5 +353,8 @@ class Addon(AddonBase):
         self.api.set("bg_path", self.v_path.get().strip())
         self.api.set("bg_fit", self.v_fit.get() if self.v_fit.get() in FITS else "cover")
         self.api.set("bg_fade", max(0, min(90, int(self.v_fade.get()))) / 100)
+        if hasattr(self, "editor"):
+            self.api.set("actions", self.editor.items())
+            self.register_actions()
         self._size = None
         self.apply_background()

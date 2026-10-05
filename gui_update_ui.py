@@ -21,7 +21,7 @@ LINKS = {
 class UpdateDialog(tk.Toplevel):
     def __init__(self, app, auto_check=True):
         super().__init__(app.root, bg=BG)
-        self.app, self.info = app, None
+        self.app, self.info, self.addon_updates = app, None, []
         self.title("Check for updates")
         self.geometry("560x340")
         self.transient(app.root)
@@ -49,38 +49,68 @@ class UpdateDialog(tk.Toplevel):
         self.log.config(state="disabled")
 
     def check(self):
-        self.say("Checking GitHub for the newest version...")
+        self.say("Checking GitHub for the newest version of mcIRC and of your addons...")
         self.btn_go.config(state="disabled")
+        mgr = self.app.addons
+        installed = {n: mgr.installed_version(n) for n in mgr.discover()}
+        def work():
+            info = gu.check()
+            try: addons = ga.updates_available(installed, ga.fetch_catalog())
+            except Exception as e: addons = e                        # the app check still counts when the catalog can't be read
+            return info, addons
         def done(r):
             if isinstance(r, Exception): return self.say(f"Could not check: {r}")
-            self.info = r
-            if r["newer"]:
-                self.head.config(text=f"Update available: {r['remote']}  (installed: {r['local']})")
-                self.btn_go.config(state="normal")
-            else: self.head.config(text=f"You are up to date ({r['local']}).")
-            self.say(f"Newest version on GitHub: {r['remote']}")
-        self.app.bg(gu.check, done)
+            self.info, addons = r
+            if isinstance(addons, Exception):
+                self.say(f"(Could not read the addon catalog: {addons})")
+                addons = []
+            self.addon_updates = addons
+            parts = []
+            if self.info["newer"]: parts.append(f"mcIRC {self.info['remote']}  (installed: {self.info['local']})")
+            if addons: parts.append(f"{len(addons)} addon update{'s' if len(addons) > 1 else ''}")
+            self.head.config(text=("Update available: " + " + ".join(parts)) if parts else f"You are up to date ({self.info['local']}, addons too).")
+            self.say(f"Newest version on GitHub: {self.info['remote']}")
+            for name, old, new, _ in addons: self.say(f"Addon '{name}': {old} -> {new}")
+            if parts: self.btn_go.config(state="normal")
+        self.app.bg(work, done)
 
     def install(self):
-        if not messagebox.askokcancel("Install update", "Download and install the newest version now?\nYour settings, addons, logs and node memory are kept.", parent=self):
+        app_newer = bool(self.info and self.info.get("newer"))
+        what = "the newest mcIRC and your addons" if app_newer and self.addon_updates else "the newest mcIRC" if app_newer else "the newer addons"
+        if not messagebox.askokcancel("Install update", f"Download and install {what} now?\nYour settings, addons, logs and node memory are kept.", parent=self):
             return
         self.btn_go.config(state="disabled")
         progress = lambda t: self.app.q.put(("call", lambda: self.say(t)))
+        mgr, pending = self.app.addons, list(self.addon_updates)
         def work():
-            res = gu.apply_update(progress=progress)
-            return res, self.app.addons.update_installed()    # installed addons whose package got a newer version are refreshed too
+            res = gu.apply_update(progress=progress) if app_newer else None
+            done_addons = list(mgr.update_installed()) if app_newer else []     # from the packages that came with the new version
+            got = {n for n, _, _ in done_addons}
+            for name, old, new, entry in pending:                                   # and anything newer in the catalog
+                if name in got or ga.vkey(mgr.installed_version(name)) >= ga.vkey(new): continue
+                progress(f"Updating addon '{name}'...")
+                ga.install_from_catalog(entry)
+                done_addons.append((name, old, new))
+            return res, done_addons
         def done(r):
             if isinstance(r, Exception):
                 self.say(f"Update failed - nothing was changed: {r}")
                 self.btn_go.config(state="normal")
                 return
             res, addons = r
-            self.say(f"Updated {res['old']} -> {res['new']}: {len(res['updated'])} file(s) replaced, {len(res['added'])} added.")
-            for rel in res["kept"]: self.say(f"Kept your edited {rel}; the new version is saved as {rel}.new (copy your changes into it, or rename it to adopt).")
-            for name, old, new in addons: self.say(f"Addon '{name}' updated {old} -> {new} (its settings are unchanged).")
-            if res["updated"]: self.say(f"Backup of replaced files: {res['backup']}")
-            self.head.config(text=f"Updated to {res['new']} - restart to use it.")
-            self.btn_restart.config(state="normal")
+            if res:
+                self.say(f"Updated {res['old']} -> {res['new']}: {len(res['updated'])} file(s) replaced, {len(res['added'])} added.")
+                for rel in res["kept"]: self.say(f"Kept your edited {rel}; the new version is saved as {rel}.new (copy your changes into it, or rename it to adopt).")
+            for name, old, new in addons:
+                if not res and name in mgr.loaded: mgr.reload(name)                 # addons only: they run the new version straight away
+                self.say(f"Addon '{name}' updated {old} -> {new} (its settings are unchanged).")
+            if res and res["updated"]: self.say(f"Backup of replaced files: {res['backup']}")
+            if res:
+                self.head.config(text=f"Updated to {res['new']} - restart to use it.")
+                self.btn_restart.config(state="normal")
+            else:
+                self.head.config(text="Addons updated - they are running the new version already.")
+            self.addon_updates = []
         self.app.bg(work, done)
 
     def restart(self):

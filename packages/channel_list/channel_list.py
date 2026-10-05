@@ -1,4 +1,5 @@
 """Channel list bot: someone types 'channel list' and gets the list of channels you keep (Options: add, remove, rename, reorder).
+'channel list add #name' adds a channel to it (can be switched off; checked names only, a size limit, and you see who added what).
 Off until you switch it on; one answer per person per minute."""
 import re
 import time
@@ -10,6 +11,10 @@ import meshbot_common as mc
 DEFAULT_CHANNELS = ["Public", "#bc", "#bcferries", "#bctransit", "#drivebc", "#kod-bot", "#news", "#ssi", "#translink", "#vanisle",
                     "#wardrive", "#wardriving", "#weather"]
 DEFAULT_TRIGGERS = "channel list, channels list, !channels"
+MAX_CHANNELS = 30                                  # 'channel list add' stops here (the answer has to fit a few mesh messages)
+ADD_RE = re.compile(r"channel list add(?:\s+(\S+))?\s*", re.IGNORECASE)      # the one way to type it: channel list add #name
+NAME_RE = re.compile(r"#[a-z0-9][a-z0-9_-]{0,29}", re.IGNORECASE)
+ADD_HOW = "Type it like this: channel list add #name (letters, digits, - or _)"
 
 
 def norm_text(t): return re.sub(r"[^a-z0-9!#]+", " ", (t or "").lower()).strip()
@@ -21,9 +26,10 @@ def answer_text(channels, intro="Channels:"):
 
 class Addon(AddonBase):
     title = "Channel list"
-    version = "1.0.1"
+    version = "1.1.0"
     author = "mcIRC"
-    description = "Answers 'channel list' with the channels you keep in its list (add / remove / rename / reorder them in Options). Off until you switch it on."
+    description = ("Answers 'channel list' with the channels you keep in its list (add / remove / rename / reorder them in Options); "
+                   "'channel list add #name' adds one from the mesh. Off until you switch it on.")
     tick_seconds = 0
 
     def on_load(self):
@@ -39,17 +45,41 @@ class Addon(AddonBase):
         if not self.api.get("enabled", False): return []
         if (dm and not self.api.get("answer_dm", True)) or (not dm and not mc.channel_ok(channel, mc.channel_list(self.api.get("where", "all")))): return []
         first = next((t.strip() for t in self.api.get("triggers", DEFAULT_TRIGGERS).split(",") if t.strip()), "")
-        return [first] if first else []
+        if not first: return []
+        return [first] + (["channel list add #name"] if self.api.get("allow_add", True) else [])
+
+    def add_request(self, text):
+        """'channel list add #lse-bot' -> '#lse-bot'; '' when the name is missing or not usable (the answer shows how to type it);
+        None when it's not 'channel list add'."""
+        m = ADD_RE.fullmatch((text or "").strip())
+        if not m: return None
+        name = m.group(1) or ""
+        if not NAME_RE.fullmatch(name) or name.lower() == "#public": return ""
+        return name.lower()
+
+    def handle_add(self, msg, name):
+        """Adds the channel and says so (the caller has checked where and how often)."""
+        if not name: return ADD_HOW
+        chans = self.channels()
+        if name.lower() in (c.lower() for c in chans): return f"{name} is already in the channel list."
+        if len(chans) >= MAX_CHANNELS: return f"The channel list is full ({MAX_CHANNELS})."
+        self.api.set("list", chans + [name])
+        self.api.log(f"{msg.get('nick', '?')} added {name} to the channel list (remove it in the Channel list settings if you don't want it).", "info")
+        return f"Added {name} to the channel list."
 
     def on_message(self, msg):
         if not self.api.get("enabled", False): return
-        if norm_text(msg.get("text")) not in self.triggers(): return
+        add = self.add_request(msg.get("text")) if self.api.get("allow_add", True) else None
+        if add is None and norm_text(msg.get("text")) not in self.triggers(): return
         if msg.get("dm"):
             if not self.api.get("answer_dm", True): return
         elif not mc.channel_ok(msg.get("channel", ""), mc.channel_list(self.api.get("where", "all"))):
             return
         now, who = time.time(), msg.get("nick", "?")
         if now - self.last_any < 5 or now - self.last_by.get(who, 0) < 60: return
+        if add is not None:
+            self.last_any = self.last_by[who] = now
+            return mc.send_parts(self.api, msg, self.handle_add(msg, add), max_parts=1)
         chans = self.channels()
         if not chans: return
         self.last_any = self.last_by[who] = now
@@ -62,9 +92,11 @@ class Addon(AddonBase):
         g = self.api.get
         self.v = {"enabled": tk.BooleanVar(value=g("enabled", False)), "answer_dm": tk.BooleanVar(value=g("answer_dm", True)),
                   "where": tk.StringVar(value=g("where", "all")), "triggers": tk.StringVar(value=g("triggers", DEFAULT_TRIGGERS)),
-                  "intro": tk.StringVar(value=g("intro", "Channels:"))}
+                  "intro": tk.StringVar(value=g("intro", "Channels:")), "allow_add": tk.BooleanVar(value=g("allow_add", True))}
         tk.Checkbutton(f, text="Answer 'channel list' with the list below", variable=self.v["enabled"], bg=bg).pack(anchor="w")
         tk.Checkbutton(f, text="Also answer private messages", variable=self.v["answer_dm"], bg=bg).pack(anchor="w")
+        tk.Checkbutton(f, text=f"Let people add channels: 'channel list add #name' (checked names, at most {MAX_CHANNELS}; you see who added what)",
+                       variable=self.v["allow_add"], bg=bg, wraplength=460, justify="left").pack(anchor="w")
         for label, key, width in (("Answer in channels (comma separated, or 'all'):", "where", 24), ("Words that ask for it (comma separated):", "triggers", 30),
                                   ("Answer starts with:", "intro", 20)):
             r = tk.Frame(f, bg=bg)

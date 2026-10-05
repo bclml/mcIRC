@@ -51,7 +51,34 @@ ok("add (a '#' is added), rename, remove and reorder are saved", "#mesh-test" in
 ok("the preview shows the answer", bot.preview.cget("text").startswith("The answer: Channels: Public"))
 sent.clear(); bot.last_by.clear(); bot.last_any = 0; bot.on_message(msg("channel list", nick="Eve"))
 ok("the answer uses the edited list", "#bc-chat" in " ".join(t for _, t in sent) and "#ssi" not in " ".join(t for _, t in sent), sent)
-ok("bothelp lists it as 'channel list'", bot.help_for("Public") == ["channel list"], bot.help_for("Public"))
+ok("bothelp lists 'channel list' and how to add one", bot.help_for("Public") == ["channel list", "channel list add #name"], bot.help_for("Public"))
+
+# ---- 'channel list add #name' from the mesh
+logged = []
+api.log = lambda text, level="info": logged.append(text)
+def ask(text, nick):
+    sent.clear(); bot.last_any = 0
+    bot.on_message(msg(text, nick=nick))
+    return " ".join(t for _, t in sent)
+ok("'channel list add #lse-bot' adds it and says so", ask("channel list add #lse-bot", "Ann") == "Added #lse-bot to the channel list." and "#lse-bot" in api.get("list"))
+ok("...and you see who added it", any("Ann added #lse-bot" in l for l in logged), logged)
+ok("capitals in the command are fine", ask("Channel List add #Test", "Ben") == "Added #test to the channel list." and "#test" in api.get("list"))
+ok("without the '#': the answer shows how to type it, nothing added", ask("channel list add news2", "Bo") == m.ADD_HOW and "#news2" not in api.get("list"))
+ok("'channel list add' alone: the same hint", ask("channel list add", "Bea") == m.ADD_HOW)
+ok("other wordings ('!channels add #x', 'channels list add #x') are not the add command", ask("!channels add #x1", "Bri") == "" and ask("channels list add #x2", "Bud") == ""
+   and "#x1" not in api.get("list") and "#x2" not in api.get("list"))
+ok("a channel already there: says so, not added twice", ask("channel list add #LSE-BOT", "Cy").endswith("is already in the channel list.") and api.get("list").count("#lse-bot") == 1)
+before = list(api.get("list"))
+for bad in ("channel list add #bad name", "channel list add 🐬", "channel list add #public", "channel list add #" + "x" * 40):
+    ask(bad, "Dee" + str(len(bad)))
+ok("bad names are refused with the hint and nothing is added", api.get("list") == before and ask("channel list add #a!b", "Eli") == m.ADD_HOW, api.get("list"))
+ok("the same person again within a minute: quiet", ask("channel list add #again", "Ann") == "" and "#again" not in api.get("list"))
+api.set("list", ["#c%d" % i for i in range(m.MAX_CHANNELS)])
+ok(f"the list stops at {m.MAX_CHANNELS} channels", ask("channel list add #one-more", "Fay") == f"The channel list is full ({m.MAX_CHANNELS})." and "#one-more" not in api.get("list"))
+api.set("list", before)
+api.set("allow_add", False)
+ok("switched off: 'channel list add' does nothing", ask("channel list add #off", "Gus") == "" and "#off" not in api.get("list"))
+ok("...and bothelp no longer mentions it", bot.help_for("Public") == ["channel list"])
 root.destroy()
 print("\nALL PASSED" if not fails else f"\n{len(fails)} FAILED: {fails}")
 sys.exit(1 if fails else 0)

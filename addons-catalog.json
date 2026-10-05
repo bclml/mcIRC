@@ -68,9 +68,9 @@
     {
       "name": "channel_list",
       "title": "Channel list",
-      "version": "1.0.1",
+      "version": "1.1.0",
       "author": "bclml",
-      "description": "Answers 'channel list' with the channels you keep in its list (add / remove / rename / reorder them in Options; starts with 13 BC channels). Off until you switch it on; one answer per person per minute.",
+      "description": "Answers 'channel list' with the channels you keep in its list (add / remove / rename / reorder them in Options, and people can add one with 'channel list add #name' - checked names, at most 30, you see who added what; starts with 13 BC channels). Off until you switch it on; one answer per person per minute.",
       "path": "packages/channel_list",
       "tested": "2026-10-04 with app 1.5.3 with a stand-in radio (not over the air yet)"
     },

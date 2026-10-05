@@ -32,11 +32,11 @@
     {
       "name": "dolphins",
       "title": "Dolphins",
-      "version": "1.0.3",
+      "version": "1.1.1",
       "author": "bclml",
-      "description": "/dolphins sends a pod of dolphins to the channel in front, or to one person (also in the right-click menu on a name). Only sends when you type or click it; one per 10 seconds.",
+      "description": "/dolphins sends a pod of dolphins to the channel in front, or to one person (also in the right-click menu on a name). Only sends when you type or click it; one per 10 seconds. Also puts a picture behind the channel list - a pod of dolphins drawn by mcIRC, or your own picture - with each channel name in a box (on by default; needs Pillow - mcIRC offers to install it).",
       "path": "packages/dolphins",
-      "tested": "2026-10-04 with app 1.5.2 (no radio; sending is covered by tests with a fake radio)"
+      "tested": "2026-10-04 with app 1.5.2 (no radio; sending is covered by tests with a fake radio). Channel-list picture: 2026-10-04 with app 2.0.2 on Windows, checked on screen"
     },
     {
       "name": "modern_look",

@@ -86,7 +86,7 @@
     {
       "name": "node_tools",
       "title": "MeshCore tools",
-      "version": "1.1.0",
+      "version": "1.1.1",
       "author": "bclml",
       "description": "Node clock (check and set), channel manager (add / rename / re-key / remove, duplicates shown), backup & restore (settings, channels, contacts, optional identity), firmware check and update for ESP32 boards, a Wi-Fi firmware builder (your Wi-Fi in MeshCore's companion firmware, flashed and added as a node), a version list with the newest preselected, a Node: choice to work on any connected node, path tools (show / discover / reset / trace, repeater status and neighbours), live packet monitor, radio health graphs and a coverage map. Firmware updates need 'pip install esptool'.",
       "path": "packages/node_tools",

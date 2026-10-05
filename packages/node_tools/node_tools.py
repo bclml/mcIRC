@@ -15,7 +15,7 @@ HEALTH_CSV = os.path.join(BASE_DIR, "logs", "radio_health.csv")
 
 class Addon(AddonBase):
     title = "MeshCore tools"
-    version = "1.1.0"
+    version = "1.1.1"
     author = "mcIRC"
     description = ("Node clock, channel manager, backup & restore, firmware check / update, Wi-Fi firmware builder, path tools, packet monitor, "
                    "radio health graphs and coverage map - in the Addons menu.")

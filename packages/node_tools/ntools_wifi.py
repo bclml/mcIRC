@@ -125,21 +125,58 @@ def needs_boot_buttons(hwid):
 MAC_RE = re.compile(r"\bMAC:\s*([0-9a-fA-F]{2}(?::[0-9a-fA-F]{2}){5})")
 
 
+ARP_MAC_RE = re.compile(r"\b([0-9a-fA-F]{1,2}(?:[:-][0-9a-fA-F]{1,2}){5})\b")
+
+
+def mac_key(mac):
+    """'90:70:69:84:9a:44', '90-70-69-84-9A-44' and macOS's '90:70:69:84:9a:4' style (no leading zeros) -> one comparable form."""
+    parts = re.split(r"[:-]", (mac or "").strip())
+    try: return tuple(int(p, 16) for p in parts) if len(parts) == 6 else None
+    except ValueError: return None
+
+
+def parse_neighbours(text):
+    """[(ip, mac_key)] from `arp -a` (Windows '  192.168.1.39  90-70-69-84-9a-44  dynamic', Linux/macOS '? (192.168.1.39) at 90:70:...')
+    or `ip neigh` ('192.168.1.39 dev wlan0 lladdr 90:70:...')."""
+    out = []
+    for line in (text or "").splitlines():
+        ip, m = IP_RE.search(line), ARP_MAC_RE.search(line)
+        if ip and m and mac_key(m.group(1)): out.append((ip.group(1), mac_key(m.group(1))))
+    return out
+
+
+def neighbours():
+    """This PC's ARP table (the addresses it has talked to on the local network)."""
+    for cmd in (["arp", "-a"], ["arp", "-an"], ["ip", "neigh"]):
+        try:
+            r = subprocess.run(cmd, capture_output=True, text=True, timeout=10, creationflags=io.NO_WINDOW)
+        except (OSError, subprocess.SubprocessError):
+            continue
+        found = parse_neighbours(r.stdout)
+        if found: return found
+    return []
+
+
 def find_on_lan(mac, seconds=180, port=5000, log=print):
     """MeshCore's Wi-Fi firmware does not print its IP address, so look for the board on this PC's network: knock on port `port` of every
     address of the local /24 networks (that also fills the PC's ARP table) and match the board's MAC (printed by the flasher)."""
     import concurrent.futures as cf
     import socket
-    mac = (mac or "").lower().replace(":", "-")
+    want = mac_key(mac)
     def local_nets():
         nets = set()
         try:
             for info in socket.getaddrinfo(socket.gethostname(), None, socket.AF_INET):
-                ip = info[4][0]
-                if not ip.startswith("127."): nets.add(ip.rsplit(".", 1)[0])
+                nets.add(info[4][0])
         except OSError:
             pass
-        return sorted(nets)
+        try:                                                    # the address this PC goes out with (Linux often names itself 127.0.1.1)
+            with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as u:
+                u.connect(("192.0.2.1", 9))                     # UDP: nothing is sent
+                nets.add(u.getsockname()[0])
+        except OSError:
+            pass
+        return sorted({ip.rsplit(".", 1)[0] for ip in nets if not ip.startswith(("127.", "169.254.", "0."))})
     def knock(ip):
         s = socket.socket()
         s.settimeout(0.5)
@@ -151,14 +188,8 @@ def find_on_lan(mac, seconds=180, port=5000, log=print):
         open_ = []
         with cf.ThreadPoolExecutor(64) as ex:
             for net in local_nets(): open_ += [r for r in ex.map(knock, [f"{net}.{i}" for i in range(1, 255)]) if r]
-        try:
-            arp = subprocess.run(["arp", "-a"], capture_output=True, text=True, timeout=10, creationflags=io.NO_WINDOW).stdout.lower().replace(":", "-")
-        except (OSError, subprocess.SubprocessError):
-            arp = ""
-        for line in arp.splitlines():
-            if mac and mac in line:
-                ip = line.split()[0].strip("()?")
-                if ip in open_: return ip
+        for ip, m in neighbours():
+            if want and m == want and ip in open_: return ip
         log(".")
         time.sleep(5)
     return None

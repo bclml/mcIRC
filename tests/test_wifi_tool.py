@@ -62,6 +62,13 @@ with mock.patch.object(w.subprocess, "run", lambda *a, **k: SimpleNamespace(stdo
      mock.patch("socket.socket.connect", lambda self, addr: None if addr[0] in ("192.168.1.39", "192.168.1.61") else (_ for _ in ()).throw(OSError())), \
      mock.patch("socket.getaddrinfo", lambda *a, **k: [(0, 0, 0, "", ("192.168.1.46", 0))]):
     ok("the flashed board is found on the network by its MAC (not another ESP32 with port 5000)", w.find_on_lan("90:70:69:84:9a:44", seconds=5) == "192.168.1.39")
+want = w.mac_key("90:70:69:84:9a:44")
+for system, text in (("Windows", "Interface: 192.168.1.46 --- 0x5\n  192.168.1.39          90-70-69-84-9a-44     dynamic\n"),
+                     ("Linux", "? (192.168.1.39) at 90:70:69:84:9a:44 [ether] on wlan0\n? (192.168.1.1) at <incomplete> on wlan0\n"),
+                     ("macOS", "? (192.168.1.39) at 90:70:69:84:9a:44 on en0 ifscope [ethernet]\n? (192.168.1.61) at 90:70:69:83:f4:0 on en0\n"),
+                     ("ip neigh", "192.168.1.39 dev wlan0 lladdr 90:70:69:84:9a:44 REACHABLE\n")):
+    ok(f"the PC's address table is read on {system}", ("192.168.1.39", want) in w.parse_neighbours(text), w.parse_neighbours(text))
+ok("macOS's short MAC form (no leading zeros) matches", w.mac_key("90:70:69:83:f4:0") == w.mac_key("90-70-69-83-F4-00"))
 ok("PlatformIO is found on this PC (or reported missing)", w.find_pio() is None or isinstance(w.find_pio(), list))
 
 # ---- adding the flashed board as a node; the radio settings of an extra node

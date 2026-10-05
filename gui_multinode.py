@@ -108,7 +108,7 @@ class ExtraNode:
         out = self.run_cmd(".contacts", timeout=60)
         data = next((d for d in io.json_docs(out.stdout) if isinstance(d, dict)), {})
         for c in data.values():
-            if isinstance(c, dict) and c.get("public_key"): self.app.nodes.touch_contact(c)
+            if isinstance(c, dict) and c.get("public_key"): self.app.nodes.touch_contact(c, via=self.label)
 
     def send_channel(self, idx, text):
         self.run_cmd(*(["public", text] if idx == 0 else ["chan", idx, text]))
@@ -145,6 +145,19 @@ class MultiNodeMixin:
             name = (n.info.get("name") if n else None) or ""
             out.append((c["label"], f"{c['label']}{' (' + name + ')' if name else ''}"))
         return out
+
+    def node_describe(self, key):
+        """'main - 909 MHz, USB' / '915 - 915 MHz, Wi-Fi' for lists like the map's Heard by."""
+        if key in (None, "", "main"):
+            s, freq = self.settings, getattr(self, "main_freq", None)
+            how = {"usb": "USB", "tcp": "Wi-Fi", "bluetooth": "Bluetooth"}.get(s.get("mode"), "")
+        else:
+            c = next((c for c in self.settings.get("extra_nodes", []) if c.get("label") == key), {})
+            n = self.extra_nodes.get(key)
+            freq = n.info.get("radio_freq") if n else None
+            how = {"usb": "USB", "tcp": "Wi-Fi", "ble": "Bluetooth"}.get(c.get("mode"), "")
+        bits = [f"{float(freq):g} MHz" if freq else "", how]
+        return f"{key or 'main'} - " + ", ".join(b for b in bits if b) if any(bits) else (key or "main")
 
     def node_ready(self, key):
         if key in (None, "", "main"): return bool(self.connected)

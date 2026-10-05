@@ -69,7 +69,11 @@ class NodePages:
         key = self.node_key
         def work():
             with self.app.node_target(key): return fn()
-        self.app.bg(work, done)
+        def finished(r):
+            try: alive = bool(self.dlg.winfo_exists())
+            except tk.TclError: alive = False
+            if alive: done(r)                                  # Options was closed while the node answered: nothing left to fill in
+        self.app.bg(work, finished)
 
     def build(self, stage):
         a, b, c = (tk.Frame(stage, bg=BG) for _ in range(3))

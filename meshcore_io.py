@@ -616,17 +616,20 @@ def fetch_incoming_messages():
 def parse_messages(combined):
     """The messages in a `.sync_msgs` answer -> [(kind, channel_idx, text, nick, extra)]: kind 'dm' (nick = the sender's key prefix) or 'in'."""
     out = []
-    for line in combined.splitlines():
-        line = line.strip()
-        # BUG FIX: confirmed live that `.sync_msgs` prints ALL fetched messages as a single JSON
-        # ARRAY on one line (`[{...}, {...}]`), not one JSON object per line as originally assumed.
-        if not line or line[0] not in "{[": continue
-        try:
-            # raw_decode() only needs the line to START with valid JSON, not end there - meshcli
-            # prints trailing text (e.g. a disconnect log line) after the payload on the same line.
-            parsed, _ = json.JSONDecoder().raw_decode(line)
-        except ValueError:
-            continue
+    # `.sync_msgs` prints its messages as ONE JSON array that spans lines when there are several: '[{...},\n{...}]'.  Reading line by
+    # line lost every message but the last of such a batch, so each JSON value is decoded from where it starts to where it really ends.
+    # raw_decode() only needs the text to START with valid JSON: meshcli may print a log line right after the payload.
+    dec, pos = json.JSONDecoder(), 0
+    for m in re.finditer(r"(?m)^[ \t]*(\[?)[ \t]*(\{?)", combined):
+        starts = [m.start(g) for g in (1, 2) if m.group(g) and m.start(g) >= pos]   # the array, else the one message on this line
+        parsed = None
+        for s in starts:
+            try:
+                parsed, pos = dec.raw_decode(combined, s)
+                break
+            except ValueError:
+                continue
+        if parsed is None: continue
         for data in (parsed if isinstance(parsed, list) else [parsed]):
             if not isinstance(data, dict): continue
             if data.get("type") == "PRIV":  # direct message: only the sender's key prefix is known here

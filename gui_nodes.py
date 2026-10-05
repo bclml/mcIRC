@@ -28,7 +28,19 @@ class NodeStore:
         self.db.execute("""CREATE TABLE IF NOT EXISTS nodes (
             public_key TEXT PRIMARY KEY, name TEXT, type INTEGER, lat REAL, lon REAL,
             first_seen INTEGER, last_seen INTEGER, last_advert INTEGER, lastmod INTEGER, on_radio INTEGER)""")
+        # which of your nodes heard it ('main' or an extra node's label from Options > More nodes) - the map filters on it
+        self.db.execute("CREATE TABLE IF NOT EXISTS heard_by (public_key TEXT, via TEXT, last_seen INTEGER, PRIMARY KEY (public_key, via))")
         self.db.commit()
+
+    def _heard(self, keys, via, now):
+        self.db.executemany("INSERT OR REPLACE INTO heard_by VALUES (?,?,?)", [(k, via, now) for k in keys if k])
+
+    def heard_by(self):
+        """{public_key: {'main', '915', ...}} - nodes remembered from before this was kept count as heard by the main node."""
+        with self.lock:
+            out = {}
+            for r in self.db.execute("SELECT public_key, via FROM heard_by"): out.setdefault(r["public_key"], set()).add(r["via"])
+        return out
 
     def update_from_radio(self, contacts, now=None, min_seen=0):
         """contacts: the `.contacts` JSON dict (public_key -> fields).  Returns (new_nodes, on_radio_count).
@@ -55,11 +67,13 @@ class NodeStore:
                     if not (lat or lon): lat, lon = row["lat"], row["lon"]  # keep a remembered position if the radio lost it
                     self.db.execute("UPDATE nodes SET name=?, type=?, lat=?, lon=?, last_seen=?, last_advert=?, lastmod=?, on_radio=1 WHERE public_key=?",
                                     (c.get("adv_name") or row["name"], int(c.get("type") or row["type"]), lat, lon, seen, adv, mod, key))
+            self._heard([c.get("public_key", k) for k, c in contacts.items()], "main", now)
             self.db.commit()
         return new, len(contacts)
 
-    def touch_contact(self, c, now=None):
-        """Remember one radio contact as seen right now (used when a node we only knew by key sends us a message)."""
+    def touch_contact(self, c, now=None, via="main"):
+        """Remember one radio contact as seen right now (used when a node we only knew by key sends us a message).  via: which of your
+        nodes has it ('main' or an extra node's label)."""
         now = int(now or time.time())
         key = c.get("public_key")
         if not key: return
@@ -70,6 +84,7 @@ class NodeStore:
             self.db.execute("INSERT OR REPLACE INTO nodes VALUES (?,?,?,?,?,?,?,?,?,1)",
                             (key, c.get("adv_name") or key[:8], int(c.get("type") or 0), lat, lon, row["first_seen"] if row else now, now,
                              int(c.get("last_advert") or 0), int(c.get("lastmod") or 0)))
+            self._heard([key], via, now)
             self.db.commit()
 
     def max_lastmod(self):
@@ -91,6 +106,7 @@ class NodeStore:
             else:
                 self.db.execute("INSERT INTO nodes VALUES (?,?,?,?,?,?,?,?,?,0)", (key, c.get("adv_name") or key[:8], int(c.get("type") or 0), lat, lon,
                                                                                     now, now, int(c.get("last_advert") or 0), int(c.get("lastmod") or 0)))
+            self._heard([key], "main", now)
             self.db.commit()
         return row is None
 
@@ -101,6 +117,7 @@ class NodeStore:
         with self.lock:
             rows = [(r["public_key"], bool(r["on_radio"])) for r in self.db.execute("SELECT public_key, on_radio FROM nodes WHERE last_seen < ?", (cutoff,))]
             self.db.execute("DELETE FROM nodes WHERE last_seen < ?", (cutoff,))
+            self.db.execute("DELETE FROM heard_by WHERE public_key NOT IN (SELECT public_key FROM nodes)")
             self.db.commit()
         return rows
 

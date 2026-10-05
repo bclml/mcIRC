@@ -57,6 +57,9 @@ class MapWindow(tk.Toplevel):
         e = tk.Entry(r, textvariable=self.max_days, width=4)
         e.pack(side="left")
         e.bind("<Return>", lambda _: self.refresh())
+        self.via_box = tk.LabelFrame(side, text="Heard by (your nodes)", bg=BG)
+        self.via_box.pack(fill="x", pady=(6, 0))
+        self.via_vars, self.via_checks = {}, {}
         self.layer_box = tk.LabelFrame(side, text="Layers", bg=BG)
         self.layer_box.pack(fill="x", pady=6)
         tk.Checkbutton(self.layer_box, text="My node", variable=self.show_me, command=self.refresh, bg=BG, anchor="w").pack(fill="x")
@@ -99,8 +102,20 @@ class MapWindow(tk.Toplevel):
                 tk.Checkbutton(self.layer_box, text=name, variable=self.layer_vars[name], command=self.refresh, bg=BG, fg=color,
                                selectcolor="white", anchor="w").pack(fill="x")
 
+    def _sync_via_boxes(self):
+        """One checkbox per node you connect (main + More nodes), labelled with its frequency and connection."""
+        for key, _ in self.app.node_choices():
+            text = self.app.node_describe(key)
+            if key not in self.via_vars:
+                self.via_vars[key] = tk.BooleanVar(value=True)
+                self.via_checks[key] = tk.Checkbutton(self.via_box, variable=self.via_vars[key], command=self.refresh, bg=BG, anchor="w",
+                                                      justify="left", wraplength=190)
+                self.via_checks[key].pack(fill="x")
+            if self.via_checks[key]["text"] != text: self.via_checks[key].config(text=text)
+
     def points(self):
         s, pts = self.app.settings, []
+        heard = self.app.nodes.heard_by()
         try: max_age = float(self.max_days.get() or 0) * 86400
         except ValueError: max_age = 0
         now = time.time()
@@ -109,8 +124,11 @@ class MapWindow(tk.Toplevel):
             if not (n["lat"] or n["lon"]) or not self.show_type.get(n["type"], tk.BooleanVar(value=False)).get(): continue
             if not n["on_radio"] and not self.show_memory.get(): continue
             if max_age and now - n["last_seen"] > max_age: continue
+            via = heard.get(n["public_key"]) or {"main"}               # remembered before this was kept: they came from the main node
+            if not any(self.via_vars[v].get() if v in self.via_vars else True for v in via): continue
             kind = TYPE_NAMES.get(n["type"], "Node")
-            info = f"{n['name']}\n{kind}{'' if n['on_radio'] else ' (remembered, not on radio)'}\nseen {ago(n['last_seen'])}\n{n['lat']:.4f}, {n['lon']:.4f}\n{n['public_key'][:12]}..."
+            info = (f"{n['name']}\n{kind}{'' if n['on_radio'] else ' (remembered, not on radio)'}\nseen {ago(n['last_seen'])}\nheard by: {', '.join(sorted(via))}\n"
+                    f"{n['lat']:.4f}, {n['lon']:.4f}\n{n['public_key'][:12]}...")
             pts.append((n["lat"], n["lon"], n["name"] if self.show_names.get() else "", TYPE_COLORS.get(n["type"], "#555"),
                         "#555" if n["on_radio"] else OFF_RADIO_OUTLINE, info))
             shown += 1
@@ -129,6 +147,7 @@ class MapWindow(tk.Toplevel):
 
     def refresh(self, force=False):
         if not self.winfo_exists(): return
+        self._sync_via_boxes()
         self._sync_layer_boxes()
         pts = self.points()
         sig = hash(tuple(p[:5] for p in pts))                 # the info text ("seen 3 min ago") changes every minute and must not trigger a redraw

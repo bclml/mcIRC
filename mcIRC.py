@@ -509,12 +509,16 @@ class App(PrivateMixin, MenusMixin, CommandsMixin, gui_multinode.MultiNodeMixin)
 
     # ---- queue handlers (GUI thread) ----------------------------------------------------------
     def drain(self):
+        """Everything the radio / worker threads send to the window.  One item that fails must not stop the others: before, an error in a
+        single item (e.g. a dialog closed while it was reading the node) ended this loop for good - no incoming messages until a restart."""
         try:
             while True:
-                item = self.q.get_nowait()
-                getattr(self, "_h_" + item[0])(*item[1:])
-        except queue.Empty: pass
-        self.root.after(100, self.drain)
+                try: item = self.q.get_nowait()
+                except queue.Empty: break
+                try: getattr(self, "_h_" + item[0])(*item[1:])
+                except Exception: self.root.report_callback_exception(*sys.exc_info())     # logged (gui_diag), then go on
+        finally:
+            self.root.after(100, self.drain)
 
     def _h_chat(self, kind, idx, text, nick, extra):
         gui_diag.count(f"messages_{kind}")          # only counted: the text itself is never logged
@@ -634,6 +638,7 @@ class App(PrivateMixin, MenusMixin, CommandsMixin, gui_multinode.MultiNodeMixin)
         if v.get("max_contacts"): s["radio_capacity"] = int(v["max_contacts"])
         if i.get("name"): s["node_name"], ea.BOT_NICK = i["name"], i["name"]
         if i.get("adv_lat") or i.get("adv_lon"): s["node_lat"], s["node_lon"] = float(i["adv_lat"]), float(i["adv_lon"])
+        self.main_freq = i.get("radio_freq")                    # for 'main - 909 MHz' in the map's Heard by list
         self.save()
         if self.current: self.refresh_nicks()
 

@@ -33,7 +33,7 @@ def new_client(transport, client_id):
 
 class Addon(AddonBase):
     title = "Packet upload"
-    version = "1.0.0"
+    version = "1.0.1"
     author = "mcIRC (after agessaman/meshcore-packet-capture)"
     description = ("Sends the packets your node hears to community packet analyzers (MeshCore.ca, CascadiaMesh, LetsMesh, ...) so they can "
                    "map coverage and routes. Logs in with a token your node signs. Off until you switch it on and give your area code.")
@@ -42,7 +42,37 @@ class Addon(AddonBase):
     def on_load(self):
         self.clients, self.me, self.sent, self.notes = {}, None, 0, {}
         self.starting = False
+        self.api.add_menu_item("Sending on / off", self.toggle)
+        self.api.add_menu_item("Status...", self.show_status)
         if self.api.connected: self.on_connect()
+
+    def toggle(self):
+        on = not self.api.get("enabled", False)
+        self.api.set("enabled", on)
+        self.stop()
+        if not on: return self.api.log("Packet upload is OFF.", "info")
+        if not re.fullmatch(r"[A-Za-z]{3}", self.api.get("area", "") or ""):
+            return self.api.log("Packet upload is ON, but set your 3-letter area code first (Addons > Packet upload > Settings...).", "warn")
+        self.api.log("Packet upload is ON - the packets your node hears go to the analyzers you ticked.", "warn")
+        if self.api.connected: self.on_connect()
+
+    def status_text(self):
+        on = self.api.get("enabled", False)
+        area = (self.api.get("area", "") or "").upper() or "(not set)"
+        lines = [f"Packet upload: {'ON' if on else 'OFF'}.  Area: {area}.  Packets sent since mcIRC started: {self.sent}", ""]
+        names = {s[1]: core.PRESETS[s[0]][0] for s in self.servers()}
+        for server, name in names.items():
+            c = self.clients.get(server)
+            state = "connected" if c and c["client"].is_connected() else "connecting..." if c else "not connected"
+            lines.append(f"{name:<24} {server:<34} {state}")
+        if not names: lines.append("No analyzers ticked (Settings...).")
+        if on and not self.api.connected: lines += ["", "mcIRC is not connected to a node: nothing to send."]
+        return "\n".join(lines)
+
+    def show_status(self):
+        show = getattr(self.api, "show_text", None)
+        if show: show("Packet upload - status", self.status_text)
+        else: self.api.notice(self.status_text())
 
     def on_unload(self): self.stop()
     def on_disconnect(self): self.stop()

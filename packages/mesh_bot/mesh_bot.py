@@ -2,6 +2,7 @@
 version - and its greeter, each switched on for the channels you choose.  Off until you switch it on; answers only when asked (the greeter:
 once per newcomer), rate-limited, and in the channel or privately as you set it."""
 import time
+import gui_platform
 import tkinter as tk
 
 from gui_addons import AddonBase
@@ -19,15 +20,15 @@ COMMANDS = {
     "version": "which bot this is",
 }
 USAGE = {"path": "path [a1,b2]", "prefix": "prefix <A1|free>", "sports": "sports [team|league]"}
-GREETING = "Welcome to the mesh, @[{nick}]! Type bothelp for the bot commands."
+GREETING = cmds.DEFAULT_GREETINGS[0]                     # the single greeting of 1.0.x (kept when someone had changed it)
 
 
 class Addon(AddonBase):
     title = "Mesh bot"
-    version = "1.0.1"
+    version = "1.1.0"
     author = "mcIRC (commands after agessaman/meshcore-bot, MIT)"
     description = ("ping, hello, path, prefix, multitest, stats, sports and version - the meshcore-bot commands mcIRC's other bots don't have - "
-                   "plus its greeter for newcomers, each switched on for the channels you choose. Off until you switch it on.")
+                   "plus its greeter for newcomers (a random greeting from your list), each switched on for the channels you choose. Off until you switch it on.")
     tick_seconds = 0
     replies = True
 
@@ -102,7 +103,16 @@ class Addon(AddonBase):
         if nick in seen: return
         seen.add(nick)
         self.api.set("greeted", sorted(seen)[-5000:])
-        self.send(msg, cmds.greeting_for(nick, self.api.get("greet_text", GREETING)))
+        line = cmds.pick_greeting(self.greetings(), getattr(self, "_last_greeting", None))
+        self._last_greeting = line
+        self.send(msg, cmds.greeting_for(nick, line, msg.get("channel", "")))
+
+    def greetings(self):
+        """The greetings to pick from: the list from the settings, or 1.0.x's single line if it was changed, else the defaults."""
+        saved = self.api.get("greet_lines")
+        if saved: return list(saved)
+        old = self.api.get("greet_text", GREETING)
+        return [old] if old != GREETING else list(cmds.DEFAULT_GREETINGS)
 
     def send(self, msg, text): mc.send_parts(self.api, msg, text, max_parts=2)
 
@@ -114,7 +124,7 @@ class Addon(AddonBase):
         self.v_on, self.v_dm = tk.BooleanVar(value=g("enabled", False)), tk.BooleanVar(value=g("answer_dm", False))
         self.v_prefix, self.v_cool = tk.StringVar(value=g("prefix", "")), tk.StringVar(value=str(g("cooldown", 20)))
         self.v_teams = tk.StringVar(value=g("sports_teams", "canucks, whitecaps, seahawks, mariners, kraken"))
-        self.v_greet_ch, self.v_greet_text = tk.StringVar(value=g("greet_channels", "")), tk.StringVar(value=g("greet_text", GREETING))
+        self.v_greet_ch = tk.StringVar(value=g("greet_channels", ""))
         tk.Checkbutton(f, text="Answer these commands (sends to the mesh when someone asks)", variable=self.v_on, bg=bg).pack(anchor="w")
         tk.Label(f, text="For each command, the channels it answers in (comma separated, 'all', or blank = off):", bg=bg).pack(anchor="w", pady=(6, 2))
         grid = tk.Frame(f, bg=bg); grid.pack(anchor="w")
@@ -136,10 +146,17 @@ class Addon(AddonBase):
             tk.Entry(r, textvariable=var, width=width).pack(side="left", padx=4)
         tk.Checkbutton(f, text="Also answer private messages (for the commands that are on somewhere)", variable=self.v_dm, bg=bg).pack(anchor="w")
         tk.Label(f, text="Greeter (sends on its own - once per newcomer; blank = off):", bg=bg, font=("TkDefaultFont", 9, "bold")).pack(anchor="w", pady=(8, 0))
-        for label, var, width in (("Greet newcomers in channels:", self.v_greet_ch, 22), ("With:", self.v_greet_text, 50)):
-            r = tk.Frame(f, bg=bg); r.pack(fill="x", pady=1)
-            tk.Label(r, text=label, bg=bg).pack(side="left")
-            tk.Entry(r, textvariable=var, width=width).pack(side="left", padx=4)
+        r = tk.Frame(f, bg=bg); r.pack(fill="x", pady=1)
+        tk.Label(r, text="Greet newcomers in channels:", bg=bg).pack(side="left")
+        tk.Entry(r, textvariable=self.v_greet_ch, width=22).pack(side="left", padx=4)
+        tk.Label(f, bg=bg, text="With one of these, picked at random (one per line; {nick} = their name, {channel} = the channel):").pack(anchor="w")
+        self.greet_box = tk.Text(f, height=6, width=70, wrap="none", font=(gui_platform.EDITOR_FONT_NAME, 9))
+        self.greet_box.insert("1.0", "\n".join(self.greetings()))
+        self.greet_box.pack(anchor="w", fill="x")
+        r = tk.Frame(f, bg=bg); r.pack(anchor="w", pady=(2, 0))
+        tk.Button(r, text="Back to the default greetings",
+                  command=lambda: (self.greet_box.delete("1.0", "end"), self.greet_box.insert("1.0", "\n".join(cmds.DEFAULT_GREETINGS)))).pack(side="left")
+        tk.Label(r, bg=bg, fg="#555", text="  Plain text only - the mesh can't carry mIRC colours.").pack(side="left")
         tk.Label(f, bg=bg, fg="#555", wraplength=460, justify="left",
                  text="A newcomer: someone who isn't in mcIRC's own memory of nodes (nodes.db on this PC - not the radio's contact list) when "
                       "you switch the greeter on, speaking for the first time. path and prefix name repeaters from that same memory.").pack(anchor="w")
@@ -159,4 +176,4 @@ class Addon(AddonBase):
         if greet and not greet_was:                              # greeter switched on: everyone already known is not a newcomer
             self.api.set("greeted", sorted({n["name"] for n in self.api.nodes.all() if n.get("name")})[-5000:])
         self.api.set("greet_channels", greet)
-        self.api.set("greet_text", self.v_greet_text.get().strip() or GREETING)
+        self.api.set("greet_lines", cmds.greeting_lines(self.greet_box.get("1.0", "end")) or list(cmds.DEFAULT_GREETINGS))

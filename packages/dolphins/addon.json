@@ -1,7 +1,7 @@
 {
   "name": "dolphins",
   "title": "Dolphins",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "Fun actions in the right-click menu on a name (Fun): slap with a large trout, send a pod of dolphins, water balloon, anvil, penguins, ... - your own list, editable in its settings; /dolphins, /slap and /fun. Only sends when you click or type. Also a picture behind the channel list, each channel name in a box.",
   "requires": [],
   "files": {

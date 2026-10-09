@@ -45,7 +45,7 @@ def match_rule(rule, text):
 
 class Addon(AddonBase):
     title = "Auto reply"
-    version = "1.1.5"
+    version = "1.1.6"
     author = "bclml"
     description = "Keyword rules: answer chosen words on chosen channels with your own text, to the channels you pick."
 
@@ -56,6 +56,7 @@ class Addon(AddonBase):
         self.button = self.api.add_toolbar_button("", self.toggle)
         self._refresh_button()
         self.api.add_command("autoreply", self._command, "autoreply on|off - switch the auto reply on or off")
+        self.api.add_menu_item("Answering on / off", self.toggle)
 
     # ---- the responder ----
     def help_for(self, channel, dm=False):

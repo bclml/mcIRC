@@ -71,10 +71,28 @@ ok("bothelp lists what's on in a channel", bot.help_for("#bot-van") == ["ping", 
 sent.clear()
 app.settings["addons"]["mesh_bot"].update(greet_channels="Public", greeted=["Old Timer"])
 bot.on_message(msg("hello all", ch="Public", nick="Newbie"))
-ok("the greeter welcomes a newcomer once", sent == [("Public", "Welcome to the mesh, @[Newbie]! Type bothelp for the bot commands.")], sent)
+import meshbot_cmds as mcmds
+ok("the greeter welcomes a newcomer once, with one of its greetings", len(sent) == 1 and sent[0][0] == "Public"
+   and sent[0][1] in [mcmds.greeting_for("Newbie", g, "Public") for g in mcmds.DEFAULT_GREETINGS], sent)
 sent.clear(); bot.on_message(msg("me again", ch="Public", nick="Newbie")); bot.on_message(msg("hi", ch="Public", nick="Old Timer"))
 ok("...not twice, and not people known before", sent == [], sent)
+app.settings["addons"]["mesh_bot"]["greet_lines"] = ["Hi {nick} in {channel}", "Yo {nick}"]
+got = []
+for i in range(8):
+    sent.clear(); bot.on_message(msg("first words", ch="Public", nick=f"New{i}")); got.append(sent[0][1])
+ok("greetings are picked at random from your own list, {channel} filled in", set(got) <= {f"Hi New{i} in Public" for i in range(8)} | {f"Yo New{i}" for i in range(8)}
+   and any(g.startswith("Hi") for g in got) and any(g.startswith("Yo") for g in got), got)
+ok("...never the same one twice in a row", all(a.split()[0] != b.split()[0] for a, b in zip(got, got[1:])), got)
+del app.settings["addons"]["mesh_bot"]["greet_lines"]
+app.settings["addons"]["mesh_bot"]["greet_text"] = "Howdy {nick}"
+ok("a greeting changed in 1.0.x is kept", bot.greetings() == ["Howdy {nick}"])
+del app.settings["addons"]["mesh_bot"]["greet_text"]
+ok("...otherwise the default greetings, Invision-style ones included", bot.greetings() == mcmds.DEFAULT_GREETINGS and any("graced us" in g for g in bot.greetings()))
 page = bot.build_options(tk.Frame(root)); bot.v_greet_ch.set("#weather"); bot.v_greet_ch.set("")
+bot.greet_box.delete("1.0", "end"); bot.greet_box.insert("1.0", "One {nick}\n\n  Two {nick}  \n")
+bot.apply_options()
+ok("the settings box saves one greeting per line, blanks skipped", app.settings["addons"]["mesh_bot"]["greet_lines"] == ["One {nick}", "Two {nick}"],
+   app.settings["addons"]["mesh_bot"].get("greet_lines"))
 root.destroy()
 print("\nALL PASSED" if not fails else f"\n{len(fails)} FAILED: {fails}")
 sys.exit(1 if fails else 0)

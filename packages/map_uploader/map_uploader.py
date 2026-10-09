@@ -62,7 +62,7 @@ def post(body):
 
 class Addon(AddonBase):
     title = "Map uploader"
-    version = "1.0.0"
+    version = "1.0.1"
     author = "mcIRC (after recrof/map.meshcore.io-uploader)"
     description = ("Puts the repeaters, room servers and sensors your node hears on the official MeshCore map (map.meshcore.io). "
                    "Each upload is signed by your node; its private key never leaves the radio. Off until you switch it on.")
@@ -73,6 +73,26 @@ class Addon(AddonBase):
         self.busy, self.paused, self.uploaded, self.last_upload = False, "", 0, 0.0
         self.me = self.radio = None
         self.radio_at = 0.0
+        self.recent = []                                     # (time, kind, name) of this session's uploads, newest last
+        self.api.add_menu_item("Uploading on / off", self.toggle)
+        self.api.add_menu_item("Recent uploads...", self.show_recent)
+
+    def toggle(self):
+        on = not self.api.get("enabled", False)
+        self.api.set("enabled", on)
+        if on: self.paused = ""
+        self.api.log("Map uploader is ON - repeaters, room servers and sensors your node hears go to map.meshcore.io" if on
+                     else "Map uploader is OFF", "warn" if on else "info")
+
+    def recent_text(self):
+        state = ("ON" if self.api.get("enabled", False) else "OFF") + (f" (paused: {self.paused})" if self.paused else "")
+        lines = [f"{time.strftime('%H:%M:%S', time.localtime(t))}  {kind:<12} {name}" for t, kind, name in reversed(self.recent)]
+        return f"Map uploader: {state}.  Uploaded since mcIRC started: {self.uploaded}\n\n" + ("\n".join(lines) or "Nothing uploaded yet.")
+
+    def show_recent(self):
+        show = getattr(self.api, "show_text", None)
+        if show: show("Map uploader - recent uploads", self.recent_text)
+        else: self.api.notice(self.recent_text())
 
     def on_unload(self):
         with self.lock: self.queue.clear()
@@ -128,6 +148,7 @@ class Addon(AddonBase):
             return
         for name, kind, answer in r:
             self.uploaded += 1
+            self.recent = (self.recent + [(time.time(), kind, name)])[-100:]
             self.api.log(f"Map: uploaded {kind} '{name}' to map.meshcore.io", "info")
         with self.lock: more = bool(self.queue)
         if more and not self.busy:

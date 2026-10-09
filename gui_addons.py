@@ -123,26 +123,52 @@ class AddonAPI:
         self._app.commands[name.lower()] = (fn, help, self.name)
         self._commands.append(name.lower())
     def add_menu_item(self, label, fn):
-        """An entry in the Addons menu: 'Title: label' - or, once an addon has several, its own submenu named after it ('MeshCore tools >
-        Node clock...') so the name isn't repeated on every line."""
+        """An entry in this addon's submenu of the Addons menu ('MeshCore tools > Node clock...').  Every switched-on addon has that
+        submenu; mcIRC ends it with 'Settings...' and 'Switch off'."""
         self._items.append((label, fn))
         self._draw_menu()
     def _draw_menu(self):
         import tkinter as tk
-        m = self._app.addon_menu
+        m = getattr(self._app, "addon_menu", None)
+        if m is None: return
         for entry in self._menu:
             try: m.delete(entry)
             except Exception: pass
         self._menu = []
-        if len(self._items) == 1:
-            label, fn = self._items[0]
-            m.add_command(label=f"{self.display}: {label}", command=fn)
-            self._menu.append(f"{self.display}: {label}")
-        elif self._items:
-            sub = tk.Menu(m, tearoff=0)
-            for label, fn in self._items: sub.add_command(label=label, command=fn)
-            m.add_cascade(label=self.display, menu=sub)
-            self._menu.append(self.display)
+        sub = tk.Menu(m, tearoff=0)
+        for label, fn in self._items: sub.add_command(label=label, command=fn)
+        if self._items: sub.add_separator()
+        sub.add_command(label="Settings...", command=self._open_settings)
+        sub.add_command(label="Switch off", command=self._switch_off)
+        m.add_cascade(label=self.display, menu=sub)
+        self._menu.append(self.display)
+    def show_text(self, title, text):
+        """A small read-only window with lines of text (a list, a status).  text: a string, or a function returning one - then the window
+        has a Refresh button.  Returns the window."""
+        import tkinter as tk
+        from tkinter import ttk
+        win = tk.Toplevel(self._app.root)
+        win.title(title); win.geometry("640x380")
+        import gui_platform
+        box = tk.Text(win, wrap="word", font=(gui_platform.EDITOR_FONT_NAME, 9))
+        sb = ttk.Scrollbar(win, command=box.yview); box.config(yscrollcommand=sb.set)
+        def fill():
+            box.config(state="normal"); box.delete("1.0", "end")
+            box.insert("end", text() if callable(text) else text); box.config(state="disabled")
+        bar = tk.Frame(win); bar.pack(side="bottom", fill="x", padx=6, pady=6)
+        if callable(text): ttk.Button(bar, text="Refresh", command=fill).pack(side="left")
+        ttk.Button(bar, text="Close", command=win.destroy).pack(side="right")
+        sb.pack(side="right", fill="y"); box.pack(side="left", fill="both", expand=True)
+        fill()
+        return win
+    def _open_settings(self):
+        import gui_addonsettings
+        gui_addonsettings.open_settings(self._app, self.name, self._app.root)
+    def _switch_off(self):
+        def off():
+            self._app.addons.set_enabled(self.name, False)
+            self._app.status_line(f"*** {self.display} is switched off (Tools > Addons switches it back on).")
+        self._app.root.after(0, off)          # not from inside its own menu, which is removed with it
     def add_toolbar_button(self, text, fn):
         """Returns the tk.Button so you can change its text/colour later."""
         import tkinter as tk
@@ -289,6 +315,7 @@ class AddonManager:
             self.loaded[name] = (inst, api)
             self.errors.pop(name, None)
             self._call(name, "on_load")
+            if name in self.loaded: api._draw_menu()               # its Addons submenu, even with no entries of its own
             if self.app.connected: self._call(name, "on_connect")
             return True
         except Exception:

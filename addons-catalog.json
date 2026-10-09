@@ -5,7 +5,7 @@
     {
       "name": "broadcast_alerts",
       "title": "BC traffic bot",
-      "version": "1.2.3",
+      "version": "1.2.4",
       "author": "bclml",
       "description": "DriveBC, BC Ferries, BC Transit, TransLink, weather, earthquake and tsunami alerts. Keeps the map layers up to date; broadcasting them to the mesh is off until you switch it on (a switch per alert type).",
       "path": "packages/broadcast_alerts",
@@ -14,7 +14,7 @@
     {
       "name": "auto_reply",
       "title": "Auto reply",
-      "version": "1.1.5",
+      "version": "1.1.6",
       "author": "bclml",
       "description": "Keyword rules: answer the words you choose on the channels you choose, with your own reply text, sent to the channels you pick. Comes with a 'test' rule.",
       "path": "packages/auto_reply",
@@ -23,7 +23,7 @@
     {
       "name": "dolphins",
       "title": "Dolphins",
-      "version": "1.2.0",
+      "version": "1.2.1",
       "author": "bclml",
       "description": "Fun actions in the right-click menu on a name (Fun): slap with a large trout, send a pod of dolphins, water balloon, anvil, penguins, a fresh battery, ... - your own list, editable in its settings; /dolphins, /slap and /fun. Only sends when you click or type it; one per 10 seconds. Replaces the Slap addon. Also a picture behind the channel list - a pod of dolphins drawn by mcIRC, or your own - with each channel name in a box (on by default; needs Pillow - mcIRC offers to install it).",
       "path": "packages/dolphins",
@@ -86,7 +86,7 @@
     {
       "name": "map_uploader",
       "title": "Map uploader",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "author": "bclml (Python port of recrof/map.meshcore.io-uploader, MIT)",
       "description": "Puts the repeaters, room servers and sensors your node hears on the official MeshCore map (map.meshcore.io). Only adverts really signed by their node; each upload is signed by your node itself - its private key never leaves the radio. People's companions are never uploaded. Off until you switch it on.",
       "path": "packages/map_uploader",
@@ -100,7 +100,7 @@
     {
       "name": "packet_upload",
       "title": "Packet upload",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "author": "bclml (after agessaman/meshcore-packet-capture, MIT)",
       "description": "Sends the packets your node hears to community packet analyzers (MeshCore.ca, CascadiaMesh, LetsMesh and 14 more) over MQTT, on mcIRC's own connection, so they can map coverage and routes. Logs in with a token your node signs - no password, the private key never leaves the radio. Off until you switch it on and give your area code. Needs 'pip install paho-mqtt'.",
       "path": "packages/packet_upload",
@@ -114,9 +114,9 @@
     {
       "name": "mesh_bot",
       "title": "Mesh bot",
-      "version": "1.0.1",
+      "version": "1.1.0",
       "author": "bclml (commands after agessaman/meshcore-bot, MIT)",
-      "description": "ping, hello, path (the repeaters your message came through) and prefix (who uses a key prefix) from mcIRC's own node memory, multitest (the paths your message took), stats (the mesh in 24 h), sports and version - the meshcore-bot commands mcIRC's other bots don't have - plus its greeter for newcomers (off by default). Each switched on for the channels you choose; answers in the channel or privately. Off until you switch it on.",
+      "description": "ping, hello, path, prefix, multitest, stats, sports and version - the agessaman/meshcore-bot commands mcIRC's other bots don't have - plus its greeter (a random greeting from a list you can edit), each switched on for the channels you choose. Off until you switch it on.",
       "path": "packages/mesh_bot",
       "upstream": {
         "repo": "agessaman/meshcore-bot",

@@ -108,7 +108,7 @@ PILLOW_NEEDED = ("The dolphin picture behind the channel list needs Pillow (a fr
 
 class Addon(AddonBase):
     title = "Dolphins"
-    version = "1.2.0"
+    version = "1.2.1"
     author = "mcIRC"
     description = ("Fun actions in the right-click menu on a name - slap with a large trout, send dolphins, water balloon, ... "
                    "(your own list); /dolphins, /slap and /fun.  A picture behind the channel list, each channel name in a box.")
@@ -124,6 +124,8 @@ class Addon(AddonBase):
         self.api.add_command("fun", self.cmd_fun, "/fun <number or name> <nick>: a fun action (no arguments: the list)")
         if not self.api.has_command("slap"): self.api.add_command("slap", self.cmd_slap, "/slap <nick>: slap someone around a bit with a large trout")
         self.register_actions()
+        self.api.add_menu_item("Send dolphins...", self.ask_dolphins)
+        self.api.add_menu_item("Picture behind the channel list on / off", self.toggle_background)
         self.api.after(3000, self._old_slap_note)
         tree = self._tree()
         if tree is not None:
@@ -189,6 +191,16 @@ class Addon(AddonBase):
         if time.time() - self._last < MIN_GAP: return self.api.notice(f"Easy there - one pod every {MIN_GAP} seconds.", "warn")
         if not self.api.send_current(TO_ONE.format(nick=nick) if nick else random.choice(PODS)): return self.api.notice("Open a channel or private window first - /dolphins sends to the window in front.", "warn")
         self._last = time.time()
+
+    def ask_dolphins(self):
+        from tkinter import simpledialog
+        nick = simpledialog.askstring("Send dolphins", "Send a pod of dolphins to whom?\n(blank: to everyone in the window in front)",
+                                      parent=self.api.ui().get("root"))
+        if nick is not None: self.cmd_dolphins(nick)
+
+    def toggle_background(self):
+        self.api.set("bg_on", not self.api.get("bg_on", True))
+        self.apply_background()
 
     # ---- the picture behind the channel list ----
     def _tree(self): return self.api.ui().get("tree")

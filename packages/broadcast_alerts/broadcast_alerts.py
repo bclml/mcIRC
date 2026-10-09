@@ -15,7 +15,7 @@ class Addon(AddonBase):
     # (The "test" auto-reply is its own addon now: Auto reply.)
     SOURCES = [k for k in ea.TX_SOURCES if k != "Test reply"]   # alert types with a switch on the Alerts tab
     title = "BC traffic bot"
-    version = "1.2.2"
+    version = "1.2.4"
     author = "built in"
     description = ("Traffic / ferry / transit / weather / earthquake / tsunami alerts. Keeps the map's DriveBC and earthquake layers up to date; "
                    "broadcasting them to the mesh is OFF until you switch it on.")
@@ -29,6 +29,7 @@ class Addon(AddonBase):
         self.api.add_command("mute", lambda a: self.set_muted(True), "stop ALL transmitting by the broadcast addon, tsunami included")
         self.api.add_command("unmute", lambda a: self.set_muted(False), "resume broadcasting")
         self.api.add_menu_item("Mute / unmute broadcasting", self.toggle_mute)
+        self.api.add_menu_item("Active alerts...", self.show_active)
         self.api.add_map_layer("DriveBC incidents", self._incidents, "#d32f2f")
         self.api.add_map_layer("Earthquakes", self._quakes, "#ef6c00")
         if ea.TX["muted"]: self._start_feeds()       # map-only mode needs no radio: read the feeds right away
@@ -112,6 +113,17 @@ class Addon(AddonBase):
                      "info" if muted else "warn")
 
     def toggle_mute(self): self.set_muted(not ea.TX["muted"])
+
+    def active_text(self):
+        """What the bot counts as active right now (announced and not cleared yet) - after a restart it is read back from its log."""
+        lines = [f"[{src}] {title}" for src, title in sorted(set(ea.active_traffic_alerts.values()) | set(ea.active_weather_alerts.values()))]
+        state = "map only - nothing is broadcast" if ea.TX["muted"] else "BROADCASTING"
+        return (f"BC traffic bot: {state}.  {len(lines)} active alert(s):\n\n" + "\n".join(lines)) if lines else f"BC traffic bot: {state}.  No active alerts."
+
+    def show_active(self):
+        show = getattr(self.api, "show_text", None)
+        if show: show("BC traffic bot - active alerts", self.active_text)
+        else: self.api.notice(self.active_text())
 
     def _refresh_button(self):
         muted = ea.TX["muted"]

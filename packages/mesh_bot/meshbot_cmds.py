@@ -163,5 +163,28 @@ def sports_text(arg, get, default_teams=()):
 
 
 # ---- greeter ----
-def greeting_for(nick, template):
-    return template.replace("{nick}", nick.replace("[", "").replace("]", ""))
+# A random one of these for each newcomer (editable in the bot's settings), in the spirit of mIRC's Invision script.  The mesh carries
+# plain text only: no mIRC colour codes (the phone apps would show them as junk and they eat into the short message limit).
+DEFAULT_GREETINGS = [
+    "Welcome to the mesh, @[{nick}]! Type bothelp for the bot commands.",
+    "»» Welcome @[{nick}] to {channel} | Mesh: MeshCore | Script: m-c-I-R-C ««",
+    "«°·.¸.·°» Attention everyone! @[{nick}] has graced us with their presence! «°·.¸.·°»",
+    "»» @[{nick}] has entered the room. Everyone act natural... ««",
+    "*** @[{nick}] has joined {channel} - say hi! (bothelp for the bot commands)",
+]
+
+
+def greeting_lines(text):
+    """The greetings typed in the settings box: one per line, blank lines skipped."""
+    return [l.strip() for l in (text or "").splitlines() if l.strip()]
+
+
+def pick_greeting(lines, last=None):
+    """A random greeting, not the same one twice in a row when there are several."""
+    lines = list(lines) or DEFAULT_GREETINGS
+    choices = [l for l in lines if l != last] or lines
+    return random.choice(choices)
+
+
+def greeting_for(nick, template, channel=""):
+    return template.replace("{nick}", nick.replace("[", "").replace("]", "")).replace("{channel}", channel or "the mesh")

@@ -38,6 +38,8 @@ uv.lock.bak
 # Helper modules that installed addons put next to the app (their source is in packages/)
 /dolphin_*.py
 /funbot_*.py
-/meshbot_common.py
+/meshbot_*.py
+/mapup_*.py
+/pktup_*.py
 /ntools_*.py
 /wxbot_*.py

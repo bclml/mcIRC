@@ -1,9 +1,11 @@
 {
   "name": "packet_upload",
   "title": "Packet upload",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Sends the packets your node hears to community packet analyzers (MeshCore.ca, CascadiaMesh, LetsMesh, ...) over MQTT, on mcIRC's own connection. Logs in with a token your node signs. Off until you switch it on. Follows agessaman/meshcore-packet-capture (MIT).",
-  "requires": ["paho-mqtt"],
+  "requires": [
+    "paho-mqtt"
+  ],
   "files": {
     "packet_upload.py": "addons/packet_upload.py",
     "pktup_core.py": "pktup_core.py"

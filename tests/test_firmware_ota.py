@@ -123,7 +123,10 @@ got = pr.official(lambda url: API_JSON)
 ok("presets: MeshCore's own list is read; entries with impossible values are left out", got == [("Canada", "910.525", "62.5", "7", "5")], got)
 allp = pr.merged([("South BC 909", "909.000", "62.5", "7", "5")], got)
 ok("...your own first ('My: '), then the official ones, then local groups' (South BC 909 included)", allp[0][0] == "My: South BC 909" and allp[1][0] == "Canada"
-   and any(p[0] == "Canada: South BC (909)" and p[1:] == ("909.000", "62.5", "7", "5") for p in allp), allp[:3])
+   and any(p[0] == "Canada: South BC 909 (Salish Mesh)" and p[1:] == ("909.000", "62.5", "7", "5") for p in allp), allp[:3])
+names = [p[0] for p in pr.merged([], [])]
+ok("countries are together: Canada next to South BC, the USA ones next to each other", names.index("Canada: South BC 909 (Salish Mesh)") == names.index("Canada") + 1
+   and names[names.index("USA"):names.index("USA") + 4] == ["USA", "USA - Southern California", "USA: 500 kHz (MeshCore 500)", "USA: Florida, CR8 (Florida Mesh)"], names)
 ok("...offline: the built-in copy of the official list (26 regions)", len(pr.BUILTIN) == 26 and pr.merged([], [])[0][0] == "Australia")
 ok("every built-in and local-group preset is a valid MeshCore radio setting", all(pr.valid(*p[1:]) for p in pr.BUILTIN + pr.COMMUNITY))
 ok("valid() refuses bad values", not pr.valid("1000", "62.5", "7", "5") and not pr.valid("910", "62.5", "13", "5") and not pr.valid("910", "62.5", "7", "4"))
@@ -166,7 +169,7 @@ with mock.patch.object(w, "find_pio", lambda: None), mock.patch.object(ota, "uf2
         mock.patch("tkinter.simpledialog.askstring", lambda *a, **k: "South BC 909"), mock.patch("tkinter.messagebox.showerror", lambda *a, **k: None):
     win = w.FirmwareBuilderWindow(API2())
     vals = list(win.preset_box.cget("values"))
-    i = next(n for n, v in enumerate(vals) if v.startswith("Canada: South BC (909)"))
+    i = next(n for n, v in enumerate(vals) if v.startswith("Canada: South BC 909 (Salish Mesh)"))
     win.preset_box.current(i); win._use_preset()
     ok("choosing a preset fills in the radio", [win.v[k].get() for k in ("freq", "bw", "sf", "cr")] == ["909.000", "62.5", "7", "5"])
     win.save_preset()
@@ -174,6 +177,15 @@ with mock.patch.object(w, "find_pio", lambda: None), mock.patch.object(ota, "uf2
        and any(v.startswith("My: South BC 909") for v in win.preset_box.cget("values")), store)
     win.preset_box.set(pr.label(("My: South BC 909", "909.000", "62.5", "7", "5"))); win.remove_preset()
     ok("'Remove' deletes one of your own presets", store.get("radio_presets") == [])
+    import urllib.parse
+    opened, answers = [], iter(["Ridgeline Mesh", "Canada: Fraser Valley"])
+    win.v["freq"].set("909.000")
+    with mock.patch("tkinter.simpledialog.askstring", lambda *a, **k: next(answers)), mock.patch("tkinter.messagebox.askokcancel", lambda *a, **k: True):
+        win.suggest_preset(open_url=opened.append)
+    q = urllib.parse.parse_qs(urllib.parse.urlparse(opened[0]).query) if opened else {}
+    ok("'Suggest to mcIRC...' opens a ready-filled GitHub issue (the person submits it there)", opened and opened[0].startswith("https://github.com/bclml/mcIRC/issues/new?")
+       and q.get("title") == ["Radio preset: Canada: Fraser Valley (Ridgeline Mesh)"] and "909.000 MHz" in q["body"][0] and q.get("labels") == ["radio-preset"], opened)
+    ok("...with the preset line ready to paste into the list", '("Canada: Fraser Valley (Ridgeline Mesh)", "909.000", "62.5", "7", "5")' in q["body"][0])
     win.v["freq"].set("2000"); win.save_preset()
     ok("an impossible radio is not saved", store.get("radio_presets") == [])
     win.destroy()

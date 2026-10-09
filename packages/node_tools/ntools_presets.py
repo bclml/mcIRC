@@ -22,9 +22,9 @@ BUILTIN = [
 ]
 # Local groups whose settings differ from the official list (found on their own pages)
 COMMUNITY = [
-    ("Canada: South BC (909)", "909.000", "62.5", "7", "5"),                 # south BC mesh (mcIRC's home)
-    ("USA: Florida Mesh (CR8)", "910.525", "62.5", "7", "8"),                # areyoumeshingwith.us - USA preset with CR 8
-    ("USA: MeshCore 500 (some US networks)", "902.250", "500", "11", "5"),   # meshmap.me/meshcore500 - 500 kHz for FCC Part 15
+    ("Canada: South BC 909 (Salish Mesh)", "909.000", "62.5", "7", "5"),     # south BC (mcIRC's home)
+    ("USA: Florida, CR8 (Florida Mesh)", "910.525", "62.5", "7", "8"),       # areyoumeshingwith.us - the USA preset with CR 8
+    ("USA: 500 kHz (MeshCore 500)", "902.250", "500", "11", "5"),            # meshmap.me/meshcore500 - some US networks, for FCC Part 15
 ]
 BANDWIDTHS = {"7.8", "10.4", "15.6", "20.8", "31.25", "41.7", "62.5", "125", "250", "500"}
 
@@ -52,13 +52,27 @@ def official(get=None):
     return out
 
 
+ISSUES_URL = "https://github.com/bclml/mcIRC/issues/new"
+
+
+def suggest_url(group, where, vals):
+    """A new-issue link with the suggestion filled in (radio values and the names typed - nothing else)."""
+    import urllib.parse
+    title = f"Radio preset: {where} ({group})"
+    body = (f"A local group's radio setting for the Firmware builder's preset list.\n\n"
+            f"- Group: {group}\n- Where: {where}\n- Frequency: {vals[0]} MHz\n- Bandwidth: {vals[1]} kHz\n- Spreading factor: {vals[2]}\n"
+            f"- Coding rate: {vals[3]}\n- Group's page or source (please add a link):\n\n"
+            f"Preset line: (\"{where} ({group})\", \"{vals[0]}\", \"{vals[1]}\", \"{vals[2]}\", \"{vals[3]}\")\n")
+    return ISSUES_URL + "?" + urllib.parse.urlencode({"title": title, "body": body, "labels": "radio-preset"})
+
+
 def label(p): return f"{p[0]}  -  {p[1]} MHz / {p[2]} kHz / SF{p[3]} / CR{p[4]}"
 
 
 def merged(mine, official_list):
-    """The preset list: yours first, then the official ones, then the local groups' - each title once."""
+    """The preset list: yours first, then the official ones and the local groups' together, by country (A-Z) - each title once."""
     seen, out = set(), []
-    for group, prefix in ((mine, "My: "), (official_list or BUILTIN, ""), (COMMUNITY, "")):
+    for group, prefix in ((mine, "My: "), (sorted(list(official_list or BUILTIN) + COMMUNITY, key=lambda p: p[0].lower()), "")):
         for p in group:
             t = prefix + p[0]
             if t.lower() in seen: continue
@@ -78,6 +92,7 @@ class PresetSteps:
         self.preset_box = box
         ttk.Button(parent, text="Save as preset...", command=self.save_preset).pack(side="left")
         ttk.Button(parent, text="Remove", command=self.remove_preset).pack(side="left", padx=(4, 0))
+        ttk.Button(parent, text="Suggest to mcIRC...", command=self.suggest_preset).pack(side="left", padx=(4, 0))
         self._fill_presets()
         self.api.run_background(official, lambda r: (setattr(self, "_official", r if not isinstance(r, Exception) else []),
                                                      self.winfo_exists() and self._fill_presets()))
@@ -109,6 +124,22 @@ class PresetSteps:
         self.api.set("radio_presets", [list(p) for p in mine])
         self._fill_presets()
         self.preset_box.set(label(("My: " + name,) + vals))
+
+    def suggest_preset(self, open_url=None):
+        """Opens a ready-filled GitHub issue for a local group's radio setting; the person checks it and presses Submit on GitHub themselves
+        (nothing is sent from mcIRC).  The maintainers add good ones to COMMUNITY in an update."""
+        vals = tuple(self.v[k].get().strip() for k in ("freq", "bw", "sf", "cr"))
+        if not valid(*vals):
+            return messagebox.showerror("Suggest a radio preset", "Fill in the group's radio first (or pick one of your own presets): MHz, bandwidth, SF, CR.", parent=self)
+        group = (simpledialog.askstring("Suggest a radio preset", "The group's name (e.g. Salish Mesh):", parent=self) or "").strip()[:60]
+        if not group: return
+        where = (simpledialog.askstring("Suggest a radio preset", "Where it is used (country and area, e.g. Canada: South BC):", parent=self) or "").strip()[:60]
+        if not where: return
+        url = suggest_url(group, where, vals)
+        if not messagebox.askokcancel("Suggest a radio preset", f"Your browser opens a new GitHub issue for:\n\n    {where} ({group})\n    "
+                                      f"{vals[0]} MHz / {vals[1]} kHz / SF{vals[2]} / CR{vals[3]}\n\nCheck it there and press Submit (needs a "
+                                      "GitHub account). Nothing is sent until you do.", parent=self): return
+        (open_url or __import__("webbrowser").open)(url)
 
     def remove_preset(self):
         i = self.preset_box.current() - 1

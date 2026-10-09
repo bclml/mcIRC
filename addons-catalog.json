@@ -77,7 +77,7 @@
     {
       "name": "node_tools",
       "title": "MeshCore tools",
-      "version": "1.3.2",
+      "version": "1.3.3",
       "author": "bclml",
       "description": "Node clock, channel manager, backup & restore, firmware check / update, firmware builder - companion with USB / Bluetooth / Wi-Fi, repeater, room server, sensor, observer (MQTT), repeater bridges, terminal chat, KISS modem; OTAFIX bootloader for nRF52 boards and updates over Wi-Fi for ESP32, radio presets (MeshCore's list, local groups' and your own) (needs PlatformIO), path tools, packet monitor, radio health graphs and coverage map - in the Addons menu. Updating firmware from mcIRC needs 'pip install esptool'.",
       "path": "packages/node_tools",
@@ -100,9 +100,9 @@
     {
       "name": "packet_upload",
       "title": "Packet upload",
-      "version": "1.0.3",
+      "version": "1.1.0",
       "author": "bclml (after agessaman/meshcore-packet-capture, MIT)",
-      "description": "Sends the packets your node hears to community packet analyzers (MeshCore.ca, CascadiaMesh, LetsMesh and 14 more) over MQTT, on mcIRC's own connection, so they can map coverage and routes. Logs in with a token your node signs - no password, the private key never leaves the radio. Off until you switch it on and give your area code. Needs 'pip install paho-mqtt'.",
+      "description": "Sends the packets your node hears to the community packet analyzers you pick (28 around the world - none picked when installed) over MQTT, on mcIRC's own connection. Logs in with a token your node signs. Off until you switch it on. Follows agessaman/meshcore-packet-capture (MIT).",
       "path": "packages/packet_upload",
       "upstream": {
         "repo": "agessaman/meshcore-packet-capture",

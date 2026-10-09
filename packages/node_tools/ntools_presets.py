@@ -86,8 +86,8 @@ class PresetSteps:
 
     def preset_widgets(self, parent):
         self._official = []
-        box = ttk.Combobox(parent, width=46, state="readonly")
-        box.pack(side="left", padx=(8, 4))
+        box = ttk.Combobox(parent, width=60, state="readonly")
+        box.pack(side="left", padx=(0, 4))
         box.bind("<<ComboboxSelected>>", lambda e: self._use_preset())
         self.preset_box = box
         ttk.Button(parent, text="Save as preset...", command=self.save_preset).pack(side="left")

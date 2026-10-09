@@ -50,6 +50,7 @@ def plan(board_envs, kind, conns=(), ssid="", pwd=""):
     if kind != "companion":
         if kind not in board_envs: raise ValueError(f"this board has no {TYPE_TITLES[kind].lower()} firmware")
         env, ini = board_envs[kind]
+        if kind in ("observer", "observer_room"): return CUSTOM_ENV, ini, lambda text: _custom(text, env, OBSERVER_QUIET)
         return env, ini, lambda text: text
     conns = [c for c in ("usb", "ble", "wifi") if c in set(conns)]
     if not conns: raise ValueError("tick at least one connection: USB, Bluetooth or Wi-Fi")
@@ -69,6 +70,17 @@ def plan(board_envs, kind, conns=(), ssid="", pwd=""):
         flags = "\n".join("  " + f for f in extra)
         return text.rstrip("\n") + f"\n\n[env:{CUSTOM_ENV}]\nextends = env:{base}\nbuild_flags =\n  ${{env:{base}.build_flags}}\n{flags}\n"
     return (CUSTOM_ENV if extra else base), ini, make
+
+
+# The observer firmware sends what it hears to LetsMesh (two slots) as soon as it has Wi-Fi.  mcIRC builds it with every slot off:
+# nothing is reported until you pick your area's analyzer yourself (set mqtt1.preset <name>, set mqtt.iata <code>).
+OBSERVER_QUIET = [f"-D MQTT_DEFAULT_SLOT{n}_PRESET='\"none\"'" for n in range(1, 7)]
+
+
+def _custom(text, base, flags):
+    """The ini text plus an env that extends `base` with extra build flags."""
+    lines = "\n".join("  " + f for f in flags)
+    return text.rstrip("\n") + f"\n\n[env:{CUSTOM_ENV}]\nextends = env:{base}\nbuild_flags =\n  ${{env:{base}.build_flags}}\n{lines}\n"
 
 
 def with_wifi(ini_text, env, ssid, pwd):
@@ -109,8 +121,10 @@ AFTER = {k: f"A {v} is set up through its USB command line: open config.meshcore
          for k, v in (("repeater", "repeater"), ("room_server", "room server"), ("sensor", "sensor"), ("bridge_espnow", "repeater bridge"),
                       ("bridge_rs232", "repeater bridge"))}
 for _k in ("observer", "observer_room"):
-    AFTER[_k] = ("An observer is set up over USB like a repeater (name, admin password, radio), plus its Wi-Fi, MQTT server and your 3-letter "
-                 "area code (e.g. YVR) - from its serial console, or 'start webconfig' for a web page (see agessaman's observer docs). "
-                 "Community firmware: it repeats like a repeater and also sends what it hears to the analyzers.")
+    AFTER[_k] = ("An observer is set up over USB like a repeater (name, admin password, radio), plus its Wi-Fi and your 3-letter area code "
+                 "(the nearest airport's IATA code) - from its serial console, or 'start webconfig' for a web page. mcIRC built it with NO "
+                 "analyzer switched on, so it reports nothing until you pick yours: 'get mqtt.presets' lists them, then e.g. "
+                 "'set mqtt1.preset analyzer-eu', 'set mqtt.iata LHR', 'set wifi.ssid ...', 'set wifi.pwd ...', 'reboot'. "
+                 "Community firmware: it repeats like a repeater and also sends what it hears to the analyzers you pick.")
 AFTER["terminal_chat"] = "Terminal chat: open the board's USB port in a serial terminal (115200 baud) and type 'help'."
 AFTER["kiss_modem"] = "KISS modem: point your KISS software at the board's USB port (115200 baud)."

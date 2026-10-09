@@ -29,8 +29,21 @@ PRESETS = {
                                                         ("collector2.dutchmeshcore.nl", 443, "websockets", "/", "collector2.dutchmeshcore.nl", 86400)]),
     "meshat-se": ("Meshat", "Sweden", [("meshcore-mqtt.meshat.se", 443, "websockets", "/", "meshcore-mqtt.meshat.se", 86400)]),
     "nz-analyzer": ("NZ Analyzer", "New Zealand", [("meshcore-mqtt-1.baird.io", 443, "websockets", "/", "meshcore-mqtt-1.baird.io", 86400)]),
+    # from the community observer firmware's broker list (agessaman/MeshCore observer-firmware, src/helpers/MQTTPresets.h) - same signed log-in
+    "meshcore-analyzer-eu": ("EU MeshCore Analyzer", "Europe and worldwide", [("mqtt.meshcore-analyzer.eu", 443, "websockets", "/", "mqtt.meshcore-analyzer.eu", 86400)]),
+    "meshcore-fi": ("MeshCore Finland", "Finland", [("mc-mqtt.meshcore.fi", 443, "websockets", "/", "mc-mqtt.meshcore.fi", 86400)]),
+    "atvirastinklas": ("Atviras Tinklas", "Lithuania", [("mqtt-mc.atvirastinklas.lt", 443, "websockets", "/", "mqtt-mc.atvirastinklas.lt", 86400)]),
+    "ipnt-uk": ("IPNet", "UK: East of England", [("mqtt.ipnt.uk", 443, "websockets", "/", "mqtt.ipnt.uk", 86400)]),
+    "meshtexas": ("MeshTexas", "Texas", [("mqtt.meshtexas.org", 443, "websockets", "/mqtt", "mqtt.meshtexas.org", 86400)]),
+    "idahomesh": ("Idaho Mesh", "Idaho", [("mqtt.idahomesh.org", 443, "websockets", "/mqtt", "mqtt.idahomesh.org", 86400)]),
+    "okimesh": ("OKI Mesh", "", [("mqtt1.okimesh.org", 9002, "websockets", "/mqtt", "mqtt1.okimesh.org", 86400),
+                                 ("mqtt2.okimesh.org", 9002, "websockets", "/mqtt", "mqtt2.okimesh.org", 86400)]),
+    "wcmesh": ("West Coast Mesh", "", [("mqtt.wcmesh.com", 443, "websockets", "/", "mqtt.wcmesh.com", 86400)]),
+    "rflab": ("RF Lab", "", [("mqtt.rflab.io", 443, "websockets", "/", "mqtt.rflab.io", 86400)]),
+    "corecomms": ("CoreComms", "", [("mqtt.corecomms.net", 443, "websockets", "/mqtt", "mqtt.corecomms.net", 86400)]),
+    "gomesh": ("gomesh.dev", "", [("mqtt.gomesh.dev", 443, "websockets", "/", "mqtt.gomesh.dev", 86400)]),
 }
-RECOMMENDED = ("meshcore-ca", "cascadiamesh", "letsmesh")
+RECOMMENDED = ()          # none ticked when installed: nothing is reported until you pick your area's analyzers yourself
 ROUTE_LETTER = {0: "F", 1: "F", 2: "D", 3: "T"}           # transport flood counts as flood, as upstream
 
 

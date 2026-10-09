@@ -33,10 +33,10 @@ def new_client(transport, client_id):
 
 class Addon(AddonBase):
     title = "Packet upload"
-    version = "1.0.3"
+    version = "1.1.0"
     author = "mcIRC (after agessaman/meshcore-packet-capture)"
-    description = ("Sends the packets your node hears to community packet analyzers (MeshCore.ca, CascadiaMesh, LetsMesh, ...) so they can "
-                   "map coverage and routes. Logs in with a token your node signs. Off until you switch it on and give your area code.")
+    description = ("Sends the packets your node hears to the community packet analyzers you pick (28 around the world) so they can "
+                   "map coverage and routes. Logs in with a token your node signs. Off until you switch it on, pick analyzers and give your area code.")
     tick_seconds = 60
     switch = "enabled"           # its ON/OFF switch on the toolbar
 
@@ -179,12 +179,13 @@ class Addon(AddonBase):
             "an online/offline status. You log in with a token your node signs - no password, and its private key never leaves the radio. "
             "Needs a USB or Wi-Fi connection.")).pack(anchor="w", pady=(0, 6))
         grid = tk.Frame(f, bg=bg); grid.pack(anchor="w")
-        keys = list(core.RECOMMENDED) + [k for k in core.PRESETS if k not in core.RECOMMENDED]
+        tk.Label(grid, bg=bg, text="Tick the analyzers that cover your area (none is ticked when installed - nothing is sent until you choose):"
+                 ).grid(row=0, column=0, columnspan=2, sticky="w", pady=(0, 2))
+        keys = sorted(core.PRESETS, key=lambda k: (core.PRESETS[k][1] == "", core.PRESETS[k][1].lower(), core.PRESETS[k][0].lower()))
         for i, k in enumerate(keys):
             title, area, _ = core.PRESETS[k]
-            tk.Checkbutton(grid, text=title + (f" ({area})" if area else "") + (" *" if k in core.RECOMMENDED else ""), variable=self.v_presets[k],
-                           bg=bg, anchor="w").grid(row=i // 2, column=i % 2, sticky="w", padx=(0, 12))
-        tk.Label(f, bg=bg, fg="#555", text="* suggested for BC").pack(anchor="w")
+            tk.Checkbutton(grid, text=title + (f" ({area})" if area else ""), variable=self.v_presets[k],
+                           bg=bg, anchor="w").grid(row=1 + i // 2, column=i % 2, sticky="w", padx=(0, 12))
         try:
             import paho.mqtt  # noqa: F401
         except ImportError:

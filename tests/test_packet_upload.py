@@ -31,7 +31,8 @@ h, p = (json.loads(base64.urlsafe_b64decode(x + "==")) for x in sig_in.split("."
 ok("the log-in token: Ed25519 JWT with the node's key, issued/expiry times and the server as audience",
    h == {"alg": "Ed25519", "typ": "JWT"} and p == {"publicKey": "AB" * 32, "iat": 1000, "exp": 87400, "aud": "mqtt1.meshcore.ca"}, (h, p))
 ok("...signed by the node: <header>.<claims>.<signature hex>", core.token(sig_in, "EE" * 64) == sig_in + "." + "ee" * 64)
-ok("17 servers, the three suggested for BC among them", len(core.PRESETS) == 17 and all(k in core.PRESETS for k in core.RECOMMENDED))
+ok("28 analyzers to choose from, none ticked when installed", len(core.PRESETS) == 28 and core.RECOMMENDED == ())
+ok("...every one with its signed log-in (an audience) except the one that needs none", all(s[4] for k, (_, _, ss) in core.PRESETS.items() for s in ss if k != "eastidahomesh"))
 
 # the addon with a fake MQTT library
 class FakeClient:
@@ -73,14 +74,17 @@ ok("off until switched on: no connections", FakeClient.made == [])
 vals.update(enabled=True)
 inst.on_connect()
 ok("switched on without an area code: still nothing", FakeClient.made == [])
-vals.update(area="YVR")
+vals.update(area="LHR")
 inst.on_connect()
-ok("with an area code: the suggested servers are connected (MeshCore.ca x2, CascadiaMesh, LetsMesh x2)",
+ok("with an area code but no analyzer ticked: still nothing (none is ticked when installed)", FakeClient.made == [])
+vals.update(presets=["meshcore-ca", "cascadiamesh", "letsmesh"])
+inst.on_connect()
+ok("with an area code and analyzers ticked: those are connected (MeshCore.ca x2, CascadiaMesh, LetsMesh x2)",
    sorted(c.connected_to[0] for c in FakeClient.made) == sorted(["mqtt1.meshcore.ca", "mqtt2.meshcore.ca", "mqtt-v1.cascadiamesh.org", "mqtt-us-v1.letsmesh.net", "mqtt-eu-v1.letsmesh.net"]),
    [c.connected_to for c in FakeClient.made])
 c0 = FakeClient.made[0]
 ok("...logging in as v1_<node key> with a token the node signed", c0.user[0] == "v1_" + "AB" * 32 and c0.user[1].endswith("." + "ee" * 64) and len(signed) == 5)
-ok("...announcing 'online' (kept), with 'offline' as the last will", c0.pub[0][0] == "meshcore/YVR/" + "AB" * 32 + "/status" and c0.pub[0][1]["status"] == "online" and c0.pub[0][2]
+ok("...announcing 'online' (kept), with 'offline' as the last will", c0.pub[0][0] == "meshcore/LHR/" + "AB" * 32 + "/status" and c0.pub[0][1]["status"] == "online" and c0.pub[0][2]
    and c0.will[1:] == ("offline", True))
 ok("...and every packet the radio hears is now wanted whole", "packet_upload" in app.raw_packets_wanted)
 inst.on_packet({"packet": "0A" + "02" + "1122" + "deadbeef" * 5, "snr": 6.5, "rssi": -90})

@@ -33,6 +33,11 @@ ok("...the observer is the observer build, not the repeater", bd["Heltec_v3"]["o
    and bd["Heltec_v3"]["repeater"][0] == "Heltec_v3_repeater")
 ok("every type has a title and an after-flashing note (companion: its own)", all(k in fb.TYPE_TITLES for k in ("observer", "bridge_espnow", "terminal_chat", "kiss_modem"))
    and all(k in fb.AFTER for k in fb.TYPE_TITLES if k != "companion"))
+env, ini, make = fb.plan(bd["Heltec_v3"], "observer")
+t = make("[env:Heltec_v3_repeater_observer_mqtt]\nbuild_flags = -D X\n")
+ok("an observer is built with every analyzer slot off - it reports nothing until you pick one", env == fb.CUSTOM_ENV
+   and "extends = env:Heltec_v3_repeater_observer_mqtt" in t and all(f"-D MQTT_DEFAULT_SLOT{n}_PRESET='\"none\"'" in t for n in range(1, 7)), t)
+ok("...and the after-flashing note says how to pick one", "NO analyzer" in fb.AFTER["observer"] and "set mqtt1.preset" in fb.AFTER["observer"])
 ok("ESP32 or nRF52 is read from the board's build file", fb.arch(bd["Heltec_v3"]) == "esp32" and fb.arch(bd["RAK_4631"]) == "nrf52")
 ok("Wi-Fi OTA: offered for ESP32 repeater types", fb.wifi_ota_ok(bd["Heltec_v3"], "repeater") and fb.wifi_ota_ok(bd["Heltec_v3"], "observer"))
 ok("...not for a companion, terminal chat or KISS modem (no 'start ota'), nor for nRF52 boards",

@@ -106,8 +106,8 @@
       "path": "packages/packet_upload",
       "upstream": {
         "repo": "agessaman/meshcore-packet-capture",
-        "ref": "c011f4ef2d4767d3b6d20163f463e87041569d88",
-        "release": "v2.2.0"
+        "ref": "d797e43010a7c9e00def74f9412c24e7a332adbe",
+        "release": "v2.2.1"
       },
       "tested": "2026-10-08 with app 2.0.5: messages, packet hashes and the log-in token checked against the upstream uploader's own code; MQTT connection, token renewal and offline status covered by tests with a fake broker; not yet tried against a real analyzer"
     },

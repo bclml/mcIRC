@@ -113,6 +113,21 @@ with mock.patch.object(ota.time, "sleep", lambda s: None):
     ota.serial_cli("COM99", ["set name Hilltop", "password s3cret", "reboot"], log=lines.append, opener=Port)
 ok("the commands go to the node's USB command line, each ended by a carriage return", sent == [b"set name Hilltop\r", b"password s3cret\r", b"reboot\r"], sent)
 ok("...and the admin password is never shown", not any("s3cret" in l for l in lines), lines)
+# ---- radio presets
+import ntools_presets as pr
+API_JSON = {"config": {"suggested_radio_settings": {"entries": [
+    {"title": "Canada", "frequency": "910.525", "bandwidth": "62.5", "spreading_factor": "7", "coding_rate": "5"},
+    {"title": "Broken", "frequency": "abc", "bandwidth": "62.5", "spreading_factor": "7", "coding_rate": "5"},
+    {"title": "Bad BW", "frequency": "910.0", "bandwidth": "63", "spreading_factor": "7", "coding_rate": "5"}]}}}
+got = pr.official(lambda url: API_JSON)
+ok("presets: MeshCore's own list is read; entries with impossible values are left out", got == [("Canada", "910.525", "62.5", "7", "5")], got)
+allp = pr.merged([("South BC 909", "909.000", "62.5", "7", "5")], got)
+ok("...your own first ('My: '), then the official ones, then local groups' (South BC 909 included)", allp[0][0] == "My: South BC 909" and allp[1][0] == "Canada"
+   and any(p[0] == "Canada: South BC (909)" and p[1:] == ("909.000", "62.5", "7", "5") for p in allp), allp[:3])
+ok("...offline: the built-in copy of the official list (26 regions)", len(pr.BUILTIN) == 26 and pr.merged([], [])[0][0] == "Australia")
+ok("every built-in and local-group preset is a valid MeshCore radio setting", all(pr.valid(*p[1:]) for p in pr.BUILTIN + pr.COMMUNITY))
+ok("valid() refuses bad values", not pr.valid("1000", "62.5", "7", "5") and not pr.valid("910", "62.5", "13", "5") and not pr.valid("910", "62.5", "7", "4"))
+
 # ---- the window: each box only where it makes sense
 import tkinter as tk
 root = tk.Tk(); root.withdraw()
@@ -142,6 +157,25 @@ with mock.patch.object(w, "find_pio", lambda: None), mock.patch.object(ota, "uf2
     ok("...nothing to set up on a KISS modem", st(win.setup_check) == "disabled")
     pick("Heltec_v3", "repeater"); win.wifi_ota.set(True); win.update_fields()
     ok("updating over Wi-Fi: no USB port and no setup (the node keeps its settings)", st(win.entries["port"]) == "disabled" and st(win.setup_check) == "disabled")
+    win.destroy()
+store = {}
+class API2(API):
+    def get(self, k, d=None): return store.get(k, d)
+    def set(self, k, v): store[k] = v
+with mock.patch.object(w, "find_pio", lambda: None), mock.patch.object(ota, "uf2_drives", lambda: []), \
+        mock.patch("tkinter.simpledialog.askstring", lambda *a, **k: "South BC 909"), mock.patch("tkinter.messagebox.showerror", lambda *a, **k: None):
+    win = w.FirmwareBuilderWindow(API2())
+    vals = list(win.preset_box.cget("values"))
+    i = next(n for n, v in enumerate(vals) if v.startswith("Canada: South BC (909)"))
+    win.preset_box.current(i); win._use_preset()
+    ok("choosing a preset fills in the radio", [win.v[k].get() for k in ("freq", "bw", "sf", "cr")] == ["909.000", "62.5", "7", "5"])
+    win.save_preset()
+    ok("'Save as preset...' keeps the radio under your name (saved with the addon)", store.get("radio_presets") == [["South BC 909", "909.000", "62.5", "7", "5"]]
+       and any(v.startswith("My: South BC 909") for v in win.preset_box.cget("values")), store)
+    win.preset_box.set(pr.label(("My: South BC 909", "909.000", "62.5", "7", "5"))); win.remove_preset()
+    ok("'Remove' deletes one of your own presets", store.get("radio_presets") == [])
+    win.v["freq"].set("2000"); win.save_preset()
+    ok("an impossible radio is not saved", store.get("radio_presets") == [])
     win.destroy()
 root.destroy()
 print("\nALL PASSED" if not fails else f"\n{len(fails)} FAILED: {fails}")

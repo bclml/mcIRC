@@ -20,6 +20,7 @@ import meshcore_io as io
 from ntools_common import BG, MONO, ToolWindow
 import ntools_fwbuild as fb
 from ntools_fwsteps import OtaSteps
+from ntools_presets import PresetSteps
 import ntools_ota as ota
 
 BUILD_ROOT = os.path.join(os.environ.get("LOCALAPPDATA") or os.path.expanduser("~"), "mcIRC", "firmware-build")      # not in OneDrive: builds are big
@@ -213,11 +214,11 @@ def best_env(envs, model):
     return next((e for e in envs if e.lower().startswith(key + "_companion")), next(iter(envs), None))
 
 
-class FirmwareBuilderWindow(ToolWindow, OtaSteps):
+class FirmwareBuilderWindow(ToolWindow, OtaSteps, PresetSteps):
     """Firmware builder: a companion (any mix of USB, Bluetooth and Wi-Fi), a repeater, a room server or a sensor, built from MeshCore's
     source for the chosen release and flashed over USB."""
     def __init__(self, api):
-        super().__init__(api, "Firmware builder", "820x860", choose_node=False)
+        super().__init__(api, "Firmware builder", "980x880", choose_node=False)
         self.pio = find_pio()
         self.boards, self.tag, self.ip, self.flashed = {}, "", None, None
         f = tk.Frame(self, bg=BG)
@@ -267,6 +268,7 @@ class FirmwareBuilderWindow(ToolWindow, OtaSteps):
         for label, key, w in (("MHz", "freq", 8), ("BW kHz", "bw", 6), ("SF", "sf", 3), ("CR", "cr", 3)):
             tk.Entry(rf, textvariable=self.v[key], width=w).pack(side="left")
             tk.Label(rf, text=label + "  ", bg=BG).pack(side="left")
+        self.preset_widgets(rf)                                                # official, local-group and your own radio presets
         tk.Checkbutton(f, text="Erase the board first (recommended when it runs other firmware - it resets the board's settings, channels and contacts)",
                        variable=self.erase, bg=BG).grid(row=r + 1, column=0, columnspan=4, sticky="w")
         self.ota_widgets(f, r + 2)

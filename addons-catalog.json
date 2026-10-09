@@ -77,9 +77,9 @@
     {
       "name": "node_tools",
       "title": "MeshCore tools",
-      "version": "1.3.0",
+      "version": "1.3.1",
       "author": "bclml",
-      "description": "Node clock, channel manager, backup & restore, firmware check / update, firmware builder - companion with USB / Bluetooth / Wi-Fi, repeater, room server, sensor, observer (MQTT), repeater bridges, terminal chat, KISS modem; OTAFIX bootloader for nRF52 boards and updates over Wi-Fi for ESP32 (needs PlatformIO), path tools, packet monitor, radio health graphs and coverage map - in the Addons menu. Updating firmware from mcIRC needs 'pip install esptool'.",
+      "description": "Node clock, channel manager, backup & restore, firmware check / update, firmware builder - companion with USB / Bluetooth / Wi-Fi, repeater, room server, sensor, observer (MQTT), repeater bridges, terminal chat, KISS modem; OTAFIX bootloader for nRF52 boards and updates over Wi-Fi for ESP32, radio presets (MeshCore's list, local groups' and your own) (needs PlatformIO), path tools, packet monitor, radio health graphs and coverage map - in the Addons menu. Updating firmware from mcIRC needs 'pip install esptool'.",
       "path": "packages/node_tools",
       "tested": "2026-10-04 with app 1.5.4 on a Heltec V3 (fw 1.16.0): every read checked on the real node; writing (clock set, channel edits, restore, firmware update) checked with a stand-in radio only. Wi-Fi firmware: built and flashed to a real Heltec V4 with app 2.0.1 (v1.17.1, found on the network, name and radio written over Wi-Fi). Firmware builder (1.2.0, app 2.0.7): a Heltec V3 companion with USB + Bluetooth + Wi-Fi built with PlatformIO (not flashed yet); repeater, room server and sensor choices checked by tests only"
     },

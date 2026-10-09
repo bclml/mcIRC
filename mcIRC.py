@@ -41,6 +41,7 @@ import gui_rescue
 import gui_channels
 import gui_multinode
 import gui_nodestatus
+import gui_nicks
 import gui_sources
 import gui_sounds
 from gui_private import PrivateMixin
@@ -252,7 +253,8 @@ class QueueLogHandler(logging.Handler):
         if "[DIAGNOSTIC]" not in msg: self.q.put(("log", record.levelno, msg))
 
 
-class App(PrivateMixin, MenusMixin, CommandsMixin, gui_multinode.MultiNodeMixin, gui_nodestatus.NodeStatusMixin, gui_channels.ChannelsMixin):
+class App(PrivateMixin, MenusMixin, CommandsMixin, gui_multinode.MultiNodeMixin, gui_nodestatus.NodeStatusMixin, gui_channels.ChannelsMixin,
+          gui_nicks.NickListMixin):
     def __init__(self, root, demo=False):
         self.root, self.demo, self.connected = root, demo, False
         first_start = not os.path.exists(SETTINGS_PATH)          # a brand-new setup: the default addons get installed below
@@ -431,6 +433,7 @@ class App(PrivateMixin, MenusMixin, CommandsMixin, gui_multinode.MultiNodeMixin,
         log = WindowLog(name, self.log_dir) if self.settings["log_enabled"] else None
         w = ChatWindow(self.stack, name, topic, self.font, log, self.settings["log_history"], self.theme, self.settings["node_name"])
         w.frame.grid(row=0, column=0, sticky="nsew")
+        self.restore_nicks(w)                                                                # the names it had before a restart
         gui_platform.bind_right_click(w.text, lambda e, w=w: self._chat_menu(e, w))      # right-click a name in the text
         self.windows[name] = w
         base, node_label = gui_multinode.split_tag(name)
@@ -460,12 +463,6 @@ class App(PrivateMixin, MenusMixin, CommandsMixin, gui_multinode.MultiNodeMixin,
         self.root.title(f"mcIRC - [{name}]")
         self._style_buttons()
         self.entry.focus_set()
-
-    def refresh_nicks(self):
-        self.nicklist.delete(0, "end")
-        if self.current is self.status or self.current is None: return
-        self.nicklist.insert("end", "@" + self.settings["node_name"])
-        for n in sorted(self.current.nicks - {self.settings["node_name"]}, key=str.lower): self.nicklist.insert("end", n)
 
     def mark_unread(self, w, level):
         if w is self.current: return
@@ -510,7 +507,7 @@ class App(PrivateMixin, MenusMixin, CommandsMixin, gui_multinode.MultiNodeMixin,
         parts = self.stamp() + [("<", "text"), (nick, (nick_tag, "nickname")), ("> ", "text")] + body
         if suffix: parts.append((f"  {suffix}", "meta"))
         mark = w.write(parts)
-        w.nicks.add(nick)
+        self.remember_nick(w, nick)
         self.mark_unread(w, "msg")
         if w is self.current: self.refresh_nicks()
         if not mine:
@@ -577,6 +574,7 @@ class App(PrivateMixin, MenusMixin, CommandsMixin, gui_multinode.MultiNodeMixin,
                              + (f", {r['removed_from_radio']} removed from radio" if r["removed_from_radio"] else "") + ")", "info")
         if r["on_radio"] >= cap * 0.95:
             self.status_line(f"*** Radio contact list nearly full ({r['on_radio']}/{cap}) - new nodes may not fit on the radio, but they are still remembered here.", "warn")
+        self.favorites_from_node(r.get("favorites"))
         self.resolve_key_windows()
         if self.map_win is not None and self.map_win.winfo_exists(): self.map_win.refresh(force=True)
 
@@ -840,7 +838,7 @@ class App(PrivateMixin, MenusMixin, CommandsMixin, gui_multinode.MultiNodeMixin,
     def nick_dblclick(self, _):
         sel = self.nicklist.curselection()   # double-click a name = open a private window, like mIRC
         if not sel: return
-        nick = self.nicklist.get(sel[0]).lstrip("@")
+        nick = self.nick_at(sel[0])
         if nick != self.settings["node_name"]:
             node = self.nodes.find_by_name(nick)
             self.open_query(nick, node["public_key"] if node else None)

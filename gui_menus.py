@@ -63,13 +63,18 @@ class MenusMixin:
         if i < 0 or not self.nicklist.bbox(i): return
         self.nicklist.selection_clear(0, "end")
         self.nicklist.selection_set(i)
-        nick = self.nicklist.get(i).lstrip("@")
+        nick = self.nick_at(i)
         m = tk.Menu(self.root, tearoff=0)
         if nick != self.settings["node_name"]:
             m.add_command(label=f"Private message with {nick}", command=lambda: self._open_query_by_name(nick))
+            self._favorite_entry(m, nick)
             m.add_command(label="Node info...", command=lambda: self.node_info(name=nick))
         m.add_command(label="Copy name", command=lambda: (self.root.clipboard_clear(), self.root.clipboard_append(nick)))
         m.tk_popup(e.x_root, e.y_root)
+
+    def _favorite_entry(self, m, nick):
+        m.add_command(label=f"Remove {nick} from favorites" if self.is_favorite(nick) else f"Add {nick} as favorite",
+                      command=lambda: self.toggle_favorite(nick))
 
     def _chat_menu(self, e, w):
         """Right-click on a name in the chat text: private chat, reply, node info, and the fun commands addons provide."""
@@ -90,6 +95,7 @@ class MenusMixin:
         if not mine:
             m.add_command(label=f"Private message with {nick}", command=lambda: self._open_query_by_name(nick))
             m.add_command(label=f"Reply to {nick}", command=lambda: self._reply_to(nick))
+            self._favorite_entry(m, nick)
             self._name_actions_menu(m, nick)
             m.add_separator()
             m.add_command(label="Node info...", command=lambda: self.node_info(name=nick))

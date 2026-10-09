@@ -195,4 +195,5 @@ def sync(store, prune_days, also_remove_from_radio):
     new, on_radio = store.update_from_radio(contacts, now, min_seen=now - prune_days * 86400 if prune_days > 0 else 0)
     gone = store.prune(prune_days, now)
     removed_radio = remove_from_radio([k for k, was in gone if was]) if (also_remove_from_radio and gone) else 0
-    return {"new": new, "on_radio": on_radio, "pruned": len(gone), "removed_from_radio": removed_radio, **store.stats()}
+    starred = {(c.get("adv_name") or "").strip() for c in contacts.values() if int(c.get("flags") or 0) & 1} - {""}     # the node's favorites (stars)
+    return {"new": new, "on_radio": on_radio, "pruned": len(gone), "removed_from_radio": removed_radio, "favorites": starred, **store.stats()}

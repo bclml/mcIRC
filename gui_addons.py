@@ -389,9 +389,13 @@ class AddonManager:
     def _call(self, name, hook, *args):
         inst = self.loaded[name][0]
         try: return getattr(inst, hook)(*args)
-        except Exception:
+        except Exception as e:
             tb = traceback.format_exc().strip().splitlines()
-            self.app.status_line(f"*** Addon '{name}' error in {hook}(): {tb[-1]}", "error")
+            self.app.status_line(f"*** Addon '{name}' error in {hook}(): {tb[-1]}", "error", log=False)
+            try:
+                import gui_diag            # where in the code; an on_message error's own text could quote a message, so not that one's
+                gui_diag.failure("addon", f"'{name}' {getattr(inst, 'version', '')} {hook}()", e, with_message=hook != "on_message")
+            except Exception: pass
 
     def nodes_for(self, name):
         """The nodes an addon works on: 'main' and/or extra node labels (its settings window, 'Use on these nodes')."""

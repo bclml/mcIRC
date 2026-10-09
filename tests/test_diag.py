@@ -71,6 +71,36 @@ ok("device line remembered", "Heltec V3" in d.device())
 d.ports_snapshot()
 ok("serial ports listed", "[ports]" in open(d.current_path(), encoding="utf-8").read())
 
+# ---- the newer parts: tool failures, addon errors, firmware builds, packet upload
+def boom(msg):
+    try: raise ValueError(msg)
+    except ValueError as e: return e
+d.failure("tools", "Firmware builder: Uploading the firmware over Wi-Fi", boom("the node refused the firmware (400: MD5 parameter missing)"))
+d.failure("addon", "'fun_bot' 1.0.7 on_message()", boom(SECRET_TEXT), with_message=False)
+text = open(d.current_path(), encoding="utf-8").read()
+ok("a tool's failure is logged with the error and where in the code", "[tools] Firmware builder: Uploading the firmware over Wi-Fi failed: ValueError: the node refused"
+   in text and "test_diag.py:" in text and " boom" in text, text[-600:])
+ok("...an addon's on_message error: where, but never its text (it could quote a message)", "[addon] 'fun_bot' 1.0.7 on_message() failed: ValueError" in text
+   and SECRET_TEXT not in text)
+import inspect
+ok("the report names the versions the new features depend on", all(p in inspect.getsource(d._environment) for p in ("paho-mqtt", "platformio", "esptool", "Pillow")))
+sys.path[:0] = [os.path.join(ROOT, "packages", "node_tools"), os.path.join(ROOT, "packages", "packet_upload")]
+import ntools_wifi, ntools_common
+hidden = ntools_wifi.hide_wifi(["Compiling... -DWIFI_SSID='\"HomeNet5\"' -DWIFI_PWD='\"hunter2pass\"'", "error: x"], "HomeNet5", "hunter2pass")
+ok("a failed build's last lines go to the log with the Wi-Fi name and password blanked", "HomeNet5" not in "".join(hidden) and "hunter2pass" not in "".join(hidden)
+   and "<wifi>" in hidden[0], hidden)
+ntools_common.diag_failure("Firmware builder: Building", boom("PlatformIO stopped (upload) - see above"))
+ok("MeshCore tools failures reach the log (they used to show only in the tool's window)",
+   "[tools] Firmware builder: Building failed: ValueError: PlatformIO stopped" in open(d.current_path(), encoding="utf-8").read())
+import packet_upload as pu
+logged = []
+inst = pu.Addon(types.SimpleNamespace(log=lambda t, level="info": logged.append((t, level))))
+inst.notes = {}
+inst.trouble("mqtt1.example.net", "refused the connection (Connection Refused: not authorised.)")
+inst.trouble("mqtt1.example.net", "refused the connection (Connection Refused: not authorised.)")
+ok("packet upload: a server refusing the log-in is said in Status (and so logged) - once an hour, not on every retry",
+   logged == [("Packet upload: mqtt1.example.net refused the connection (Connection Refused: not authorised.).", "warn")], logged)
+
 # ---- crash hook
 try: raise ValueError("boom in callback")
 except ValueError: d.tk_exception(*sys.exc_info())

@@ -16,6 +16,22 @@ def run(*args, timeout=40, retries=1):
     return f"{r.stdout}\n{r.stderr}"
 
 
+def diag(text):
+    """A line in mcIRC's troubleshooting log (Help > Report a bug).  Never raises; older mcIRC without it: nothing."""
+    try:
+        import gui_diag
+        gui_diag.event("tools", text)
+    except Exception: pass
+
+
+def diag_failure(what, exc):
+    try:
+        import gui_diag
+        if hasattr(gui_diag, "failure"): gui_diag.failure("tools", what, exc)
+        else: gui_diag.event("tools", f"{what} failed: {type(exc).__name__}: {exc}")
+    except Exception: pass
+
+
 def docs(text):
     """Every JSON value in meshcli's output, in order."""
     return list(io.json_docs(text))
@@ -81,7 +97,9 @@ class ToolWindow(tk.Toplevel):
         def finished(r):
             self.busy = False
             if not self.winfo_exists(): return
-            if isinstance(r, Exception): return self.say(f"{label} failed: {io.explain_failure(str(r))}", error=True)
+            if isinstance(r, Exception):
+                diag_failure(f"{self.title()}: {label}", r)
+                return self.say(f"{label} failed: {io.explain_failure(str(r))}", error=True)
             self.say(label + " - done.")
             if done: done(r)
         def work():

@@ -103,6 +103,18 @@ def event(category, text):
         pass
 
 
+def failure(category, what, exc, with_message=True):
+    """'<what> failed: <ErrorType>: <message>' plus where in the code (file:line in function, innermost last).  with_message=False leaves the
+    error's own text out - for errors that could carry message text (an addon's on_message)."""
+    try:
+        frames = traceback.extract_tb(exc.__traceback__)[-6:] if exc.__traceback__ else []
+        where = " < ".join(f"{os.path.basename(f.filename)}:{f.lineno} {f.name}" for f in reversed(frames))
+        msg = f": {str(exc)[:300]}" if with_message and str(exc) else ""
+        event(category, f"{what} failed: {type(exc).__name__}{msg}" + (f"  [at {where}]" if where else ""))
+    except Exception:
+        pass
+
+
 def count(name, n=1):
     _state["counts"][name] = _state["counts"].get(name, 0) + n
 
@@ -124,7 +136,7 @@ def _environment():
     lines = [f"Python {platform.python_version()} ({platform.architecture()[0]}), {platform.platform()}"]
     try:
         import importlib.metadata as md
-        for pkg in ("meshcore-cli", "meshcore", "pyserial", "bleak", "tkintermapview", "requests"):
+        for pkg in ("meshcore-cli", "meshcore", "pyserial", "bleak", "tkintermapview", "requests", "paho-mqtt", "platformio", "esptool", "Pillow"):
             try: lines.append(f"{pkg} {md.version(pkg)}")
             except Exception: pass
     except Exception:

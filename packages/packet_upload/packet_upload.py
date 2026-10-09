@@ -31,9 +31,17 @@ def new_client(transport, client_id):
     except AttributeError: return mqtt.Client(client_id=client_id, transport=transport, clean_session=True)                     # paho 1.x
 
 
+def connack_text(rc):
+    try:
+        import paho.mqtt.client as mqtt
+        return mqtt.connack_string(rc)
+    except Exception:
+        return f"code {rc}"
+
+
 class Addon(AddonBase):
     title = "Packet upload"
-    version = "1.1.0"
+    version = "1.1.1"
     author = "mcIRC (after agessaman/meshcore-packet-capture)"
     description = ("Sends the packets your node hears to the community packet analyzers you pick (28 around the world) so they can "
                    "map coverage and routes. Logs in with a token your node signs. Off until you switch it on, pick analyzers and give your area code.")
@@ -75,6 +83,14 @@ class Addon(AddonBase):
         if show: show("Packet upload - status", self.status_text)
         else: self.api.notice(self.status_text())
 
+    def trouble(self, server, what):
+        """A server refused or dropped us: said in Status (and so in the troubleshooting log) - at most once an hour per server and kind."""
+        key = (server, what.split(" (")[0])
+        now = time.time()
+        if now - self.notes.get(key, 0) < 3600: return
+        self.notes[key] = now
+        self.api.log(f"Packet upload: {server} {what}.", "warn")
+
     def on_unload(self): self.stop()
     def on_disconnect(self): self.stop()
 
@@ -112,7 +128,13 @@ class Addon(AddonBase):
             exp = now + ttl
         status = lambda s: json.dumps(core.status_message(s, me["name"], me["key"], me["model"], me["fw"], me["radio"]))
         c.will_set(core.topic(area, me["key"], "status"), status("offline"), qos=0, retain=True)
-        c.on_connect = lambda cl, ud, flags, rc: cl.publish(core.topic(area, me["key"], "status"), status("online"), qos=0, retain=True) if rc == 0 else None
+        def on_connect(cl, ud, flags, rc):
+            if rc == 0: return cl.publish(core.topic(area, me["key"], "status"), status("online"), qos=0, retain=True)
+            self.trouble(server, f"refused the connection ({connack_text(rc)})")     # e.g. the log-in token wasn't accepted
+
+        def on_disconnect(cl, ud, rc):
+            if rc != 0: self.trouble(server, f"dropped the connection (code {rc}); reconnecting")
+        c.on_connect, c.on_disconnect = on_connect, on_disconnect
         c.reconnect_delay_set(min_delay=2, max_delay=120)
         c.connect_async(server, port, keepalive=55)
         c.loop_start()

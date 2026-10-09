@@ -17,7 +17,7 @@ import zipfile
 from tkinter import messagebox, ttk
 
 import meshcore_io as io
-from ntools_common import BG, MONO, ToolWindow
+from ntools_common import BG, MONO, ToolWindow, diag
 import ntools_fwbuild as fb
 from ntools_fwsteps import OtaSteps
 from ntools_presets import PresetSteps
@@ -68,6 +68,16 @@ def get_source(tag, log=print):
         z.extractall(BUILD_ROOT)
     if os.path.abspath(os.path.join(BUILD_ROOT, top)) != os.path.abspath(d): os.replace(os.path.join(BUILD_ROOT, top), d)
     return d
+
+
+def hide_wifi(lines, ssid, pwd):
+    """Build output for the troubleshooting log, with the Wi-Fi name and password blanked out wherever they appear."""
+    out = []
+    for l in lines:
+        for s in (pwd, ssid):
+            if s: l = l.replace(s, "<wifi>")
+        out.append(l)
+    return out
 
 
 def wifi_envs(src):
@@ -391,6 +401,8 @@ class FirmwareBuilderWindow(ToolWindow, OtaSteps, PresetSteps):
                                    + "\n\nDon't unplug it until this says it is done.", parent=self): return
         if io.CONNECTION_ARGS and io.CONNECTION_ARGS[:2] == ["-s", port]: self.api.disconnect()        # mcIRC must let go of that port
         erase, others, otafix = self.erase.get(), set(ids) - {port}, self.otafix.get()
+        diag(f"Firmware builder: {kind} {'+'.join(conns)} for {board} ({self.tag}, env {env}); erase={erase}, otafix={otafix}, "
+             f"setup={'yes' if setup else 'no'}, radio={'set' if all(radio) else 'unchanged'}")
         def work():
             mac = None
             with open(ini_path, encoding="utf-8") as f: original = f.read()
@@ -401,16 +413,20 @@ class FirmwareBuilderWindow(ToolWindow, OtaSteps, PresetSteps):
                     self.write(f"\n== pio run -e {env} -t {target} --upload-port {port}\n")
                     p = subprocess.Popen(self.pio + ["run", "-e", env, "-t", target, "--upload-port", port], cwd=source_dir(self.tag),
                                          stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, errors="replace", creationflags=io.NO_WINDOW)
+                    tail = []
                     for line in p.stdout:
                         self.write(line)
+                        tail = (tail + [line.rstrip()])[-25:]
                         m = MAC_RE.search(line)
                         if m: mac = m.group(1)                                  # the board's address on the Wi-Fi, used to find it below
                     if p.wait() != 0:
+                        diag(f"PlatformIO {target} failed (exit {p.returncode}); its last lines:\n" + "\n".join(hide_wifi(tail, ssid, pwd)))
                         self.write("\nIf it could not open or connect to the port: hold PRG (BOOT), tap RST, let go of PRG, choose the board's "
                                    "(new) USB port and press Build and flash again.\n")
                         raise RuntimeError(f"PlatformIO stopped ({target}) - see above")
             finally:
                 with open(ini_path, "w", encoding="utf-8") as f: f.write(original)      # the password is not left in the build files
+            diag(f"Firmware builder: flashed {env}")
             self.write("\nFlashed. If the board doesn't restart by itself (boards like the Heltec V4), tap its RST button now.\n")
             result = {"kind": kind, "conns": conns, "ip": None, "port": None}
             if "wifi" in conns:

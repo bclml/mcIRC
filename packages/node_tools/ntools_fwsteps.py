@@ -8,7 +8,7 @@ from tkinter import messagebox
 import meshcore_io as io
 import ntools_fwbuild as fb
 import ntools_ota as ota
-from ntools_common import BG
+from ntools_common import BG, diag
 
 
 class OtaSteps:
@@ -101,7 +101,11 @@ class OtaSteps:
         while not ota.uf2_drives():
             if time.time() - t0 > 60: raise RuntimeError("no UF2 drive appeared - double-press the board's reset button and try again")
             time.sleep(1)
-        if ota.install_otafix(ota.uf2_drives()[0], log=self.write) == "installed":
+        info = ota.read_info(ota.uf2_drives()[0])
+        diag(f"OTAFIX: UF2 drive found - {info.get('model') or '?'} / {info.get('board_id') or '?'} / {info.get('bootloader', '')[:60]}")
+        result = ota.install_otafix(ota.uf2_drives()[0], log=self.write)
+        diag(f"OTAFIX: {result}")
+        if result == "installed":
             self.write("Bootloader installed. Waiting for the board to restart...\n")
             time.sleep(10)
 
@@ -120,8 +124,13 @@ class OtaSteps:
                 self.write(f"\n== pio run -e {env}\n")
                 p = subprocess.Popen(self.pio + ["run", "-e", env], cwd=src, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                                      text=True, errors="replace", creationflags=io.NO_WINDOW)
-                for line in p.stdout: self.write(line)
-                if p.wait() != 0: raise RuntimeError("PlatformIO stopped - see above")
+                tail = []
+                for line in p.stdout:
+                    self.write(line)
+                    tail = (tail + [line.rstrip()])[-25:]
+                if p.wait() != 0:
+                    diag(f"PlatformIO build of {env} (for Wi-Fi OTA) failed (exit {p.returncode}); its last lines:%s" % "".join(chr(10) + l for l in tail))
+                    raise RuntimeError("PlatformIO stopped - see above")
             finally:
                 with open(ini_path, "w", encoding="utf-8") as f: f.write(original)
             return ota.firmware_bin(src, env)
@@ -138,6 +147,7 @@ class OtaSteps:
         self.job("Looking for the node in update mode", ota.ota_identity, lambda ident: self._confirm_upload(path, ident, kind), need_radio=False)
 
     def _confirm_upload(self, path, ident, kind):
+        diag(f"Wi-Fi OTA: node in update mode: {ident.get('hardware', '?')}, {kind}")
         if not messagebox.askyesno("Firmware builder", f"The node in update mode is:\n\n    {ident.get('id', '?')}\n\nSend the new firmware to it?", parent=self):
             return
         last = [0]
@@ -147,6 +157,7 @@ class OtaSteps:
             if pct >= last[0] + 10: last[0] = pct; self.write(f"  {pct}%\n")
 
         def done(answer):
+            diag(f"Wi-Fi OTA: the node answered '{str(answer)[:40]}'")
             self.write(f"\nThe node answered '{answer}' and restarts with the new firmware. Put this PC back on your own Wi-Fi.\n"
                        "Then log in to the node again, check 'clock' (and 'clock sync' if it's wrong) and 'ver'.\n")
             if kind in fb.AFTER: self.write(fb.AFTER[kind] + "\n")

@@ -24,7 +24,7 @@ jobs:
           - { os: ubuntu-latest, python: "3.13" }
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: ${{ matrix.python }}
       - name: Tk and a virtual display (Linux)

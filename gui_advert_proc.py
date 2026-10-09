@@ -9,7 +9,8 @@ up), then stays connected for --seconds and prints one JSON line per event as it
     {"event": "new_contact", "contact": {...}}            an advert waiting for approval (the node is in manual-add mode)
     {"event": "rx", "path": "a1b2", "size": 1, "type": "GRP_TXT", "route": "FLOOD", "snr": 7.5, "rssi": -80, "length": 60}
                                                           a packet the radio heard: its kind, route and signal only - an ADVERT
-                                                          (public, signed by its node) also with "packet": its bytes in hex (map uploader)
+                                                          (public, signed by its node) also with "packet": its bytes in hex (map uploader);
+                                                          with --raw every packet has it (packet upload addon: as heard on the air)
     {"event": "error", "message": "..."}
 
 No message text is ever read or printed here."""
@@ -55,7 +56,7 @@ async def run(a):
 
     async def on_rx(ev):                    # every packet the radio heard: kind, route, signal - never message content (map signals, packet monitor)
         d = ev.payload or {}
-        extra = {"packet": d.get("payload", "")} if d.get("payload_typename") == "ADVERT" else {}     # adverts are public and signed: whole
+        extra = {"packet": d.get("payload", "")} if (a.raw or d.get("payload_typename") == "ADVERT") else {}   # adverts (public, signed) - all with --raw
         out(event="rx", path=d.get("path", "") if d.get("path_len", 0) > 0 else "", size=d.get("path_hash_size", 1), type=d.get("payload_typename", ""),
             route=d.get("route_typename", ""), snr=d.get("snr"), rssi=d.get("rssi"), length=d.get("payload_length"), **extra)
     if getattr(EventType, "RX_LOG_DATA", None) is not None: mc.subscribe(EventType.RX_LOG_DATA, on_rx)      # (older meshcore libraries don't have it)
@@ -77,6 +78,7 @@ def main():
     ap.add_argument("--port", type=int, default=5000)
     ap.add_argument("--lastmod", type=int, default=0)
     ap.add_argument("--seconds", type=int, default=10)
+    ap.add_argument("--raw", action="store_true", help="every packet whole (as heard on the air) - only while an addon asks for it")
     a = ap.parse_args()
     try:
         asyncio.run(run(a))

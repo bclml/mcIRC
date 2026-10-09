@@ -1,0 +1,6 @@
+{
+  "repo": "agessaman/meshcore-packet-capture",
+  "ref": "c011f4ef2d4767d3b6d20163f463e87041569d88",
+  "release": "v2.2.0",
+  "note": "packet_upload sends what this project sends (message formats, log-in token, server presets): a new upstream version means checking for format or server changes."
+}

@@ -68,6 +68,7 @@ class AdvertWatcher:
         started = time.time()
         try:
             cmd = [sys.executable, HELPER] + helper_args(io.CONNECTION_ARGS) + ["--lastmod", str(self.app.nodes.max_lastmod()), "--seconds", str(int(seconds))]
+            if getattr(self.app, "raw_packets_wanted", None): cmd.append("--raw")     # an addon wants every packet whole (api.want_raw_packets)
             try:
                 self.proc = proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, creationflags=io.NO_WINDOW, **io.UTF8)
             except OSError as e:

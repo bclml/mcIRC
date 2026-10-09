@@ -47,7 +47,12 @@ class MenusMixin:
         if iid.startswith("node:"):                                    # a node group ('Node 915'): remove it by hand
             label = iid[5:]
             m = tk.Menu(self.root, tearoff=0)
+            m.add_command(label=f"Join channel on node '{label}'...", command=lambda: self.ask_join(label))
             m.add_command(label=f"Remove node '{label}'...", command=lambda: self.remove_node(label))
+            m.tk_popup(e.x_root, e.y_root)
+        elif iid == "Channels":
+            m = tk.Menu(self.root, tearoff=0)
+            m.add_command(label="Join channel...", command=self.ask_join)
             m.tk_popup(e.x_root, e.y_root)
         elif iid in self.windows:
             self.select_window(iid)
@@ -146,6 +151,8 @@ class MenusMixin:
         m.add_command(label="Open log file", command=lambda: self._open_log(w))
         if w is not self.status:
             m.add_separator()
+            if name.split(" [")[0].startswith("#"):
+                m.add_command(label="Leave channel (remove from node)...", command=lambda: self.part_channel(name))
             m.add_command(label="Close", command=lambda: self.close_window(name))
         m.tk_popup(x, y)
 

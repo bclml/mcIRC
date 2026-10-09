@@ -162,6 +162,24 @@ class AddonAPI:
         for e in self._actions:
             if e in getattr(self._app, "name_actions", []): self._app.name_actions.remove(e)
         self._actions = []
+    def want_raw_packets(self, on=True):
+        """While on, on_packet() gets every packet the main radio hears whole ('packet', hex - as it went over the air), not only adverts."""
+        wanted = self._app.__dict__.setdefault("raw_packets_wanted", set())
+        (wanted.add if on else wanted.discard)(self.name)
+    def sign_with_node(self, data):
+        """The main node signs `data` (bytes) with its own key - the private key never leaves the radio.  -> signature hex.
+        Blocks for a few seconds and holds the radio: call it from run_background.  Needs a USB or Wi-Fi connection."""
+        import json as _json, subprocess, sys
+        import gui_adverts
+        import meshcore_io as io
+        args = gui_adverts.helper_args(io.CONNECTION_ARGS)
+        if args is None: raise RuntimeError("signing needs a USB or Wi-Fi connection to the node")
+        with io.MESH_LOCK:
+            r = subprocess.run([sys.executable, os.path.join(BASE_DIR, "gui_sign_proc.py")] + args + ["--hex", bytes(data).hex()],
+                               capture_output=True, text=True, timeout=90, creationflags=io.NO_WINDOW, cwd=BASE_DIR)
+        res = next((_json.loads(l) for l in reversed(r.stdout.splitlines()) if l.startswith("{")), {"error": r.stderr.strip()[-200:] or "no answer"})
+        if "signature" not in res: raise RuntimeError(f"the node did not sign: {res.get('error')}")
+        return res["signature"]
     def has_command(self, name):
         """True when a /command of that name exists already (another addon's, or mcIRC's own)."""
         return name.lower() in self._app.commands
@@ -228,6 +246,7 @@ class AddonAPI:
             if e in getattr(self._app, "bot_helps", []): self._app.bot_helps.remove(e)
         self._helps = []
         self.clear_name_actions()
+        self.want_raw_packets(False)
         for c in self._commands: self._app.commands.pop(c, None)
         for label in self._menu:
             try: self._app.addon_menu.delete(label)
@@ -338,7 +357,7 @@ import hashlib, json, shutil, time, zipfile
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 STATE_PATH = os.path.join(ADDON_DIR, ".installed.json")
 PROTECTED_ROOT = {"mcIRC.py", "meshcore_gui.py", "meshcore_io.py"}
-PIP_MODULES = {"requests": "requests", "gtfs-realtime-bindings": "google.transit", "pyserial": "serial", "tkintermapview": "tkintermapview"}
+PIP_MODULES = {"paho-mqtt": "paho.mqtt", "requests": "requests", "gtfs-realtime-bindings": "google.transit", "pyserial": "serial", "tkintermapview": "tkintermapview"}
 
 
 def vkey(version):

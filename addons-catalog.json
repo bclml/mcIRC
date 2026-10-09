@@ -96,6 +96,20 @@
         "release": ""
       },
       "tested": "2026-10-08 with app 2.0.4: decoding, signature checks, replay rules and the request covered by tests with real Ed25519-signed adverts; signing on a real node and a real upload not yet tried"
+    },
+    {
+      "name": "packet_upload",
+      "title": "Packet upload",
+      "version": "1.0.0",
+      "author": "bclml (after agessaman/meshcore-packet-capture, MIT)",
+      "description": "Sends the packets your node hears to community packet analyzers (MeshCore.ca, CascadiaMesh, LetsMesh and 14 more) over MQTT, on mcIRC's own connection, so they can map coverage and routes. Logs in with a token your node signs - no password, the private key never leaves the radio. Off until you switch it on and give your area code. Needs 'pip install paho-mqtt'.",
+      "path": "packages/packet_upload",
+      "upstream": {
+        "repo": "agessaman/meshcore-packet-capture",
+        "ref": "c011f4ef2d4767d3b6d20163f463e87041569d88",
+        "release": "v2.2.0"
+      },
+      "tested": "2026-10-08 with app 2.0.5: messages, packet hashes and the log-in token checked against the upstream uploader's own code; MQTT connection, token renewal and offline status covered by tests with a fake broker; not yet tried against a real analyzer"
     }
   ]
 }

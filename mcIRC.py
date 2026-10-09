@@ -38,6 +38,7 @@ import gui_themes
 import gui_skins
 import gui_echo
 import gui_rescue
+import gui_channels
 import gui_multinode
 import gui_nodestatus
 import gui_sources
@@ -49,7 +50,8 @@ from gui_commands import CommandsMixin, CommandPopup
 HELP = ["Commands:", "  /help            this list", "  /list            channel list", "  /map             open the map",
         "  /nodes           node list", "  /addons          addon manager", "  /options         open Options",
         "  /connect         connect to the node", "  /disconnect      disconnect", "  /freq <MHz>      change the radio frequency (node reboots)",
-        "  /clear           clear this window", "  /join <#name>    switch to a channel window", "  /query <name>    open a private window with a node",
+        "  /clear           clear this window", "  /join <#name>    join a channel (added to your node if needed; private: /join #name <key>)",
+        "  /part [#name]    leave a channel (removed from your node)", "  /query <name>    open a private window with a node",
         "  /msg <name> <text>  send a direct message", "  /close           close this private window", "  /quit            exit",
         "Type text in a channel window to send it to that channel (max ~120 characters).",
         "Type / to see every command as you type. In a private window with a repeater or room server, MeshCore CLI commands",
@@ -250,7 +252,7 @@ class QueueLogHandler(logging.Handler):
         if "[DIAGNOSTIC]" not in msg: self.q.put(("log", record.levelno, msg))
 
 
-class App(PrivateMixin, MenusMixin, CommandsMixin, gui_multinode.MultiNodeMixin, gui_nodestatus.NodeStatusMixin):
+class App(PrivateMixin, MenusMixin, CommandsMixin, gui_multinode.MultiNodeMixin, gui_nodestatus.NodeStatusMixin, gui_channels.ChannelsMixin):
     def __init__(self, root, demo=False):
         self.root, self.demo, self.connected = root, demo, False
         first_start = not os.path.exists(SETTINGS_PATH)          # a brand-new setup: the default addons get installed below
@@ -940,10 +942,10 @@ class App(PrivateMixin, MenusMixin, CommandsMixin, gui_multinode.MultiNodeMixin,
         elif cmd == "close":
             if self.current and self.current.name.startswith("@"): self.close_window(self.current.name)
             else: self.status_line("*** /close only closes private (@name) windows.", "warn")
-        elif cmd == "join":
-            name = "#" + arg.lstrip("#") if arg.lower() != "public" else "Public"
-            if name in self.windows: self.select_window(name)
-            else: self.status_line(f"*** No such channel: {arg}", "error")
+        elif cmd == "join": self.join_channel(arg, self._node_of(self.current))       # adds it to the node when it isn't there yet
+        elif cmd == "part":
+            if arg: self.part_channel(gui_multinode.tag("#" + arg.lstrip("#"), self._node_of(self.current)) if self._node_of(self.current) else "#" + arg.lstrip("#"))
+            else: self.part_channel()
         elif cmd == "freq" and arg:
             if not self.require_connection(): return
             def work():

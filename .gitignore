@@ -34,3 +34,10 @@ uv.lock.bak
 
 # Windows shortcuts made by "Create desktop shortcut" hold this PC's paths
 *.lnk
+
+# Helper modules that installed addons put next to the app (their source is in packages/)
+/dolphin_*.py
+/funbot_*.py
+/meshbot_common.py
+/ntools_*.py
+/wxbot_*.py

@@ -37,6 +37,16 @@ w2 = app.add_window("#nicktest", "test")
 ok("after a restart the window has its names again", w2.nicks >= {"Thalestr", "Altair", "MossNode"}, w2.nicks)
 app.select_window("#nicktest")
 
+# the chat history shown at start: its writers are in the list too (even from before names were saved)
+import tempfile
+logdir = tempfile.mkdtemp()
+with open(os.path.join(logdir, "#histtest.txt"), "w", encoding="utf-8") as f:
+    f.write("Session Start: Fri Oct 09 09:00:00 2026\n[09:24] <Thalestr  M1> Pinecone storm  (SNR 12.0, 5 hops)\n"
+            "[09:42] <Altair > Back from Kenya  (SNR 11.75, 5 hops)\n[09:50] *** [weather] a <status> line > not a name\n")
+hw = mcIRC.ChatWindow(root, "#histtest", "t", app.font, mcIRC.WindowLog("#histtest", logdir), 50)
+ok("names from the chat history shown at start are in the list", hw.nicks == {"Thalestr  M1", "Altair "}, hw.nicks)
+hw.frame.destroy()
+
 # favorite from the right-click menu: not connected here, so only in mcIRC
 app.connected = False
 app.nodes = SimpleNamespace(find_by_name=lambda n: {"public_key": "ab" * 32} if n == "MossNode" else None, all=lambda: [])

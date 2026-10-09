@@ -65,7 +65,7 @@ def world_cup(arg, get=mc.http_json):
 
 class Addon(AddonBase):
     title = "Fun bot"
-    version = "1.0.5"
+    version = "1.0.6"
     author = "mcIRC"
     description = ("dice, roll, magic8, joke, dadjoke, hacker, catfact and wc (World Cup scores and tables) - each switched on for the channels you "
                    "choose. Off until you switch it on.")
@@ -80,7 +80,7 @@ class Addon(AddonBase):
 
     def help_for(self, channel, dm=False):
         """For 'bothelp': the commands answered in this channel right now."""
-        if not self.api.get("enabled", False) or (dm and not self.api.get("answer_dm", False)): return []
+        if not self.api.get("enabled", False) or (dm and not self.api.get("answer_dm", True)): return []
         p = self.api.get("prefix", "")
         return [p + self.USAGE.get(c, c) for c in COMMANDS if self.where(c) and (dm or mc.channel_ok(channel, self.where(c)))]
 
@@ -96,7 +96,7 @@ class Addon(AddonBase):
         if not hit: return
         cmd, arg = hit
         if msg.get("dm"):
-            if not (self.api.get("answer_dm", False) and self.where(cmd)): return
+            if not (self.api.get("answer_dm", True) and self.where(cmd)): return
         elif not mc.channel_ok(msg.get("channel", ""), self.where(cmd)):
             return
         if not self.limiter.allow(msg.get("nick", "?")): return
@@ -128,7 +128,7 @@ class Addon(AddonBase):
         bg = parent["bg"]
         f = tk.Frame(parent, bg=bg)
         self.v_on = tk.BooleanVar(value=self.api.get("enabled", False))
-        self.v_dm = tk.BooleanVar(value=self.api.get("answer_dm", False))
+        self.v_dm = tk.BooleanVar(value=self.api.get("answer_dm", True))
         self.v_prefix = tk.StringVar(value=self.api.get("prefix", ""))
         self.v_cool = tk.StringVar(value=str(self.api.get("cooldown", 20)))
         tk.Checkbutton(f, text="Answer fun commands (sends to the mesh when someone asks)", variable=self.v_on, bg=bg).pack(anchor="w")

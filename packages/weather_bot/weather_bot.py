@@ -27,7 +27,7 @@ COMMANDS = {        # command: (what it does, needs a place)
     "contact": "who runs this bot",
 }
 ALIASES = {"solarforecast": "sf", "overhead": "airplanes"}
-VERSION = "1.0.6"
+VERSION = "1.0.7"
 
 
 class Addon(AddonBase):
@@ -49,7 +49,7 @@ class Addon(AddonBase):
     def help_for(self, channel, dm=False):
         """For 'bothelp': the commands answered in this channel right now."""
         if not self.cfg("enabled", False): return []
-        if (dm and not self.cfg("answer_dm", False)) or (not dm and not mc.channel_ok(channel, self.channels())): return []
+        if (dm and not self.cfg("answer_dm", True)) or (not dm and not mc.channel_ok(channel, self.channels())): return []
         p, off = self.cfg("prefix", ""), self.cfg("off", [])
         return [p + self.USAGE.get(c, c) for c in COMMANDS if c not in off]
 
@@ -73,7 +73,7 @@ class Addon(AddonBase):
     def on_message(self, msg):
         if not self.cfg("enabled", False): return
         if msg.get("dm"):
-            if not self.cfg("answer_dm", False): return
+            if not self.cfg("answer_dm", True): return
         elif not mc.channel_ok(msg.get("channel", ""), self.channels()):
             return
         cmds = set(COMMANDS) | set(ALIASES)
@@ -164,7 +164,7 @@ class Addon(AddonBase):
     def build_options(self, parent):
         bg = parent["bg"]
         f = tk.Frame(parent, bg=bg)
-        self.v = {"enabled": tk.BooleanVar(value=self.cfg("enabled", False)), "answer_dm": tk.BooleanVar(value=self.cfg("answer_dm", False)),
+        self.v = {"enabled": tk.BooleanVar(value=self.cfg("enabled", False)), "answer_dm": tk.BooleanVar(value=self.cfg("answer_dm", True)),
                   "rain_alerts": tk.BooleanVar(value=self.cfg("rain_alerts", False)), "channels": tk.StringVar(value=self.cfg("channels", "#weather")),
                   "home": tk.StringVar(value=self.cfg("home", "")), "prefix": tk.StringVar(value=self.cfg("prefix", "")),
                   "units": tk.StringVar(value=self.cfg("units", "metric")), "contact": tk.StringVar(value=self.cfg("contact", "")),

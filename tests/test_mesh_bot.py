@@ -34,7 +34,25 @@ log = [{"t": now - 2, "type": "GRP_TXT", "path": "a1b2", "size": 1, "length": 40
        {"t": now + 2, "type": "GRP_TXT", "path": "d4", "size": 1, "length": 77}]
 ok("the path of a message: the channel packet heard just before it with that many hops", cmds.path_of_message(log, now, 2) == ["A1", "B2"])
 ok("multitest: the different paths the same message took", cmds.multitest_text(cmds.multitest_paths(log, now)) == "Multitest: 3 paths: A1>B2, A1, direct", cmds.multitest_text(cmds.multitest_paths(log, now)))
-ok("stats: packets, nodes heard and the busiest channel in 24 h", cmds.stats_text(log, NODES, {"#weather": 9, "Public": 3}, now).startswith("Mesh 24h: 5 packets heard (GRP_TXT 4, ADVERT 1)") and "busiest channel #weather" in cmds.stats_text(log, NODES, {"#weather": 9, "Public": 3}, now))
+HEARD = [{"lastmod": now - 3600}, {"lastmod": now - 90000}, {"lastmod": 0, "last_advert": now + 9 ** 9}, {"lastmod": now - 60, "last_advert": now - 10 ** 8}]
+st = cmds.stats_text(log, HEARD, {"#weather": 9, "Public": 3, "#joke": 1, "#test": 1}, now, now - 3600)
+ok("stats: nodes YOUR node heard in 24 h (by its own clock, not the nodes' often-wrong ones)", st.startswith("Mesh 24h: 2 nodes heard;"), st)
+ok("...the busiest channels with their counts, and the packets since mcIRC started", "busiest channels #weather 9, Public 3, #joke 1 msgs" in st
+   and "5 packets heard since " in st, st)
+import tempfile, datetime as _dt
+ld = tempfile.mkdtemp()
+day = _dt.datetime.fromtimestamp(now) - _dt.timedelta(hours=2)
+def stamp(d): return d.strftime("%a %b %d %H:%M:%S %Y")
+with open(os.path.join(ld, "#drivebc.txt"), "w", encoding="utf-8") as f:
+    f.write(f"Session Start: {stamp(day - _dt.timedelta(days=3))}\n[{day:%H:%M}] <Old> three days ago\n"
+            f"Session Start: {stamp(day)}\n[{day:%H:%M}] <Ann> hi\n[{day:%H:%M}] <mcIRC> my own line\n[{(day + _dt.timedelta(minutes=30)):%H:%M}] <Bob> yo\n")
+with open(os.path.join(ld, "Public [wifi 1].txt"), "w", encoding="utf-8") as f:
+    f.write(f"Session Start: {stamp(day)}\n" + f"[{day:%H:%M}] <X> on the other node\n" * 50)
+for fn in ("Status.txt", "@Ann.txt"):
+    with open(os.path.join(ld, fn), "w", encoding="utf-8") as f: f.write(f"Session Start: {stamp(day)}\n[{day:%H:%M}] <Ann> private\n")
+act = cmds.channel_activity(ld, now, "mcIRC")
+ok("channel activity comes from the chat logs: last 24 h only, not our own lines, not private chats or Status", act == {"#drivebc": 2}, act)
+ok("...another node's channels ('[wifi 1]': another mesh) are left out", "Public [wifi 1]" not in act)
 ok("hello: a robot greeting that names the bot", cmds.hello("mcIRC", 9, random.Random(1)).endswith("I'm mcIRC.") and cmds.is_greeting("Hi!") and not cmds.is_greeting("hi there everyone"))
 SB = {"events": [{"competitions": [{"status": {"type": {"state": "in", "shortDetail": "2nd 10:00"}},
                                     "competitors": [{"homeAway": "home", "score": "2", "team": {"abbreviation": "VAN", "displayName": "Vancouver Canucks", "name": "Canucks"}},
@@ -66,6 +84,10 @@ bot.on_message(msg("ping", ch="Public", nick="Cy"))
 ok("...only in the channels it is on for", sent == [])
 bot.on_message(msg("hey", nick="Di"))
 ok("hello answers greetings", sent and "I'm" in sent[0][1], sent)
+sent.clear(); bot.limiter.last_by = {}; bot.limiter.last_any = 0
+bot.on_message(dict(msg("ver", nick="Ed"), channel="@Ed", dm=True))
+ok("private messages are answered by default, and 'ver' works like 'version' (also 'stat', 'fw')", sent and "Mesh bot" in sent[0][1]
+   and mod.ALIASES == {"stat": "stats", "fw": "firmware", "ver": "version"}, sent)
 ok("bothelp lists what's on in a channel", bot.help_for("#bot-van") == ["ping", "hello", "version"] and bot.help_for("Public") == ["version"], (bot.help_for("#bot-van"), bot.help_for("Public")))
 # greeter
 sent.clear()

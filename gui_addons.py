@@ -287,6 +287,10 @@ class AddonAPI:
         """Packets the radio heard recently: [{t, type, route, path, size, snr, rssi, length}] (no content)."""
         return list(getattr(self._app, "packet_log", []))
     @property
+    def log_dir(self):
+        """The folder with the chat logs (<window>.txt) - read them, never write there."""
+        return getattr(self._app, "log_dir", None)
+    @property
     def signal_traces(self): return list(getattr(self._app, "signal_traces", []))
     def bot_names(self):
         """Titles of the loaded addons that registered bot commands (whether or not they answer anywhere right now)."""

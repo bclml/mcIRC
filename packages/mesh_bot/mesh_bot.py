@@ -20,13 +20,14 @@ COMMANDS = {
     "version": "which bot this is",
     "firmware": "the newest MeshCore firmware versions (read-only)",
 }
+ALIASES = {"stat": "stats", "fw": "firmware", "ver": "version"}     # other words people type for the same command
 USAGE = {"path": "path [a1,b2]", "prefix": "prefix <A1|free>", "sports": "sports [team|league]"}
 GREETING = cmds.DEFAULT_GREETINGS[0]                     # the single greeting of 1.0.x (kept when someone had changed it)
 
 
 class Addon(AddonBase):
     title = "Mesh bot"
-    version = "1.2.0"
+    version = "1.2.2"
     author = "mcIRC (commands after agessaman/meshcore-bot, MIT)"
     description = ("ping, hello, path, prefix, multitest, stats, sports and version - the meshcore-bot commands mcIRC's other bots don't have - "
                    "plus its greeter for newcomers (a random greeting from your list), each switched on for the channels you choose. Off until you switch it on.")
@@ -37,6 +38,7 @@ class Addon(AddonBase):
     def on_load(self):
         self.limiter = mc.Limiter(per_user=int(self.api.get("cooldown", 20)), gap=5)
         self.counts = {}
+        self.loaded_at = time.time()
         if hasattr(self.api, "add_bot_commands"): self.api.add_bot_commands(self.help_for)
 
     def on_unload(self): pass
@@ -44,7 +46,7 @@ class Addon(AddonBase):
     def where(self, cmd): return mc.channel_list(self.api.get("channels", {}).get(cmd, ""))
 
     def help_for(self, channel, dm=False):
-        if not self.api.get("enabled", False) or (dm and not self.api.get("answer_dm", False)): return []
+        if not self.api.get("enabled", False) or (dm and not self.api.get("answer_dm", True)): return []
         p = self.api.get("prefix", "")
         return [p + USAGE.get(c, c) for c in COMMANDS if self.where(c) and (dm or mc.channel_ok(channel, self.where(c)))]
 
@@ -56,11 +58,11 @@ class Addon(AddonBase):
         if not self.api.get("enabled", False): return
         self.greet(msg)
         text = msg.get("text", "")
-        hit = ("hello", "") if cmds.is_greeting(text) else mc.parse_command(text, set(COMMANDS) - {"hello"}, self.api.get("prefix", ""))
+        hit = ("hello", "") if cmds.is_greeting(text) else mc.parse_command(text, (set(COMMANDS) | set(ALIASES)) - {"hello"}, self.api.get("prefix", ""))
         if not hit: return
-        cmd, arg = hit
+        cmd, arg = ALIASES.get(hit[0], hit[0]), hit[1]
         if msg.get("dm"):
-            if not (self.api.get("answer_dm", False) and self.where(cmd)): return
+            if not (self.api.get("answer_dm", True) and self.where(cmd)): return
         elif not mc.channel_ok(ch, self.where(cmd)): return
         if not self.limiter.allow(msg.get("nick", "?")): return
         now = time.time()
@@ -88,7 +90,11 @@ class Addon(AddonBase):
             if hopsl is None: return "No path information for your message (try: path a1,b2)" if hops else "Direct connection (0 hops)"
             return cmds.path_text(nodes, hopsl)
         if cmd == "prefix": return cmds.prefix_text(self.api.nodes.all(), arg, now)
-        if cmd == "stats": return cmds.stats_text(self.api.packet_log, self.api.nodes.all(), self.counts, now)
+        if cmd == "stats":
+            log = self.api.packet_log
+            since = min([self.loaded_at] + [p.get("t", now) for p in log[:1]])
+            activity = cmds.channel_activity(getattr(self.api, "log_dir", None) or "logs", now, self.bot_name() if self.bot_name() != "a bot" else "")
+            return cmds.stats_text(log, self.api.nodes.all(), activity, now, since)
         if cmd == "version":
             try:
                 import gui_update
@@ -133,7 +139,7 @@ class Addon(AddonBase):
         bg = parent["bg"]
         f = tk.Frame(parent, bg=bg)
         g = self.api.get
-        self.v_on, self.v_dm = tk.BooleanVar(value=g("enabled", False)), tk.BooleanVar(value=g("answer_dm", False))
+        self.v_on, self.v_dm = tk.BooleanVar(value=g("enabled", False)), tk.BooleanVar(value=g("answer_dm", True))
         self.v_prefix, self.v_cool = tk.StringVar(value=g("prefix", "")), tk.StringVar(value=str(g("cooldown", 20)))
         self.v_teams = tk.StringVar(value=g("sports_teams", "canucks, whitecaps, seahawks, mariners, kraken"))
         self.v_greet_ch = tk.StringVar(value=g("greet_channels", ""))

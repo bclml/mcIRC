@@ -115,14 +115,55 @@ def multitest_text(paths):
 
 
 # ---- stats (24 h) ----
-def stats_text(packet_log, nodes, channel_counts, now):
-    day = [p for p in packet_log if now - p.get("t", 0) <= 86400]
-    kinds = {}
-    for p in day: kinds[p.get("type") or "?"] = kinds.get(p.get("type") or "?", 0) + 1
-    top = ", ".join(f"{k} {v}" for k, v in sorted(kinds.items(), key=lambda kv: -kv[1])[:3])
-    heard = sum(1 for n in nodes if now - (n.get("last_seen") or 0) <= 86400)
-    busiest = max(channel_counts.items(), key=lambda kv: kv[1])[0] if channel_counts else "-"
-    return f"Mesh 24h: {len(day)} packets heard" + (f" ({top})" if top else "") + f", {heard} nodes heard, busiest channel {busiest}"
+SESSION_RE = re.compile(r"^Session (?:Start|Close): \w{3} (\w{3} \d{2} \d{2}:\d{2}:\d{2} \d{4})")
+LINE_RE = re.compile(r"^\[(\d{2}):(\d{2})\] <([^>]*)>")
+
+
+def channel_activity(log_dir, now, me="", seconds=86400, tail_bytes=512 * 1024, with_extra=False):
+    """{channel: messages in the last `seconds`} from mcIRC's chat logs (logs/<channel>.txt): every '<name> ...' line except our own.
+    The logs carry the date on their 'Session Start' lines and only the time on each message, so the date is followed through the file."""
+    import os
+    out = {}
+    try: files = os.listdir(log_dir)
+    except OSError: return out
+    for fn in files:
+        if not fn.endswith(".txt") or fn.endswith(".old.txt") or fn.startswith(("@", "Status", "gui_")): continue
+        if " [" in fn and not with_extra: continue                     # 'Public [wifi 1]': another node, another mesh
+        try:
+            with open(os.path.join(log_dir, fn), "rb") as f:
+                f.seek(0, 2); f.seek(max(0, f.tell() - tail_bytes))
+                lines = f.read().decode("utf-8", "replace").splitlines()
+        except OSError:
+            continue
+        day, last, n = None, None, 0
+        for line in lines:
+            m = SESSION_RE.match(line)
+            if m:
+                try: day = datetime.datetime.strptime(m.group(1), "%b %d %H:%M:%S %Y")
+                except ValueError: day = None
+                last = day
+                continue
+            m = LINE_RE.match(line)
+            if not m or day is None: continue
+            t = day.replace(hour=int(m.group(1)), minute=int(m.group(2)), second=0)
+            while last and t < last - datetime.timedelta(minutes=5): t += datetime.timedelta(days=1)    # past midnight in the same session
+            last = t
+            if m.group(3) != me and 0 <= now - t.timestamp() <= seconds: n += 1
+        if n: out[fn[:-4]] = n
+    return out
+
+
+def stats_text(packet_log, nodes, activity, now, since=None):
+    """Last 24 h: nodes your node heard, the busiest channels (from the chat logs); packets the listener heard since mcIRC started.
+    'Heard' goes by lastmod - stamped by YOUR node's clock when it hears a node's advert or path - not by the advert's own time: many
+    nodes' clocks are wrong (some by years)."""
+    adv = sum(1 for n in nodes if 0 <= now - (n.get("lastmod") or 0) <= 86400)
+    busy = sorted(activity.items(), key=lambda kv: -kv[1])[:3]
+    chans = ", ".join(f"{c} {k}" for c, k in busy) if busy else "none"
+    pk = [p for p in packet_log if now - p.get("t", 0) <= 86400]
+    start = since if since and now - since < 86400 else None
+    pk_part = f"{len(pk)} packets heard" + (f" since {datetime.datetime.fromtimestamp(start).strftime('%H:%M')}" if start else "")
+    return f"Mesh 24h: {adv} nodes heard; busiest channels {chans} msgs; {pk_part}"
 
 
 # ---- sports (ESPN, like meshcore-bot) ----

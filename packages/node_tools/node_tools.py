@@ -15,9 +15,9 @@ HEALTH_CSV = os.path.join(BASE_DIR, "logs", "radio_health.csv")
 
 class Addon(AddonBase):
     title = "MeshCore tools"
-    version = "1.1.1"
+    version = "1.2.0"
     author = "mcIRC"
-    description = ("Node clock, channel manager, backup & restore, firmware check / update, Wi-Fi firmware builder, path tools, packet monitor, "
+    description = ("Node clock, channel manager, backup & restore, firmware check / update, firmware builder (companion with USB / Bluetooth / Wi-Fi, repeater, room server, sensor), path tools, packet monitor, "
                    "radio health graphs and coverage map - in the Addons menu.")
     tick_seconds = 30
 
@@ -25,7 +25,7 @@ class Addon(AddonBase):
         self.windows, self.samples, self._last_sample = {}, [], 0.0
         for label, key in (("Node clock...", "clock"), ("Channels...", "channels"), ("Backup and restore...", "backup"), ("Firmware...", "firmware"),
                            ("Path tools...", "paths"), ("Packet monitor...", "monitor"), ("Radio health...", "health"), ("Coverage...", "coverage"),
-                           ("Wi-Fi firmware...", "wifi")):
+                           ("Firmware builder...", "wifi")):
             self.api.add_menu_item(label, lambda k=key: self.open(k))
         self.api.add_map_layer("Coverage: strong (SNR >= 5)", lambda: self.coverage(True), "#2e7d32")
         self.api.add_map_layer("Coverage: weak (SNR < 5)", lambda: self.coverage(False), "#ef6c00")

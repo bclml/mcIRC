@@ -1,5 +1,6 @@
-"""Tool 9 - Wi-Fi firmware: build MeshCore's companion firmware with YOUR Wi-Fi name and password in it (MeshCore publishes no ready-made Wi-Fi
-files, the Wi-Fi details are compiled in), flash it over USB, find the board's IP address, and add it to Options > More nodes.
+"""Tool 9 - Firmware builder: build MeshCore firmware from its source - a companion with any mix of USB, Bluetooth and Wi-Fi (YOUR Wi-Fi name
+and password compiled in: MeshCore publishes no ready-made Wi-Fi files), a repeater, a room server or a sensor - flash it over USB, find a
+Wi-Fi board's IP address, and add it to Options > More nodes.
 Needs PlatformIO.  The Wi-Fi password is only written into the build's settings file for the build and put back right after; it is never saved
 by mcIRC.  (It does end up inside the firmware itself - that is how MeshCore's Wi-Fi firmware works.)"""
 import io as _io
@@ -17,6 +18,7 @@ from tkinter import messagebox, ttk
 
 import meshcore_io as io
 from ntools_common import BG, MONO, ToolWindow
+import ntools_fwbuild as fb
 
 BUILD_ROOT = os.path.join(os.environ.get("LOCALAPPDATA") or os.path.expanduser("~"), "mcIRC", "firmware-build")      # not in OneDrive: builds are big
 ENV_RE = re.compile(r"^\[env:([A-Za-z0-9_\-]+_companion_radio_wifi)\]\s*$", re.M)
@@ -200,46 +202,72 @@ def best_env(envs, model):
     return next((e for e in envs if e.lower().startswith(key + "_companion")), next(iter(envs), None))
 
 
-class WifiFirmwareWindow(ToolWindow):
+class FirmwareBuilderWindow(ToolWindow):
+    """Firmware builder: a companion (any mix of USB, Bluetooth and Wi-Fi), a repeater, a room server or a sensor, built from MeshCore's
+    source for the chosen release and flashed over USB."""
     def __init__(self, api):
-        super().__init__(api, "Wi-Fi firmware", "760x620", choose_node=False)
+        super().__init__(api, "Firmware builder", "780x680", choose_node=False)
         self.pio = find_pio()
+        self.boards, self.tag, self.ip, self.flashed = {}, "", None, None
         f = tk.Frame(self, bg=BG)
         f.pack(fill="x", padx=10, pady=8)
-        tk.Label(f, bg=BG, justify="left", wraplength=720, text=(
-            "Builds MeshCore's companion firmware for Wi-Fi with your network's name and password in it, flashes it to a board on USB, finds "
-            "its IP address and adds it to Options > More nodes. The first build downloads PlatformIO's ESP32 tools and takes several minutes.")).grid(row=0, column=0, columnspan=4, sticky="w")
-        self.v = {k: tk.StringVar(value=v) for k, v in (("ver", ""), ("env", ""), ("port", ""), ("ssid", ""), ("pwd", ""), ("label", "wifi"), ("freq", ""), ("bw", ""), ("sf", ""), ("cr", ""))}
+        tk.Label(f, bg=BG, justify="left", wraplength=740, text=(
+            "Builds MeshCore firmware from its source and flashes it to a board on USB. A companion can have USB, Bluetooth and Wi-Fi all "
+            "waiting at once (one used at a time). The first build downloads PlatformIO's tools and takes several minutes.")).grid(row=0, column=0, columnspan=4, sticky="w")
+        self.v = {k: tk.StringVar(value=v) for k, v in (("ver", ""), ("board", ""), ("port", ""), ("ssid", ""), ("pwd", ""), ("label", "node2"),
+                                                          ("freq", ""), ("bw", ""), ("sf", ""), ("cr", ""), ("kind", "companion"))}
+        self.conn = {c: tk.BooleanVar(value=(c == "wifi")) for c in ("usb", "ble", "wifi")}
         self.erase = tk.BooleanVar(value=True)
-        rows = (("Firmware version:", "ver"), ("Board:", "env"), ("USB port:", "port"), ("Wi-Fi name:", "ssid"), ("Wi-Fi password:", "pwd"), ("Label in mcIRC:", "label"))
-        for r, (label, key) in enumerate(rows, start=1):
+        r = 1
+        for label, key in (("Firmware version:", "ver"), ("Board:", "board")):
             tk.Label(f, text=label, bg=BG).grid(row=r, column=0, sticky="w", pady=2)
-            if key in ("ver", "env", "port"):
-                w = ttk.Combobox(f, textvariable=self.v[key], width=44, state="readonly" if key == "ver" else "normal",
-                                 postcommand=self.refresh_ports if key == "port" else None)          # the list is fresh each time it opens
-                setattr(self, key + "_box", w)
+            box = ttk.Combobox(f, textvariable=self.v[key], width=44, state="readonly")
+            box.grid(row=r, column=1, columnspan=3, sticky="w", pady=2)
+            setattr(self, key + "_box", box)
+            r += 1
+        tk.Label(f, text="Firmware:", bg=BG).grid(row=r, column=0, sticky="nw", pady=2)
+        kf = tk.Frame(f, bg=BG); kf.grid(row=r, column=1, columnspan=3, sticky="w")
+        self.kind_buttons = {}
+        for k, title in fb.TYPE_TITLES.items():
+            self.kind_buttons[k] = tk.Radiobutton(kf, text=title, value=k, variable=self.v["kind"], bg=BG, command=self.update_fields)
+            self.kind_buttons[k].pack(anchor="w")
+        r += 1
+        tk.Label(f, text="Connections:", bg=BG).grid(row=r, column=0, sticky="w", pady=2)
+        cf = tk.Frame(f, bg=BG); cf.grid(row=r, column=1, columnspan=3, sticky="w")
+        self.conn_checks = {}
+        for c, title in fb.CONN_TITLES.items():
+            self.conn_checks[c] = tk.Checkbutton(cf, text=title, variable=self.conn[c], bg=BG, command=self.update_fields)
+            self.conn_checks[c].pack(side="left", padx=(0, 10))
+        tk.Label(cf, text="(all ticked ones wait on the node; one is used at a time)", bg=BG, fg="#555").pack(side="left")
+        r += 1
+        self.entries = {}
+        for label, key in (("USB port:", "port"), ("Wi-Fi name:", "ssid"), ("Wi-Fi password:", "pwd"), ("Label in mcIRC:", "label")):
+            tk.Label(f, text=label, bg=BG).grid(row=r, column=0, sticky="w", pady=2)
+            if key == "port":
+                w = ttk.Combobox(f, textvariable=self.v[key], width=44, postcommand=self.refresh_ports)
+                self.port_box = w
             else:
                 w = tk.Entry(f, textvariable=self.v[key], width=34, show="*" if key == "pwd" else "")
             w.grid(row=r, column=1, columnspan=3, sticky="w", pady=2)
-        r = len(rows) + 1
+            self.entries[key] = w
+            r += 1
         tk.Label(f, text="Radio (optional):", bg=BG).grid(row=r, column=0, sticky="w")
-        rf = tk.Frame(f, bg=BG)
-        rf.grid(row=r, column=1, columnspan=3, sticky="w")
+        rf = tk.Frame(f, bg=BG); rf.grid(row=r, column=1, columnspan=3, sticky="w")
         for label, key, w in (("MHz", "freq", 8), ("BW kHz", "bw", 6), ("SF", "sf", 3), ("CR", "cr", 3)):
             tk.Entry(rf, textvariable=self.v[key], width=w).pack(side="left")
             tk.Label(rf, text=label + "  ", bg=BG).pack(side="left")
-        tk.Checkbutton(f, text="Erase the board first (recommended when it runs other firmware - it resets the board's settings)", variable=self.erase,
-                       bg=BG).grid(row=r + 1, column=0, columnspan=4, sticky="w")
-        b = tk.Frame(self, bg=BG)
-        b.pack(fill="x", padx=10)
+        tk.Checkbutton(f, text="Erase the board first (recommended when it runs other firmware - it resets the board's settings, channels and contacts)",
+                       variable=self.erase, bg=BG).grid(row=r + 1, column=0, columnspan=4, sticky="w")
+        b = tk.Frame(self, bg=BG); b.pack(fill="x", padx=10)
         self.go_btn = ttk.Button(b, text="Build and flash", command=self.go)
         self.go_btn.pack(side="left")
         self.add_btn = ttk.Button(b, text="Add to More nodes", command=self.add_node, state="disabled")
         self.add_btn.pack(side="left", padx=6)
-        self.out = tk.Text(self, font=MONO, bg="#101010", fg="#d0ffd0", height=16)
+        self.out = tk.Text(self, font=MONO, bg="#101010", fg="#d0ffd0", height=14)
         self.out.pack(fill="both", expand=True, padx=10, pady=8)
-        self.ip = None
+        self.board_box.bind("<<ComboboxSelected>>", lambda e: self.update_fields())
         self.refresh_ports()
+        self.update_fields()
         if not self.pio:
             self.write("PlatformIO is not installed. Install it (pip install platformio, or the VS Code PlatformIO extension), then reopen this window.\n")
             self.go_btn.config(state="disabled")
@@ -258,6 +286,19 @@ class WifiFirmwareWindow(ToolWindow):
             ports = []
         self.port_box.config(values=ports)
 
+    def update_fields(self):
+        """Only what the choice needs: the connections for a companion (and only those the board has), the Wi-Fi details for Wi-Fi."""
+        envs = self.boards.get(self.v["board"].get(), {})
+        for k, rb in self.kind_buttons.items():
+            rb.config(state="normal" if not envs or k in envs or (k == "companion" and fb.connections(envs)) else "disabled")
+        companion = self.v["kind"].get() == "companion"
+        have = fb.connections(envs) if envs else ["usb", "ble", "wifi"]
+        for c, cb in self.conn_checks.items():
+            cb.config(state="normal" if companion and c in have else "disabled")
+            if c not in have: self.conn[c].set(False)
+        wifi = companion and self.conn["wifi"].get()
+        for key in ("ssid", "pwd"): self.entries[key].config(state="normal" if wifi else "disabled")
+
     def load_versions(self):
         import ntools_firmware
         def done(rels):
@@ -268,39 +309,45 @@ class WifiFirmwareWindow(ToolWindow):
 
     def load_boards(self):
         tag = "companion-" + self.v["ver"].get()
-        self.envs = {}
         self.go_btn.config(state="disabled")
-        def done(envs):
-            self.tag, self.envs = tag, envs
+        def done(found):
+            self.tag, self.boards = tag, found
             self.go_btn.config(state="normal")
-            self.env_box.config(values=list(self.envs))
-            if self.v["env"].get() not in self.envs: self.v["env"].set(best_env(self.envs, "Heltec V3") or "")
-            self.write(f"{len(self.envs)} boards have a Wi-Fi build in {self.tag}.\n")
-        self.job(f"Getting the MeshCore source ({tag})", lambda: wifi_envs(get_source(tag, self.write)), done, need_radio=False)
+            self.board_box.config(values=list(found))
+            if self.v["board"].get() not in found: self.v["board"].set(fb.best_board(found, "Heltec v3") or "")
+            self.update_fields()
+            self.write(f"{len(found)} boards in MeshCore {self.tag}.\n")
+        self.job(f"Getting the MeshCore source ({tag})", lambda: fb.boards(get_source(tag, self.write)), done, need_radio=False)
 
     def go(self):
-        env, port = self.v["env"].get().strip(), self.v["port"].get().strip()
+        board, port, kind = self.v["board"].get(), self.v["port"].get().strip(), self.v["kind"].get()
+        conns = [c for c, v in self.conn.items() if v.get()] if kind == "companion" else []
+        ssid = pwd = ""
         try:
-            ssid, pwd = check_wifi_text(self.v["ssid"].get(), "name"), check_wifi_text(self.v["pwd"].get(), "password")
+            if "wifi" in conns:
+                ssid, pwd = check_wifi_text(self.v["ssid"].get(), "name"), check_wifi_text(self.v["pwd"].get(), "password")
+            if board not in self.boards or not port: raise ValueError("Choose the board and its USB port.")
+            env, ini_path, make = fb.plan(self.boards[board], kind, conns, ssid, pwd)
         except ValueError as e:
-            return messagebox.showerror("Wi-Fi firmware", str(e), parent=self)
-        if env not in getattr(self, "envs", {}) or not port: return messagebox.showerror("Wi-Fi firmware", "Choose the board and its USB port.", parent=self)
+            return messagebox.showerror("Firmware builder", str(e), parent=self)
         radio = [self.v[k].get().strip() for k in ("freq", "bw", "sf", "cr")]
-        if any(radio) and not all(radio): return messagebox.showerror("Wi-Fi firmware", "Fill in all four radio values, or none.", parent=self)
+        if any(radio) and not all(radio): return messagebox.showerror("Firmware builder", "Fill in all four radio values, or none.", parent=self)
         ids = port_ids()
         if needs_boot_buttons(ids.get(port)):
-            return messagebox.showinfo("Wi-Fi firmware", f"The board on {port} has to be put in download mode by hand first:\n\n"
+            return messagebox.showinfo("Firmware builder", f"The board on {port} has to be put in download mode by hand first:\n\n"
                                        "hold its PRG (BOOT) button, tap RST, let go of PRG.\n\nIt then shows up on a new USB port - choose that one "
                                        "in 'USB port' and press Build and flash again.", parent=self)
-        if not messagebox.askyesno("Wi-Fi firmware", f"Flash {env} to the board on {port}?" + ("\nThe board is erased first (its settings are reset)." if self.erase.get() else "")
+        what = fb.TYPE_TITLES[kind].split(" (")[0] + (f" ({', '.join(fb.CONN_TITLES[c] for c in conns)})" if conns else "")
+        if not messagebox.askyesno("Firmware builder", f"Flash {what} for {board} to the board on {port}?"
+                                   + ("\nThe board is erased first (its settings, channels and contacts are reset)." if self.erase.get() else "")
                                    + "\n\nDon't unplug it until this says it is done.", parent=self): return
         if io.CONNECTION_ARGS and io.CONNECTION_ARGS[:2] == ["-s", port]: self.api.disconnect()        # mcIRC must let go of that port
-        ini_path, erase = self.envs[env], self.erase.get()
+        erase, others = self.erase.get(), set(ids) - {port}
         def work():
             mac = None
             with open(ini_path, encoding="utf-8") as f: original = f.read()
             try:
-                with open(ini_path, "w", encoding="utf-8") as f: f.write(with_wifi(original, env, ssid, pwd))
+                with open(ini_path, "w", encoding="utf-8") as f: f.write(make(original))
                 for target in (["erase"] if erase else []) + ["upload"]:
                     self.write(f"\n== pio run -e {env} -t {target} --upload-port {port}\n")
                     p = subprocess.Popen(self.pio + ["run", "-e", env, "-t", target, "--upload-port", port], cwd=source_dir(self.tag),
@@ -315,27 +362,43 @@ class WifiFirmwareWindow(ToolWindow):
                         raise RuntimeError(f"PlatformIO stopped ({target}) - see above")
             finally:
                 with open(ini_path, "w", encoding="utf-8") as f: f.write(original)      # the password is not left in the build files
-            self.write("\nFlashed. If the board doesn't restart by itself (boards like the Heltec V4), tap its RST button now.\n"
-                       f"Looking for it on your network{' (' + mac + ')' if mac else ''} - joining the Wi-Fi can take a couple of minutes")
-            ip = find_on_lan(mac, seconds=240, log=self.write) if mac else None
-            if ip and all(radio):                                               # the Wi-Fi firmware is controlled over Wi-Fi, not USB
+            self.write("\nFlashed. If the board doesn't restart by itself (boards like the Heltec V4), tap its RST button now.\n")
+            result = {"kind": kind, "conns": conns, "ip": None, "port": None}
+            if "wifi" in conns:
+                self.write(f"Looking for it on your network{' (' + mac + ')' if mac else ''} - joining the Wi-Fi can take a couple of minutes")
+                result["ip"] = find_on_lan(mac, seconds=240, log=self.write) if mac else None
+            if "usb" in conns:
+                time.sleep(4)
+                now = port_ids()
+                result["port"] = port if port in now else next((p for p in now if p not in others), port)
+            target = ["-t", result["ip"], "-p", "5000"] if result["ip"] else ["-s", result["port"]] if result["port"] else None
+            if kind == "companion" and target and all(radio):
                 self.write(f"\nSetting the radio: {','.join(radio)} MHz/kHz/SF/CR\n")
-                io.execute_mesh_command(["-t", ip, "-p", "5000", "set", "radio", ",".join(radio)], timeout=40, retries=2, lock=io._MeshLock())
-                io.execute_mesh_command(["-t", ip, "-p", "5000", "reboot"], timeout=20, retries=0, lock=io._MeshLock())
-            return ip
-        def done(ip):
-            self.ip = ip
-            if ip:
-                self.write(f"\nThe board is on your Wi-Fi at {ip} (port 5000). Give it a fixed address in your router so it keeps it.\n")
-                self.add_btn.config(state="normal")
-            else:
-                self.write("\nFlashed, but the board was not found on this PC's network. Check your router's client list for an 'esp32s3' / Espressif "
-                           "device (a guest Wi-Fi is usually kept apart from your PC), then add it in Options > More nodes (Wi-Fi, port 5000).\n")
+                io.execute_mesh_command(target + ["set", "radio", ",".join(radio)], timeout=40, retries=2, lock=io._MeshLock())
+                io.execute_mesh_command(target + ["reboot"], timeout=20, retries=0, lock=io._MeshLock())
+            return result
+        def done(r):
+            self.flashed, self.ip = r, r["ip"]
+            if r["kind"] != "companion":
+                return self.write("\n" + fb.AFTER[r["kind"]] + "\n")
+            if r["ip"]: self.write(f"\nThe board is on your Wi-Fi at {r['ip']} (port 5000). Give it a fixed address in your router so it keeps it.\n")
+            elif "wifi" in r["conns"]:
+                self.write("\nIt was not found on this PC's network. Check your router's client list for an 'esp32' / Espressif device (a guest "
+                           "Wi-Fi is usually kept apart from your PC).\n")
+            if r["port"]: self.write(f"On USB it is {r['port']}.\n")
+            if "ble" in r["conns"]: self.write("Bluetooth is waiting too: pair it from the MeshCore app or Options > More nodes (Bluetooth).\n")
+            if r["ip"] or r["port"]: self.add_btn.config(state="normal")
         self.job("Building and flashing (several minutes the first time)", work, done, need_radio=False)
 
     def add_node(self):
-        if not self.ip: return
-        label = re.sub(r"\s+", " ", re.sub(r"[^A-Za-z0-9._ -]", "", self.v["label"].get())).strip()[:12].strip() or "wifi"
-        self.api.add_extra_node({"label": label, "mode": "tcp", "host": self.ip, "tcp_port": 5000, "enabled": True})
-        self.say(f"Added '{label}' ({self.ip}) to Options > More nodes - it connects with the main node.")
+        r = self.flashed or {}
+        if not (r.get("ip") or r.get("port")): return
+        label = re.sub(r"\s+", " ", re.sub(r"[^A-Za-z0-9._ -]", "", self.v["label"].get())).strip()[:12].strip() or "node2"
+        cfg = ({"label": label, "mode": "tcp", "host": r["ip"], "tcp_port": 5000, "enabled": True} if r.get("ip")
+               else {"label": label, "mode": "usb", "port": r["port"], "enabled": True})
+        self.api.add_extra_node(cfg)
+        self.say(f"Added '{label}' ({r.get('ip') or r.get('port')}) to Options > More nodes - it connects with the main node.")
         self.add_btn.config(state="disabled")
+
+
+WifiFirmwareWindow = FirmwareBuilderWindow          # (the name older parts of mcIRC use)

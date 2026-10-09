@@ -71,6 +71,38 @@ for system, text in (("Windows", "Interface: 192.168.1.46 --- 0x5\n  192.168.1.3
 ok("macOS's short MAC form (no leading zeros) matches", w.mac_key("90:70:69:83:f4:0") == w.mac_key("90-70-69-83-F4-00"))
 ok("PlatformIO is found on this PC (or reported missing)", w.find_pio() is None or isinstance(w.find_pio(), list))
 
+# ---- the firmware builder: which build for which choice
+import ntools_fwbuild as fb
+src2 = tempfile.mkdtemp()
+os.makedirs(os.path.join(src2, "variants", "heltec_v3")); os.makedirs(os.path.join(src2, "variants", "rak4631"))
+MORE = ("[env:Heltec_v3_companion_radio_usb]\nbuild_flags = -D ENABLE_USB_INTERFACE\n\n"
+        "[env:Heltec_v3_companion_radio_ble]\nbuild_flags = -D BLE_PIN_CODE=123456\n  -D BLE_DEBUG_LOGGING=1\n\n"
+        "[env:Heltec_v3_repeater]\nbuild_flags =\n\n[env:Heltec_v3_repeater_bridge_rs232]\nbuild_flags =\n\n"
+        "[env:Heltec_v3_room_server]\nbuild_flags =\n\n[env:Heltec_v3_sensor]\nbuild_flags =\n\n")
+V3 = INI.replace("[env:Heltec_WSL3_companion_radio_wifi]", MORE + "[env:Heltec_WSL3_companion_radio_wifi]")
+open(os.path.join(src2, "variants", "heltec_v3", "platformio.ini"), "w").write(V3)
+open(os.path.join(src2, "variants", "rak4631", "platformio.ini"), "w").write("[env:RAK_4631_companion_radio_usb]\n\n[env:RAK_4631_companion_radio_ble]\n\n[env:RAK_4631_repeater]\n")
+bd = fb.boards(src2)
+ok("boards and their firmware types are found", sorted(bd["Heltec_v3"]) == ["companion_ble", "companion_usb", "companion_wifi", "repeater", "room_server", "sensor"]
+   and sorted(bd["RAK_4631"]) == ["companion_ble", "companion_usb", "repeater"], {k: sorted(v) for k, v in bd.items()})
+ok("...a repeater bridge isn't mistaken for a repeater", bd["Heltec_v3"]["repeater"][0] == "Heltec_v3_repeater")
+ok("a board without Wi-Fi offers only USB and Bluetooth", fb.connections(bd["RAK_4631"]) == ["usb", "ble"])
+env, ini, make = fb.plan(bd["Heltec_v3"], "repeater")
+ok("a repeater is the board's own repeater build, unchanged", env == "Heltec_v3_repeater" and make(V3) == V3)
+env, ini, make = fb.plan(bd["Heltec_v3"], "companion", ["wifi"], "Home", "pw")
+ok("Wi-Fi only: the Wi-Fi build with your network in it", env == "Heltec_v3_companion_radio_wifi" and "-D WIFI_SSID='\"Home\"'" in make(V3) and "[env:mcirc_custom]" not in make(V3))
+env, ini, make = fb.plan(bd["Heltec_v3"], "companion", ["usb", "ble", "wifi"], "Home", "pw")
+t = make(V3)
+ok("all three: a build on the Bluetooth one that also switches USB and Wi-Fi on", env == "mcirc_custom" and "extends = env:Heltec_v3_companion_radio_ble" in t
+   and "-D ENABLE_USB_INTERFACE" in t and "-D WIFI_SSID='\"Home\"'" in t and "-UBLE_DEBUG_LOGGING" in t, t[-400:])
+env, ini, make = fb.plan(bd["Heltec_v3"], "companion", ["usb"])
+ok("USB only: the plain USB build", env == "Heltec_v3_companion_radio_usb" and make(V3) == V3)
+for board, args, why in (("Heltec_v3", ("companion", []), "no connection ticked"), ("RAK_4631", ("companion", ["wifi"]), "Wi-Fi on a board without it"),
+                         ("RAK_4631", ("room_server", []), "a type the board lacks")):
+    try: fb.plan(bd[board], *args); refused = False
+    except ValueError: refused = True
+    ok(f"refused: {why}", refused)
+
 # ---- adding the flashed board as a node; the radio settings of an extra node
 import mcIRC, gui_multinode_ui
 from gui_addons import AddonAPI

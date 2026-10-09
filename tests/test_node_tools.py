@@ -92,7 +92,7 @@ api = AddonAPI(app, "node_tools"); inst = m.Addon(api); api.display = inst.title
 am = app.addon_menu
 subs = [root.nametowidget(am.entrycget(i, "menu")) for i in range(am.index("end") + 1) if am.type(i) == "cascade" and am.entrycget(i, "label") == "MeshCore tools"]
 menu = [subs[-1].entrycget(i, "label") for i in range(subs[-1].index("end") + 1)] if subs else []
-ok("the tools are in one 'MeshCore tools' submenu of the Addons menu", all(any(t in l for l in menu) for t in ("Node clock", "Channels", "Backup", "Firmware", "Path tools", "Packet monitor", "Radio health", "Coverage", "Wi-Fi firmware")), menu)
+ok("the tools are in one 'MeshCore tools' submenu of the Addons menu", all(any(t in l for l in menu) for t in ("Node clock", "Channels", "Backup", "Firmware", "Path tools", "Packet monitor", "Radio health", "Coverage", "Firmware builder")), menu)
 ok("...without 'MeshCore tools' repeated in every entry", menu and not any("MeshCore tools" in l for l in menu), menu)
 ok("the coverage map layers are offered", "Coverage: strong (SNR >= 5)" in app.map_layers and "Coverage: weak (SNR < 5)" in app.map_layers)
 app.packet_log[:] = [dict(p, t=time.time()) for p in pk]

@@ -130,6 +130,37 @@ with mock.patch.object(io, "execute_mesh_command", fake_exec):
     calls.clear(); dlg.old = {**INFO, "radio_freq": 915.0, "name": "Node915"}; dlg.write()
     ok("nothing changed -> nothing is sent", calls == [], calls)
     dlg.destroy()
+
+# ---- the firmware builder says it is loading while the version list and the boards are fetched
+import threading, time, ntools_firmware
+class SlowAPI:
+    def ui(self): return {"root": root}
+    def run_background(self, fn, done):
+        def t():
+            try: r = fn()
+            except Exception as e: r = e
+            root.after(0, lambda: done(r))
+        threading.Thread(target=t, daemon=True).start()
+for failing in (False, True):
+    def rels():
+        time.sleep(0.6)
+        if failing: raise OSError("no internet")
+        return [("v1.17.1", "", ""), ("v1.16.0", "", "")]
+    seen = []
+    with mock.patch.object(w, "find_pio", lambda: ["pio"]), mock.patch.object(ntools_firmware, "companion_releases", rels), \
+            mock.patch.object(w, "get_source", lambda tag, log: (time.sleep(0.6), "src")[1]), \
+            mock.patch.object(fb, "boards", lambda src: {"Heltec_v3": {"companion_usb": ("e", "p")}, "RAK_4631": {"companion_ble": ("b", "p")}}):
+        win = w.FirmwareBuilderWindow(SlowAPI())
+        for ms in (200, 900, 2000):
+            root.after(ms, lambda: (root.update_idletasks(), seen.append((win.v["ver"].get(), win.v["board"].get(), win.loading.winfo_ismapped()))))
+        root.after(2100, root.quit); root.mainloop()
+        win.destroy()
+    if not failing:
+        ok("firmware builder: 'Loading...' in the lists and a moving bar while the firmware list is fetched",
+           seen[0] == (win.LOADING_VERSIONS, win.LOADING_BOARDS, 1) and seen[1][1:] == (win.LOADING_BOARDS, 1), seen)
+        ok("...then the newest version and a board, and the bar is gone", seen[2] == ("v1.17.1", "Heltec_v3", 0), seen)
+    else:
+        ok("...when the list can't be fetched, no 'Loading...' is left behind", seen[-1] == ("", "", 0), seen)
 root.destroy()
 print("\nALL PASSED" if not fails else f"\n{len(fails)} FAILED: {fails}")
 sys.exit(1 if fails else 0)

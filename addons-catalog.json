@@ -77,7 +77,7 @@
     {
       "name": "node_tools",
       "title": "MeshCore tools",
-      "version": "1.2.0",
+      "version": "1.2.1",
       "author": "bclml",
       "description": "Node clock, channel manager, backup & restore, firmware check / update, firmware builder - companion with USB / Bluetooth / Wi-Fi, repeater, room server or sensor (needs PlatformIO), path tools, packet monitor, radio health graphs and coverage map - in the Addons menu. Updating firmware from mcIRC needs 'pip install esptool'.",
       "path": "packages/node_tools",

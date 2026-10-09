@@ -17,6 +17,7 @@ def ok(label, cond, detail=""):
 
 root = tk.Tk()
 app = mcIRC.App(root, demo=True); root.update()
+if "modern_look" in app.addons.loaded: app.addons.unload("modern_look"); root.update()      # an installed copy that is switched on: only the package is tested
 def snapshot():
     out = {}
     def walk(w):

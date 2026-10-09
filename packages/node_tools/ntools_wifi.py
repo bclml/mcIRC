@@ -263,6 +263,8 @@ class FirmwareBuilderWindow(ToolWindow):
         self.go_btn.pack(side="left")
         self.add_btn = ttk.Button(b, text="Add to More nodes", command=self.add_node, state="disabled")
         self.add_btn.pack(side="left", padx=6)
+        self.loading = ttk.Progressbar(b, mode="indeterminate", length=160)       # shown while the versions / boards are being fetched
+        self.loading_text = tk.Label(b, bg=BG, fg="#555")
         self.out = tk.Text(self, font=MONO, bg="#101010", fg="#d0ffd0", height=14)
         self.out.pack(fill="both", expand=True, padx=10, pady=8)
         self.board_box.bind("<<ComboboxSelected>>", lambda e: self.update_fields())
@@ -299,6 +301,25 @@ class FirmwareBuilderWindow(ToolWindow):
         wifi = companion and self.conn["wifi"].get()
         for key in ("ssid", "pwd"): self.entries[key].config(state="normal" if wifi else "disabled")
 
+    LOADING_VERSIONS, LOADING_BOARDS = "Loading the firmware list...", "Loading the boards..."
+
+    def show_loading(self, what, boxes):
+        """'Loading...' in the lists being fetched and a moving bar next to the buttons, until the fetch is over (done or failed)."""
+        var = lambda box: self.v["ver" if box is self.ver_box else "board"]
+        for box, text in boxes:
+            box.config(state="disabled"); var(box).set(text)
+        self.loading_text.config(text=what)
+        self.loading.pack(side="left", padx=(16, 6)); self.loading_text.pack(side="left")
+        self.loading.start(12)
+        def watch():
+            if not self.winfo_exists(): return
+            if self.busy: return self.after(200, watch)
+            self.loading.stop(); self.loading.pack_forget(); self.loading_text.pack_forget()
+            for box, text in boxes:
+                box.config(state="readonly")
+                if var(box).get() == text: var(box).set("")                       # the fetch failed: no 'Loading...' left behind
+        self.after(200, watch)
+
     def load_versions(self):
         import ntools_firmware
         def done(rels):
@@ -306,18 +327,21 @@ class FirmwareBuilderWindow(ToolWindow):
             self.v["ver"].set(rels[0][0])                                      # the newest is preselected
             self.load_boards()
         self.job("Listing MeshCore releases", ntools_firmware.companion_releases, done, need_radio=False)
+        if self.busy: self.show_loading(self.LOADING_VERSIONS, [(self.ver_box, self.LOADING_VERSIONS), (self.board_box, self.LOADING_BOARDS)])
 
     def load_boards(self):
         tag = "companion-" + self.v["ver"].get()
         self.go_btn.config(state="disabled")
+        before = self.v["board"].get()                                          # kept when the new version has that board too
         def done(found):
             self.tag, self.boards = tag, found
             self.go_btn.config(state="normal")
             self.board_box.config(values=list(found))
-            if self.v["board"].get() not in found: self.v["board"].set(fb.best_board(found, "Heltec v3") or "")
+            self.v["board"].set(before if before in found else fb.best_board(found, "Heltec v3") or "")
             self.update_fields()
             self.write(f"{len(found)} boards in MeshCore {self.tag}.\n")
         self.job(f"Getting the MeshCore source ({tag})", lambda: fb.boards(get_source(tag, self.write)), done, need_radio=False)
+        if self.busy: self.show_loading(f"Loading the boards of MeshCore {tag}...", [(self.board_box, self.LOADING_BOARDS)])
 
     def go(self):
         board, port, kind = self.v["board"].get(), self.v["port"].get().strip(), self.v["kind"].get()

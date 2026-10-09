@@ -26,10 +26,15 @@ open(os.path.join(stub, "meshcore", "__init__.py"), "w").write(textwrap.dedent('
     import asyncio, enum, sys
     class EventType(enum.Enum):
         CONTACTS = "contacts"; NEW_CONTACT = "new_contact"; ADVERTISEMENT = "advertisement"; RX_LOG_DATA = "rx_log_data"
+        MESSAGES_WAITING = "messages_waiting"; NO_MORE_MSGS = "no_more_messages"; ERROR = "error"; CHANNEL_MSG_RECV = "channel_message"
     class Ev:
-        def __init__(self, payload): self.payload = payload
+        def __init__(self, payload, type=None): self.payload = payload; self.type = type
+    INBOX = [{"type": "CHAN", "channel_idx": 10, "text": "Ann: hello mesh", "path_len": 2, "SNR": 7.0, "sender_timestamp": 1}]
     class Cmds:
         def __init__(self, mc): self.mc = mc
+        async def get_msg(self):
+            if INBOX: return Ev(INBOX.pop(0), EventType.CHANNEL_MSG_RECV)
+            return Ev({}, EventType.NO_MORE_MSGS)
         async def get_contacts(self, lastmod=0):
             print("STUB get_contacts lastmod=%d" % lastmod, file=sys.stderr, flush=True)
             await self.mc.fire(EventType.CONTACTS, {"k1": {"public_key": "aa" * 32, "adv_name": "Catchup Node", "type": 2, "adv_lat": 49.1, "adv_lon": -123.1, "lastmod": 5}})
@@ -50,11 +55,15 @@ open(os.path.join(stub, "meshcore", "__init__.py"), "w").write(textwrap.dedent('
             await self.fire(EventType.CONTACTS, {"k2": {"public_key": "bb" * 32, "adv_name": "Fresh Repeater", "type": 2, "adv_lat": 49.3, "adv_lon": -123.3, "lastmod": 9}})
             await self.fire(EventType.NEW_CONTACT, {"public_key": "cc" * 32, "adv_name": "Pending Guy", "type": 1})
             await self.fire(EventType.RX_LOG_DATA, {"path_len": 2, "path": "a1b2", "path_hash_size": 1, "payload_typename": "GRP_TXT", "snr": 6.5, "message": "secret text"})
+            if "--messages" in sys.argv:
+                INBOX.append({"type": "CHAN", "channel_idx": 10, "text": "Bob: second one", "path_len": 255, "SNR": 9.0, "sender_timestamp": 2})
+                await self.fire(EventType.MESSAGES_WAITING, {})
+                await asyncio.sleep(0.2)
         async def disconnect(self): print("STUB disconnect", file=sys.stderr, flush=True)
 '''))
 env = dict(os.environ, PYTHONPATH=stub, PYTHONUTF8="1")
-def run_helper(lastmod):
-    p = subprocess.run([sys.executable, ga.HELPER, "--serial", "COM9", "--lastmod", str(lastmod), "--seconds", "4"], capture_output=True, text=True, env=env, timeout=30)
+def run_helper(lastmod, *more):
+    p = subprocess.run([sys.executable, ga.HELPER, "--serial", "COM9", "--lastmod", str(lastmod), "--seconds", "4", *more], capture_output=True, text=True, env=env, timeout=30)
     return [json.loads(l) for l in p.stdout.splitlines() if l.startswith("{")], p.stderr
 ev, err = run_helper(100)
 kinds = [e["event"] for e in ev]
@@ -65,6 +74,10 @@ ok("helper asks only for changes since lastmod and disconnects", "lastmod=100" i
 ev0, err0 = run_helper(0)
 ok("helper: with nothing known the first full load is silent", [e["event"] for e in ev0][0] == "ready" and "lastmod=0" in err0, [e["event"] for e in ev0])
 ok("helper prints no message text fields", not any("text" in json.dumps(e) for e in ev))
+evm, _ = run_helper(100, "--messages")
+msgs = [e["payload"]["text"] for e in evm if e["event"] == "msg"]
+ok("--messages: what the node had waiting comes right after 'ready', and a new one as soon as the node says it arrived",
+   msgs == ["Ann: hello mesh", "Bob: second one"] and [e["event"] for e in evm].index("msg") == [e["event"] for e in evm].index("ready") + 1, [e["event"] for e in evm])
 
 # ---------------------------------------------------------------- AdvertWatcher with a fake helper (timing / preemption / failure)
 import mcIRC
@@ -136,6 +149,14 @@ t = time.time(); w.listen(1, threading.Event()); ok("Bluetooth -> plain wait", w
 io.CONNECTION_ARGS = None
 
 # ---------------------------------------------------------------- GUI side
+while not app.q.empty(): app.q.get_nowait()
+app.adverts._event({"event": "msg", "payload": {"type": "CHAN", "channel_idx": 0, "text": "Ann: via the listener", "path_len": 1, "SNR": 6.0}})
+got = []
+while not app.q.empty(): got.append(app.q.get_nowait())
+ok("a message the listener fetched goes to mcIRC exactly like one from the regular poll", any(g[0] == "chat" and g[1] == "in" and g[3].endswith("via the listener")
+   and g[4] == "Ann" for g in got), got)
+ok("with the listener working, one listening stretch is a minute; without it, the poll interval",
+   (app.adverts.window(20) == 60) == app.adverts.enabled() and app.adverts.window(90) >= 90)
 while not app.q.empty(): app.q.get_nowait()
 app.settings["advert_notices"] = True
 key = "ee" * 32

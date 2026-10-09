@@ -233,7 +233,7 @@ class CoreWorker:
                 if now - last_sync >= self.app.settings["node_sync_minutes"] * 60:
                     last_sync = now
                     self.app.node_sync_worker()
-                self.app.adverts.listen(self.app.settings["poll_seconds"], self.stop_evt)      # idle time = listening for adverts (or just waiting)
+                self.app.adverts.listen(self.app.adverts.window(self.app.settings["poll_seconds"]), self.stop_evt)   # idle time = listening (packets, adverts, messages)
         except ea.Cancelled:
             gui_diag.event("connect", "cancelled")
         except Exception as e:
@@ -441,8 +441,8 @@ class App(PrivateMixin, MenusMixin, CommandsMixin, gui_multinode.MultiNodeMixin,
         base, node_label = gui_multinode.split_tag(name)
         w.node = node_label if node_label and not name.startswith("@") else None      # windows of an extra node carry its label: 'Public [915]'
         if in_tree and hasattr(self, "tree") and not name.startswith("@") and self.tree.exists("Channels"):   # the tree holds Status + channels only; people/repeaters/rooms live on the top bar
-            if node_label: self.tree.insert(self.node_parent(node_label), "end", iid=name, text=base)
-            else: self.tree.insert("Channels", "end", iid=name, text=name)
+            shown = "#Public" if base == "Public" else base                  # shown like the others; on the node it stays 'Public' (slot 0)
+            self.tree.insert(self.node_parent(node_label) if node_label else "Channels", "end", iid=name, text=shown)
         if name.startswith("@"): self._add_button(name)   # the switchbar is for direct messages only
         return w
 

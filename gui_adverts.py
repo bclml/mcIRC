@@ -21,6 +21,7 @@ import meshcore_io as io
 
 HELPER = os.path.join(os.path.dirname(os.path.abspath(__file__)), "gui_advert_proc.py")
 MAX_FAILURES = 3
+LISTEN_SECONDS = 60          # one listening stretch when messages come in through it too
 
 
 def helper_args(conn):
@@ -69,6 +70,7 @@ class AdvertWatcher:
         try:
             cmd = [sys.executable, HELPER] + helper_args(io.CONNECTION_ARGS) + ["--lastmod", str(self.app.nodes.max_lastmod()), "--seconds", str(int(seconds))]
             if getattr(self.app, "raw_packets_wanted", None): cmd.append("--raw")     # an addon wants every packet whole (api.want_raw_packets)
+            cmd.append("--messages")                    # messages arrive through this connection too: no need to break it every poll
             try:
                 self.proc = proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, creationflags=io.NO_WINDOW, **io.UTF8)
             except OSError as e:
@@ -93,6 +95,12 @@ class AdvertWatcher:
             self.interrupt()
             try: proc.wait(timeout=5)
             except subprocess.TimeoutExpired: pass
+            while True:                                    # what it printed before it stopped - above all messages the node has let go of
+                try: line = lines.get(timeout=0.5)
+                except queue.Empty: break
+                if line is None: break
+                ev = self._parse(line)
+                if ev and ev["event"] in ("msg", "rx"): self._event(ev)
             if error or (not got_ready and not interrupted and not stop_evt.is_set()):
                 return self._failed(error or "the advert listener exited without connecting", started, seconds, stop_evt)
             self.failures = 0
@@ -118,8 +126,18 @@ class AdvertWatcher:
         except ValueError: return None
         return ev if isinstance(ev, dict) and "event" in ev else None
 
+    def window(self, poll_seconds):
+        """How long one listening stretch lasts: with messages coming in through it, a minute (each new connection costs the node a
+        contact re-read and misses what is heard meanwhile); otherwise the poll interval."""
+        return max(poll_seconds, LISTEN_SECONDS) if self.enabled() else poll_seconds
+
     def _event(self, ev):
         kind = ev["event"]
+        if kind == "msg":                                  # a message the node had waiting (--messages): the same way as from .sync_msgs
+            payload = ev.get("payload")
+            if isinstance(payload, dict):
+                for k, idx, text, nick, extra in io.parse_messages(json.dumps(payload)): io._emit(k, idx, text, nick=nick, **extra)
+            return
         if kind == "rx":                                   # a packet heard: kind, route, signal (map signals, packet monitor) - never its content
             self.app.q.put(("call", lambda e=ev: self.app.note_packet(e)))
             return

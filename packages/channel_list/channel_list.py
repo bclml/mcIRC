@@ -26,11 +26,12 @@ def answer_text(channels, intro="Channels:"):
 
 class Addon(AddonBase):
     title = "Channel list"
-    version = "1.1.0"
+    version = "1.2.0"
     author = "mcIRC"
     description = ("Answers 'channel list' with the channels you keep in its list (add / remove / rename / reorder them in Options); "
                    "'channel list add #name' adds one from the mesh. Off until you switch it on.")
     tick_seconds = 0
+    switch = "enabled"           # its ON/OFF switch on the toolbar
 
     def on_load(self):
         self.last_any, self.last_by = 0.0, {}
@@ -46,7 +47,12 @@ class Addon(AddonBase):
         if (dm and not self.api.get("answer_dm", True)) or (not dm and not mc.channel_ok(channel, mc.channel_list(self.api.get("where", "all")))): return []
         first = next((t.strip() for t in self.api.get("triggers", DEFAULT_TRIGGERS).split(",") if t.strip()), "")
         if not first: return []
-        return [first] + (["channel list add #name"] if self.api.get("allow_add", True) else [])
+        return [first] + (["channel list add #name"] if self.add_ok(channel, dm) else [])
+
+    def add_ok(self, channel, dm=False):
+        """Adding is on, and not in a channel listed under 'no_add_in' (e.g. #mcirc: people use the bots there, but don't change mcIRC)."""
+        if not self.api.get("allow_add", True): return False
+        return dm or not mc.channel_ok(channel, mc.channel_list(self.api.get("no_add_in", "")))
 
     def add_request(self, text):
         """'channel list add #lse-bot' -> '#lse-bot'; '' when the name is missing or not usable (the answer shows how to type it);
@@ -69,7 +75,7 @@ class Addon(AddonBase):
 
     def on_message(self, msg):
         if not self.api.get("enabled", False): return
-        add = self.add_request(msg.get("text")) if self.api.get("allow_add", True) else None
+        add = self.add_request(msg.get("text")) if self.add_ok(msg.get("channel", ""), msg.get("dm")) else None
         if add is None and norm_text(msg.get("text")) not in self.triggers(): return
         if msg.get("dm"):
             if not self.api.get("answer_dm", True): return
@@ -92,12 +98,13 @@ class Addon(AddonBase):
         g = self.api.get
         self.v = {"enabled": tk.BooleanVar(value=g("enabled", False)), "answer_dm": tk.BooleanVar(value=g("answer_dm", True)),
                   "where": tk.StringVar(value=g("where", "all")), "triggers": tk.StringVar(value=g("triggers", DEFAULT_TRIGGERS)),
-                  "intro": tk.StringVar(value=g("intro", "Channels:")), "allow_add": tk.BooleanVar(value=g("allow_add", True))}
+                  "intro": tk.StringVar(value=g("intro", "Channels:")), "allow_add": tk.BooleanVar(value=g("allow_add", True)),
+                  "no_add_in": tk.StringVar(value=g("no_add_in", ""))}
         tk.Checkbutton(f, text="Answer 'channel list' with the list below", variable=self.v["enabled"], bg=bg).pack(anchor="w")
         tk.Checkbutton(f, text="Also answer private messages", variable=self.v["answer_dm"], bg=bg).pack(anchor="w")
         tk.Checkbutton(f, text=f"Let people add channels: 'channel list add #name' (checked names, at most {MAX_CHANNELS}; you see who added what)",
                        variable=self.v["allow_add"], bg=bg, wraplength=460, justify="left").pack(anchor="w")
-        for label, key, width in (("Answer in channels (comma separated, or 'all'):", "where", 24), ("Words that ask for it (comma separated):", "triggers", 30),
+        for label, key, width in (("...but not in these channels (comma separated):", "no_add_in", 24), ("Answer in channels (comma separated, or 'all'):", "where", 24), ("Words that ask for it (comma separated):", "triggers", 30),
                                   ("Answer starts with:", "intro", 20)):
             r = tk.Frame(f, bg=bg)
             r.pack(fill="x", pady=1)

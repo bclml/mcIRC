@@ -176,6 +176,42 @@ class AddonAPI:
         b.pack(side="left", padx=1, pady=2)
         self._buttons.append(b)
         return b
+    def add_switch(self, key="enabled", default=False, toggle=None):
+        """An ON/OFF switch on the toolbar ('Fun bot: ON') for the setting `key`; toggle() is called instead of flipping it when the addon
+        has to do more (connect, disconnect).  Hidden when the addon's settings say so ('Show its switch on the toolbar')."""
+        self._switch = (key, default, toggle)
+        self._draw_switch()
+    def _draw_switch(self):
+        sw, btn = getattr(self, "_switch", None), getattr(self, "_switch_btn", None)
+        if not sw or not self.get("_toolbar", True):
+            if btn is not None:
+                if btn in self._buttons: self._buttons.remove(btn)
+                btn.destroy()
+                self._switch_btn = None
+            return
+        if btn is None:
+            self._switch_btn = self.add_toolbar_button("", self._flip)
+            self._tick_switch()
+        self._paint_switch()
+    def switch_on(self):
+        key, default, _ = self._switch
+        return bool(self.get(key, default))
+    def _flip(self):
+        key, default, toggle = self._switch
+        if toggle: toggle()
+        else: self.set(key, not self.get(key, default))
+        self._paint_switch()
+    def _paint_switch(self):
+        btn = getattr(self, "_switch_btn", None)
+        if btn is None or not btn.winfo_exists(): return
+        on = self.switch_on()
+        btn.config(text=f"{self.display}: {'ON' if on else 'OFF'}", fg="#006400" if on else "#555555")
+    def _tick_switch(self):
+        """Follows changes made elsewhere (its settings window, a command)."""
+        btn = getattr(self, "_switch_btn", None)
+        if btn is None or not btn.winfo_exists(): return
+        self._paint_switch()
+        self._app.root.after(1500, self._tick_switch)
     def add_name_action(self, label, fn, group=None):
         """An entry in the right-click menu on a name in the chat: label ('{nick}' becomes the name), fn(nick) is called.
         group: put it in a submenu with that title ('Fun') - for addons with many entries."""
@@ -282,6 +318,7 @@ class AddonAPI:
             try: b.destroy()
             except Exception: pass
         self._commands, self._menu, self._layers, self._buttons, self._items = [], [], [], [], []
+        self._switch_btn = None
 
 
 class AddonManager:
@@ -316,6 +353,8 @@ class AddonManager:
             self.errors.pop(name, None)
             self._call(name, "on_load")
             if name in self.loaded: api._draw_menu()               # its Addons submenu, even with no entries of its own
+            if name in self.loaded and getattr(inst, "switch", None):  # 'switch = "enabled"': an ON/OFF switch on the toolbar
+                api.add_switch(inst.switch, getattr(inst, "switch_default", False), getattr(inst, "toggle", None))
             if self.app.connected: self._call(name, "on_connect")
             return True
         except Exception:

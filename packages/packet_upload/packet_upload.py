@@ -33,11 +33,12 @@ def new_client(transport, client_id):
 
 class Addon(AddonBase):
     title = "Packet upload"
-    version = "1.0.1"
+    version = "1.0.2"
     author = "mcIRC (after agessaman/meshcore-packet-capture)"
     description = ("Sends the packets your node hears to community packet analyzers (MeshCore.ca, CascadiaMesh, LetsMesh, ...) so they can "
                    "map coverage and routes. Logs in with a token your node signs. Off until you switch it on and give your area code.")
     tick_seconds = 60
+    switch = "enabled"           # its ON/OFF switch on the toolbar
 
     def on_load(self):
         self.clients, self.me, self.sent, self.notes = {}, None, 0, {}

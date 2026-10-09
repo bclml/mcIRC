@@ -22,6 +22,7 @@ ok("order: @me, then +favorites, then the rest, each A-Z",
 root = tk.Tk()
 app = mcIRC.App(root, demo=True); root.update()
 me = app.settings["node_name"]
+app.settings.update(favorites=[], favorites_node=[], window_nicks={})      # (only in memory: demo mode never writes the settings file)
 saved = {}
 app.save = lambda: saved.update(app.settings)                 # what would be written to the settings file
 w = app.add_window("#nicktest", "test")

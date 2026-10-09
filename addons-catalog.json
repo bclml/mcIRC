@@ -41,7 +41,7 @@
     {
       "name": "weather_bot",
       "title": "Weather bot",
-      "version": "1.0.5",
+      "version": "1.0.6",
       "author": "bclml",
       "description": "Answers weather commands in the channels you choose (default #weather): wx <place> (city, postal code, ZIP, node name or lat,lon), gwx, aqi, sun, moon, solar, sf, hfcond, satpass, airplanes, rain, aurora, channels, status, contact. Free data, no API keys. Off until you switch it on; rate-limited. satpass needs 'pip install sgp4'.",
       "path": "packages/weather_bot",
@@ -50,7 +50,7 @@
     {
       "name": "fun_bot",
       "title": "Fun bot",
-      "version": "1.0.4",
+      "version": "1.0.5",
       "author": "bclml",
       "description": "dice, roll, magic8, joke, dadjoke, hacker, catfact and wc (World Cup scores and tables), each switched on for the channels you choose. Off until you switch it on; rate-limited.",
       "path": "packages/fun_bot",
@@ -59,7 +59,7 @@
     {
       "name": "bot_help",
       "title": "Bot help",
-      "version": "1.0.4",
+      "version": "1.0.5",
       "author": "bclml",
       "description": "Answers 'bothelp' with the bot commands that work in that channel (Weather bot, Fun bot, Auto reply, ...), and can announce 'Type bothelp for a list of commands.' once a day at a set time. Choose which bots it lists. Off until you switch it on; rate-limited.",
       "path": "packages/bot_help",
@@ -68,7 +68,7 @@
     {
       "name": "channel_list",
       "title": "Channel list",
-      "version": "1.1.0",
+      "version": "1.2.0",
       "author": "bclml",
       "description": "Answers 'channel list' with the channels you keep in its list (add / remove / rename / reorder them in Options, and people can add one with 'channel list add #name' - checked names, at most 30, you see who added what; starts with 13 BC channels). Off until you switch it on; one answer per person per minute.",
       "path": "packages/channel_list",
@@ -77,16 +77,16 @@
     {
       "name": "node_tools",
       "title": "MeshCore tools",
-      "version": "1.2.1",
+      "version": "1.3.0",
       "author": "bclml",
-      "description": "Node clock, channel manager, backup & restore, firmware check / update, firmware builder - companion with USB / Bluetooth / Wi-Fi, repeater, room server or sensor (needs PlatformIO), path tools, packet monitor, radio health graphs and coverage map - in the Addons menu. Updating firmware from mcIRC needs 'pip install esptool'.",
+      "description": "Node clock, channel manager, backup & restore, firmware check / update, firmware builder - companion with USB / Bluetooth / Wi-Fi, repeater, room server, sensor, observer (MQTT), repeater bridges, terminal chat, KISS modem; OTAFIX bootloader for nRF52 boards and updates over Wi-Fi for ESP32 (needs PlatformIO), path tools, packet monitor, radio health graphs and coverage map - in the Addons menu. Updating firmware from mcIRC needs 'pip install esptool'.",
       "path": "packages/node_tools",
       "tested": "2026-10-04 with app 1.5.4 on a Heltec V3 (fw 1.16.0): every read checked on the real node; writing (clock set, channel edits, restore, firmware update) checked with a stand-in radio only. Wi-Fi firmware: built and flashed to a real Heltec V4 with app 2.0.1 (v1.17.1, found on the network, name and radio written over Wi-Fi). Firmware builder (1.2.0, app 2.0.7): a Heltec V3 companion with USB + Bluetooth + Wi-Fi built with PlatformIO (not flashed yet); repeater, room server and sensor choices checked by tests only"
     },
     {
       "name": "map_uploader",
       "title": "Map uploader",
-      "version": "1.0.1",
+      "version": "1.0.2",
       "author": "bclml (Python port of recrof/map.meshcore.io-uploader, MIT)",
       "description": "Puts the repeaters, room servers and sensors your node hears on the official MeshCore map (map.meshcore.io). Only adverts really signed by their node; each upload is signed by your node itself - its private key never leaves the radio. People's companions are never uploaded. Off until you switch it on.",
       "path": "packages/map_uploader",
@@ -100,7 +100,7 @@
     {
       "name": "packet_upload",
       "title": "Packet upload",
-      "version": "1.0.1",
+      "version": "1.0.2",
       "author": "bclml (after agessaman/meshcore-packet-capture, MIT)",
       "description": "Sends the packets your node hears to community packet analyzers (MeshCore.ca, CascadiaMesh, LetsMesh and 14 more) over MQTT, on mcIRC's own connection, so they can map coverage and routes. Logs in with a token your node signs - no password, the private key never leaves the radio. Off until you switch it on and give your area code. Needs 'pip install paho-mqtt'.",
       "path": "packages/packet_upload",
@@ -114,9 +114,9 @@
     {
       "name": "mesh_bot",
       "title": "Mesh bot",
-      "version": "1.1.0",
+      "version": "1.2.0",
       "author": "bclml (commands after agessaman/meshcore-bot, MIT)",
-      "description": "ping, hello, path, prefix, multitest, stats, sports and version - the agessaman/meshcore-bot commands mcIRC's other bots don't have - plus its greeter (a random greeting from a list you can edit), each switched on for the channels you choose. Off until you switch it on.",
+      "description": "ping, hello, path, prefix, multitest, stats, sports, version and firmware (the newest MeshCore releases) - the agessaman/meshcore-bot commands mcIRC's other bots don't have - plus its greeter (a random greeting from a list you can edit), each switched on for the channels you choose. Off until you switch it on.",
       "path": "packages/mesh_bot",
       "upstream": {
         "repo": "agessaman/meshcore-bot",

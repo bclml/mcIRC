@@ -188,3 +188,27 @@ def pick_greeting(lines, last=None):
 
 def greeting_for(nick, template, channel=""):
     return template.replace("{nick}", nick.replace("[", "").replace("]", "")).replace("{channel}", channel or "the mesh")
+
+
+# ---- firmware (read-only: the newest MeshCore releases) ----
+RELEASES_URL = "https://api.github.com/repos/meshcore-dev/MeshCore/releases?per_page=40"
+FW_KINDS = (("companion", "companion"), ("repeater", "repeater"), ("room-server", "room server"))
+
+
+def _vkey(v): return tuple(int(x) if x.isdigit() else 0 for x in re.split(r"[.\-]", v.lstrip("v")))
+
+
+def firmware_text(releases):
+    """'MeshCore firmware: companion v1.17.1, repeater v1.17.1, room server v1.17.1 (2026-08-14)' from GitHub's release list."""
+    newest = {}
+    for r in releases:
+        tag = str(r.get("tag_name", ""))
+        if r.get("prerelease") or r.get("draft"): continue
+        for prefix, name in FW_KINDS:
+            if tag.startswith(prefix + "-v"):
+                v = tag[len(prefix) + 1:]
+                if name not in newest or _vkey(v) > _vkey(newest[name][0]): newest[name] = (v, (r.get("published_at") or "")[:10])
+    if not newest: return "No MeshCore firmware release found"
+    parts = [f"{name} {newest[name][0]}" for _, name in FW_KINDS if name in newest]
+    date = max(d for _, d in newest.values())
+    return f"MeshCore firmware: {', '.join(parts)}" + (f" ({date})" if date else "") + " - github.com/meshcore-dev/MeshCore/releases"

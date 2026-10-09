@@ -48,11 +48,12 @@ def _wrap(text, limit):
 
 class Addon(AddonBase):
     title = "Bot help"
-    version = "1.0.4"
+    version = "1.0.5"
     author = "mcIRC"
     description = ("Answers 'bothelp' with the bot commands that work in that channel (Weather bot, Fun bot, Auto reply, ...), and can announce "
                    "'Type bothelp for a list of commands.' once a day at a set time. Off until you switch it on.")
     tick_seconds = 30
+    switch = "enabled"           # its ON/OFF switch on the toolbar
 
     def on_load(self):
         self.last_any, self.last_by = 0.0, {}

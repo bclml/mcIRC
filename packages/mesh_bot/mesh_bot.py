@@ -18,6 +18,7 @@ COMMANDS = {
     "stats": "the mesh in the last 24 hours",
     "sports": "scores: sports, sports nhl, sports canucks",
     "version": "which bot this is",
+    "firmware": "the newest MeshCore firmware versions (read-only)",
 }
 USAGE = {"path": "path [a1,b2]", "prefix": "prefix <A1|free>", "sports": "sports [team|league]"}
 GREETING = cmds.DEFAULT_GREETINGS[0]                     # the single greeting of 1.0.x (kept when someone had changed it)
@@ -25,11 +26,12 @@ GREETING = cmds.DEFAULT_GREETINGS[0]                     # the single greeting o
 
 class Addon(AddonBase):
     title = "Mesh bot"
-    version = "1.1.0"
+    version = "1.2.0"
     author = "mcIRC (commands after agessaman/meshcore-bot, MIT)"
     description = ("ping, hello, path, prefix, multitest, stats, sports and version - the meshcore-bot commands mcIRC's other bots don't have - "
                    "plus its greeter for newcomers (a random greeting from your list), each switched on for the channels you choose. Off until you switch it on.")
     tick_seconds = 0
+    switch = "enabled"           # its ON/OFF switch on the toolbar
     replies = True
 
     def on_load(self):
@@ -64,6 +66,8 @@ class Addon(AddonBase):
         now = time.time()
         if cmd == "multitest":                                   # wait for the copies of the message to arrive first
             return self.api.after(7000, lambda: self.send(msg, cmds.multitest_text(cmds.multitest_paths(self.api.packet_log, now))))
+        if cmd == "firmware":
+            return self.api.run_background(self.firmware, lambda r: self.send(msg, r if not isinstance(r, Exception) else "Couldn't reach GitHub for the firmware versions"))
         if cmd == "sports":
             teams = [t for t in self.api.get("sports_teams", "canucks, whitecaps, seahawks, mariners, kraken").split(",")]
             return self.api.run_background(lambda: cmds.sports_text(arg, mc.http_json, teams), lambda r: self.send(msg, r if not isinstance(r, Exception) else "Error fetching sports data"))
@@ -92,6 +96,14 @@ class Addon(AddonBase):
             except Exception: v = "?"
             return f"mcIRC {v} - Mesh bot {self.version} (commands after meshcore-bot)"
         raise ValueError("unknown command")
+
+    def firmware(self):
+        """The newest MeshCore releases, asked from GitHub at most once an hour."""
+        cached = getattr(self, "_fw", None)
+        if cached and time.time() - cached[0] < 3600: return cached[1]
+        text = cmds.firmware_text(mc.http_json(cmds.RELEASES_URL, headers={"User-Agent": "mcIRC"}))
+        self._fw = (time.time(), text)
+        return text
 
     def greet(self, msg):
         """Once per newcomer: someone whose first message this is, and who wasn't in mcIRC's node memory (nodes.db, not the radio's

@@ -34,6 +34,10 @@ class AddonSettingsWindow(tk.Toplevel):
             self.private_var = tk.BooleanVar(value=bool(app.settings.get("addons", {}).get(name, {}).get("_reply_private", False)))
             tk.Checkbutton(self, text="Send answers by private message instead of in the channel (to whoever asked)", variable=self.private_var,
                            bg=BG, anchor="w").pack(fill="x", padx=10, pady=(4, 0))
+        self.toolbar_var = None
+        if getattr(inst, "switch", None):                      # it has an ON/OFF switch on the toolbar: shown or not
+            self.toolbar_var = tk.BooleanVar(value=bool(app.settings.get("addons", {}).get(name, {}).get("_toolbar", True)))
+            tk.Checkbutton(self, text="Show its ON/OFF switch on the toolbar", variable=self.toolbar_var, bg=BG, anchor="w").pack(fill="x", padx=10)
         buttons = tk.Frame(self, bg=BG)
         buttons.pack(side="bottom", fill="x", padx=10, pady=8)
         ttk.Button(buttons, text="Cancel", command=self.destroy).pack(side="right")
@@ -71,6 +75,10 @@ class AddonSettingsWindow(tk.Toplevel):
         if self.node_vars:
             self.app.settings.setdefault("addons", {}).setdefault(self.name, {})["_nodes"] = [k for k, v in self.node_vars.items() if v.get()]
             self.app.save()
+        if self.toolbar_var is not None and self.name in self.app.addons.loaded:
+            self.app.settings.setdefault("addons", {}).setdefault(self.name, {})["_toolbar"] = bool(self.toolbar_var.get())
+            self.app.save()
+            self.app.addons.loaded[self.name][1]._draw_switch()
         if self.page is None: return True
         try: self.app.addons._call(self.name, "apply_options")
         except Exception as e:

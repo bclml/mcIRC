@@ -1,7 +1,7 @@
 {
   "name": "map_uploader",
   "title": "Map uploader",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Puts the repeaters, room servers and sensors your node hears on the official MeshCore map (map.meshcore.io). Each upload is signed by your node; its private key never leaves the radio. Off until you switch it on. Python port of recrof/map.meshcore.io-uploader (MIT).",
   "requires": [],
   "files": {

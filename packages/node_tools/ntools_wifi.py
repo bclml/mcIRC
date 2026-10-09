@@ -19,6 +19,8 @@ from tkinter import messagebox, ttk
 import meshcore_io as io
 from ntools_common import BG, MONO, ToolWindow
 import ntools_fwbuild as fb
+from ntools_fwsteps import OtaSteps
+import ntools_ota as ota
 
 BUILD_ROOT = os.path.join(os.environ.get("LOCALAPPDATA") or os.path.expanduser("~"), "mcIRC", "firmware-build")      # not in OneDrive: builds are big
 ENV_RE = re.compile(r"^\[env:([A-Za-z0-9_\-]+_companion_radio_wifi)\]\s*$", re.M)
@@ -40,16 +42,25 @@ def find_pio():
 
 
 def source_dir(tag):
+    """tag: a MeshCore release tag ('companion-v1.17.1'), or the title of a community source (fb.COMMUNITY: a fork pinned to one commit)."""
+    c = fb.COMMUNITY.get(tag)
+    if c: return os.path.join(BUILD_ROOT, f"{c['repo'].replace('/', '-')}-{c['ref'][:10]}")
     return os.path.join(BUILD_ROOT, f"MeshCore-{tag}")
 
 
+def source_url(tag):
+    c = fb.COMMUNITY.get(tag)
+    if c: return f"https://github.com/{c['repo']}/archive/{c['ref']}.zip"          # exactly the reviewed commit
+    return f"https://github.com/meshcore-dev/MeshCore/archive/refs/tags/{tag}.zip"
+
+
 def get_source(tag, log=print):
-    """Downloads and unpacks MeshCore's source for a release tag (once; later builds reuse it)."""
+    """Downloads and unpacks the source of a MeshCore release tag or a community source (once; later builds reuse it)."""
     d = source_dir(tag)
     if os.path.exists(os.path.join(d, "platformio.ini")): return d
     os.makedirs(BUILD_ROOT, exist_ok=True)
-    url = f"https://github.com/meshcore-dev/MeshCore/archive/refs/tags/{tag}.zip"
-    log(f"Downloading the MeshCore source ({tag})...\n")
+    url = source_url(tag)
+    log(f"Downloading the source ({tag})...\n")
     with urllib.request.urlopen(urllib.request.Request(url, headers={"User-Agent": "mcIRC"}), timeout=180) as r: data = r.read()
     with zipfile.ZipFile(_io.BytesIO(data)) as z:
         top = z.namelist()[0].split("/")[0]
@@ -202,11 +213,11 @@ def best_env(envs, model):
     return next((e for e in envs if e.lower().startswith(key + "_companion")), next(iter(envs), None))
 
 
-class FirmwareBuilderWindow(ToolWindow):
+class FirmwareBuilderWindow(ToolWindow, OtaSteps):
     """Firmware builder: a companion (any mix of USB, Bluetooth and Wi-Fi), a repeater, a room server or a sensor, built from MeshCore's
     source for the chosen release and flashed over USB."""
     def __init__(self, api):
-        super().__init__(api, "Firmware builder", "780x680", choose_node=False)
+        super().__init__(api, "Firmware builder", "820x860", choose_node=False)
         self.pio = find_pio()
         self.boards, self.tag, self.ip, self.flashed = {}, "", None, None
         f = tk.Frame(self, bg=BG)
@@ -258,6 +269,8 @@ class FirmwareBuilderWindow(ToolWindow):
             tk.Label(rf, text=label + "  ", bg=BG).pack(side="left")
         tk.Checkbutton(f, text="Erase the board first (recommended when it runs other firmware - it resets the board's settings, channels and contacts)",
                        variable=self.erase, bg=BG).grid(row=r + 1, column=0, columnspan=4, sticky="w")
+        self.ota_widgets(f, r + 2)
+        self.setup_widgets(f, r + 3)
         b = tk.Frame(self, bg=BG); b.pack(fill="x", padx=10)
         self.go_btn = ttk.Button(b, text="Build and flash", command=self.go)
         self.go_btn.pack(side="left")
@@ -300,6 +313,9 @@ class FirmwareBuilderWindow(ToolWindow):
             if c not in have: self.conn[c].set(False)
         wifi = companion and self.conn["wifi"].get()
         for key in ("ssid", "pwd"): self.entries[key].config(state="normal" if wifi else "disabled")
+        self.update_ota_fields(envs, self.v["kind"].get())
+
+    def source(self): return source_dir(self.tag)
 
     LOADING_VERSIONS, LOADING_BOARDS = "Loading the firmware list...", "Loading the boards..."
 
@@ -323,14 +339,15 @@ class FirmwareBuilderWindow(ToolWindow):
     def load_versions(self):
         import ntools_firmware
         def done(rels):
-            self.ver_box.config(values=[v for v, _, _ in rels])
+            self.ver_box.config(values=[v for v, _, _ in rels] + list(fb.COMMUNITY))      # community sources (observer) after the releases
             self.v["ver"].set(rels[0][0])                                      # the newest is preselected
             self.load_boards()
         self.job("Listing MeshCore releases", ntools_firmware.companion_releases, done, need_radio=False)
         if self.busy: self.show_loading(self.LOADING_VERSIONS, [(self.ver_box, self.LOADING_VERSIONS), (self.board_box, self.LOADING_BOARDS)])
 
     def load_boards(self):
-        tag = "companion-" + self.v["ver"].get()
+        ver = self.v["ver"].get()
+        tag = ver if ver in fb.COMMUNITY else "companion-" + ver
         self.go_btn.config(state="disabled")
         before = self.v["board"].get()                                          # kept when the new version has that board too
         def done(found):
@@ -350,28 +367,32 @@ class FirmwareBuilderWindow(ToolWindow):
         try:
             if "wifi" in conns:
                 ssid, pwd = check_wifi_text(self.v["ssid"].get(), "name"), check_wifi_text(self.v["pwd"].get(), "password")
-            if board not in self.boards or not port: raise ValueError("Choose the board and its USB port.")
+            if board not in self.boards or not (port or self.wifi_ota.get()): raise ValueError("Choose the board and its USB port.")
             env, ini_path, make = fb.plan(self.boards[board], kind, conns, ssid, pwd)
+            setup = self.setup_values(kind)
         except ValueError as e:
             return messagebox.showerror("Firmware builder", str(e), parent=self)
         radio = [self.v[k].get().strip() for k in ("freq", "bw", "sf", "cr")]
         if any(radio) and not all(radio): return messagebox.showerror("Firmware builder", "Fill in all four radio values, or none.", parent=self)
+        if self.wifi_ota.get(): return self.go_wifi_ota(env, ini_path, make, board, kind)
         ids = port_ids()
         if needs_boot_buttons(ids.get(port)):
             return messagebox.showinfo("Firmware builder", f"The board on {port} has to be put in download mode by hand first:\n\n"
                                        "hold its PRG (BOOT) button, tap RST, let go of PRG.\n\nIt then shows up on a new USB port - choose that one "
                                        "in 'USB port' and press Build and flash again.", parent=self)
-        what = fb.TYPE_TITLES[kind].split(" (")[0] + (f" ({', '.join(fb.CONN_TITLES[c] for c in conns)})" if conns else "")
+        what = fb.TYPE_TITLES[kind].split(" (")[0].split(":")[0] +(f" ({', '.join(fb.CONN_TITLES[c] for c in conns)})" if conns else "")
         if not messagebox.askyesno("Firmware builder", f"Flash {what} for {board} to the board on {port}?"
                                    + ("\nThe board is erased first (its settings, channels and contacts are reset)." if self.erase.get() else "")
+                                   + ("\n\nThe OTAFIX bootloader goes on first: when asked, double-press the board's reset button." if self.otafix.get() else "")
                                    + "\n\nDon't unplug it until this says it is done.", parent=self): return
         if io.CONNECTION_ARGS and io.CONNECTION_ARGS[:2] == ["-s", port]: self.api.disconnect()        # mcIRC must let go of that port
-        erase, others = self.erase.get(), set(ids) - {port}
+        erase, others, otafix = self.erase.get(), set(ids) - {port}, self.otafix.get()
         def work():
             mac = None
             with open(ini_path, encoding="utf-8") as f: original = f.read()
             try:
                 with open(ini_path, "w", encoding="utf-8") as f: f.write(make(original))
+                if otafix: self.install_otafix_step()                          # the bootloader first, then the firmware on top of it
                 for target in (["erase"] if erase else []) + ["upload"]:
                     self.write(f"\n== pio run -e {env} -t {target} --upload-port {port}\n")
                     p = subprocess.Popen(self.pio + ["run", "-e", env, "-t", target, "--upload-port", port], cwd=source_dir(self.tag),
@@ -396,14 +417,30 @@ class FirmwareBuilderWindow(ToolWindow):
                 now = port_ids()
                 result["port"] = port if port in now else next((p for p in now if p not in others), port)
             target = ["-t", result["ip"], "-p", "5000"] if result["ip"] else ["-s", result["port"]] if result["port"] else None
-            if kind == "companion" and target and all(radio):
-                self.write(f"\nSetting the radio: {','.join(radio)} MHz/kHz/SF/CR\n")
-                io.execute_mesh_command(target + ["set", "radio", ",".join(radio)], timeout=40, retries=2, lock=io._MeshLock())
-                io.execute_mesh_command(target + ["reboot"], timeout=20, retries=0, lock=io._MeshLock())
+            if kind == "companion" and target:
+                name, _, lat, lon = setup or ("", "", "", "")
+                steps = ([["set", "name", name]] if name else []) + ([["set", "lat", lat]] if lat else []) + ([["set", "lon", lon]] if lon else []) \
+                    + ([["set", "radio", ",".join(radio)]] if all(radio) else [])
+                if steps:
+                    self.write("\nSetting the node up: " + ", ".join(" ".join(s[1:]) for s in steps) + "\n")
+                    for s in steps: io.execute_mesh_command(target + s, timeout=40, retries=2, lock=io._MeshLock())
+                    io.execute_mesh_command(target + ["reboot"], timeout=20, retries=0, lock=io._MeshLock())
+            elif setup and kind in ota.CLI_KINDS:
+                cmds = ota.setup_commands(setup[0], setup[1], radio, setup[2], setup[3])
+                if cmds:
+                    time.sleep(4)
+                    now = port_ids()
+                    on = port if port in now else next((p for p in now if p not in others), port)
+                    self.write(f"\nSetting the node up over USB ({on}):\n")
+                    ota.serial_cli(on, cmds, log=self.write)
+                    result["setup_done"] = True
             return result
         def done(r):
             self.flashed, self.ip = r, r["ip"]
             if r["kind"] != "companion":
+                if r.get("setup_done"):
+                    return self.write("\nSet up and restarted with your settings. Change more later in its private window (/login, then /set ...)"
+                                      + (" - an observer also needs its Wi-Fi, MQTT server and area code: see its console or 'start webconfig'." if r["kind"].startswith("observer") else ".") + "\n")
                 return self.write("\n" + fb.AFTER[r["kind"]] + "\n")
             if r["ip"]: self.write(f"\nThe board is on your Wi-Fi at {r['ip']} (port 5000). Give it a fixed address in your router so it keeps it.\n")
             elif "wifi" in r["conns"]:

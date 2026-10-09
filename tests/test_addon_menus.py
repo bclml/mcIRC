@@ -84,7 +84,28 @@ _, sub = submenu("Mesh bot"); sub.invoke(1); root.update(); root.update()
 ok("Switch off switches the addon off and removes its submenu", "mesh_bot" not in app.addons.loaded and submenu("Mesh bot")[0] is None
    and app.settings["addons_enabled"]["mesh_bot"] is False)
 
+# ---- ON/OFF switches on the toolbar
+def switch_btn(api): return getattr(api, "_switch_btn", None)
+api_mu = app.addons.loaded["map_uploader"][1]
+api_mu.add_switch(mu.switch, False, mu.toggle); root.update()
+b = switch_btn(api_mu)
+ok("an addon with 'switch' gets an ON/OFF switch on the toolbar", b is not None and b.cget("text") == "Map uploader: OFF", b and b.cget("text"))
+b.invoke(); root.update()
+ok("pressing it switches the addon on - through its own toggle()", mu_api.get("enabled") is True and b.cget("text") == "Map uploader: ON")
+mu_api.set("enabled", False); root.after(1600, root.quit); root.mainloop()
+ok("...and it follows a change made elsewhere (its settings window)", b.cget("text") == "Map uploader: OFF", b.cget("text"))
+mu_api.set("_toolbar", False); mu_api._draw_switch(); root.update()
+ok("'Show its switch on the toolbar' unticked: the switch goes", switch_btn(mu_api) is None and not b.winfo_exists())
+mu_api.set("_toolbar", True); mu_api._draw_switch(); root.update()
+ok("...ticked again: it's back", switch_btn(mu_api) is not None and switch_btn(mu_api).winfo_exists())
+sys.path[:0] = [os.path.join(ROOT, "packages", p) for p in ("fun_bot", "weather_bot", "bot_help", "channel_list")]
+for pkg in ("fun_bot", "weather_bot", "mesh_bot", "channel_list", "bot_help", "map_uploader", "packet_upload"):
+    spec = importlib.util.spec_from_file_location(f"t_sw_{pkg}", os.path.join(ROOT, "packages", pkg, pkg + ".py"))
+    mod = importlib.util.module_from_spec(spec); spec.loader.exec_module(mod)
+    ok(f"{pkg} has an ON/OFF switch", getattr(mod.Addon, "switch", None) == "enabled")
+last_btn = switch_btn(mu_api)
 for n in list(app.addons.loaded): app.addons.unload(n)
+ok("unloading removes the switch too", not last_btn.winfo_exists())
 ok("unloading removes every addon's submenu", all(submenu(t)[0] is None for t in ("Map uploader", "Packet upload", "Dolphins")))
 root.destroy()
 print("\nALL PASSED" if not fails else f"\n{len(fails)} FAILED: {fails}")

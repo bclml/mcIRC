@@ -62,11 +62,12 @@ def post(body):
 
 class Addon(AddonBase):
     title = "Map uploader"
-    version = "1.0.1"
+    version = "1.0.2"
     author = "mcIRC (after recrof/map.meshcore.io-uploader)"
     description = ("Puts the repeaters, room servers and sensors your node hears on the official MeshCore map (map.meshcore.io). "
                    "Each upload is signed by your node; its private key never leaves the radio. Off until you switch it on.")
     tick_seconds = 0
+    switch = "enabled"           # its ON/OFF switch on the toolbar
 
     def on_load(self):
         self.seen, self.queue, self.lock = core.Seen(), [], threading.Lock()

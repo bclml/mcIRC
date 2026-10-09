@@ -27,7 +27,7 @@ COMMANDS = {        # command: (what it does, needs a place)
     "contact": "who runs this bot",
 }
 ALIASES = {"solarforecast": "sf", "overhead": "airplanes"}
-VERSION = "1.0.5"
+VERSION = "1.0.6"
 
 
 class Addon(AddonBase):
@@ -37,6 +37,7 @@ class Addon(AddonBase):
     description = ("Answers weather commands in the channels you choose (default #weather): wx <place>, gwx, aqi, sun, moon, solar, sf, hfcond, "
                    "satpass, airplanes, rain, aurora, channels, status, contact. Off until you switch it on.")
     tick_seconds = 60
+    switch = "enabled"           # its ON/OFF switch on the toolbar
 
     def on_load(self):
         self.started, self.answers, self._home, self._rain_said = time.time(), 0, None, 0.0

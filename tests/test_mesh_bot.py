@@ -93,6 +93,17 @@ bot.greet_box.delete("1.0", "end"); bot.greet_box.insert("1.0", "One {nick}\n\n 
 bot.apply_options()
 ok("the settings box saves one greeting per line, blanks skipped", app.settings["addons"]["mesh_bot"]["greet_lines"] == ["One {nick}", "Two {nick}"],
    app.settings["addons"]["mesh_bot"].get("greet_lines"))
+from unittest import mock
+REL = [{"tag_name": "companion-v1.17.1", "published_at": "2026-08-14T13:32:31Z"}, {"tag_name": "repeater-v1.17.1", "published_at": "2026-08-14T13:32:04Z"},
+       {"tag_name": "room-server-v1.17.1", "published_at": "2026-08-14T13:31:40Z"}, {"tag_name": "companion-v1.17.0", "published_at": "2026-08-09"},
+       {"tag_name": "companion-v1.18.0-beta", "prerelease": True, "published_at": "2026-09-01"}]
+ok("firmware: the newest companion, repeater and room server versions (no pre-releases)", mcmds.firmware_text(REL) ==
+   "MeshCore firmware: companion v1.17.1, repeater v1.17.1, room server v1.17.1 (2026-08-14) - github.com/meshcore-dev/MeshCore/releases", mcmds.firmware_text(REL))
+calls = []
+with mock.patch.object(mod.mc, "http_json", lambda url, **k: calls.append(url) or REL):
+    first, second = bot.firmware(), bot.firmware()
+ok("...GitHub is asked at most once an hour", first == second and len(calls) == 1, calls)
+ok("firmware is one of the Mesh bot's (read-only) commands", "firmware" in mod.COMMANDS)
 root.destroy()
 print("\nALL PASSED" if not fails else f"\n{len(fails)} FAILED: {fails}")
 sys.exit(1 if fails else 0)

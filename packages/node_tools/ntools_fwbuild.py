@@ -5,8 +5,20 @@ import re
 
 ENV_LINE = re.compile(r"^\[env:([A-Za-z0-9_\-]+)\]\s*$", re.M)
 KINDS = {"companion_radio_usb": ("companion", "usb"), "companion_radio_ble": ("companion", "ble"), "companion_radio_wifi": ("companion", "wifi"),
-         "repeater": ("repeater", None), "room_server": ("room_server", None), "sensor": ("sensor", None)}
-TYPE_TITLES = {"companion": "Companion (for chatting: mcIRC, the phone apps)", "repeater": "Repeater", "room_server": "Room server", "sensor": "Sensor"}
+         "repeater": ("repeater", None), "room_server": ("room_server", None), "sensor": ("sensor", None),
+         "repeater_observer_mqtt": ("observer", None), "room_server_observer_mqtt": ("observer_room", None),
+         "repeater_bridge_espnow": ("bridge_espnow", None), "repeater_bridge_rs232": ("bridge_rs232", None),
+         "terminal_chat": ("terminal_chat", None), "kiss_modem": ("kiss_modem", None)}
+TYPE_TITLES = {"companion": "Companion (for chatting: mcIRC, the phone apps)", "repeater": "Repeater", "room_server": "Room server", "sensor": "Sensor",
+               "observer": "Observer: repeater that also sends what it hears to MQTT analyzers", "observer_room": "Observer room server (MQTT)",
+               "bridge_espnow": "Repeater bridge over ESP-NOW (links two repeaters by Wi-Fi radio)", "bridge_rs232": "Repeater bridge over RS232 (serial cable)",
+               "terminal_chat": "Terminal chat (chat from a serial terminal, no app)", "kiss_modem": "KISS modem (LoRa modem for PC software)"}
+WIFI_OTA_KINDS = {"repeater", "room_server", "sensor", "observer", "observer_room", "bridge_espnow", "bridge_rs232"}   # MeshCore's CLI has 'start ota'
+
+# Where the source comes from: MeshCore's own releases, or a reviewed community fork pinned to one commit (like outside addons).
+OBSERVER_SOURCE = {"title": "Observer firmware (community: agessaman/MeshCore observer-firmware, 2026-10-04)",
+                   "repo": "agessaman/MeshCore", "ref": "7403067d1d6a3ae88ba3d8791243e0995cb8e37c"}
+COMMUNITY = {OBSERVER_SOURCE["title"]: OBSERVER_SOURCE}
 CONN_TITLES = {"usb": "USB", "ble": "Bluetooth", "wifi": "Wi-Fi"}
 CUSTOM_ENV = "mcirc_custom"
 
@@ -70,6 +82,23 @@ def with_wifi(ini_text, env, ssid, pwd):
     return ini_text[:start] + sec + ini_text[end:]
 
 
+def arch(board_envs):
+    """'esp32', 'nrf52' or 'other' - from the board's platformio.ini (its base section extends esp32_base / nrf52_base)."""
+    for env, ini in board_envs.values():
+        try:
+            with open(ini, encoding="utf-8", errors="replace") as f: text = f.read()
+        except OSError:
+            continue
+        if "esp32_base" in text: return "esp32"
+        if "nrf52_base" in text: return "nrf52"
+    return "other"
+
+
+def wifi_ota_ok(board_envs, kind):
+    """Update over Wi-Fi (MeshCore's 'start ota') is for ESP32 boards running a firmware with MeshCore's command line."""
+    return kind in WIFI_OTA_KINDS and arch(board_envs) == "esp32"
+
+
 def best_board(names, model="heltec v3"):
     key = re.sub(r"[^a-z0-9]+", "_", (model or "").lower()).strip("_")
     return next((b for b in names if b.lower() == key), next(iter(names), None))
@@ -77,4 +106,11 @@ def best_board(names, model="heltec v3"):
 
 AFTER = {k: f"A {v} is set up through its USB command line: open config.meshcore.dev in Chrome or Edge with the board on USB and set its name, "
              "admin password and radio there (or MeshCore's CLI over USB: set name ..., set password ..., set radio ..., reboot)."
-         for k, v in (("repeater", "repeater"), ("room_server", "room server"), ("sensor", "sensor"))}
+         for k, v in (("repeater", "repeater"), ("room_server", "room server"), ("sensor", "sensor"), ("bridge_espnow", "repeater bridge"),
+                      ("bridge_rs232", "repeater bridge"))}
+for _k in ("observer", "observer_room"):
+    AFTER[_k] = ("An observer is set up over USB like a repeater (name, admin password, radio), plus its Wi-Fi, MQTT server and your 3-letter "
+                 "area code (e.g. YVR) - from its serial console, or 'start webconfig' for a web page (see agessaman's observer docs). "
+                 "Community firmware: it repeats like a repeater and also sends what it hears to the analyzers.")
+AFTER["terminal_chat"] = "Terminal chat: open the board's USB port in a serial terminal (115200 baud) and type 'help'."
+AFTER["kiss_modem"] = "KISS modem: point your KISS software at the board's USB port (115200 baud)."

@@ -83,9 +83,9 @@ V3 = INI.replace("[env:Heltec_WSL3_companion_radio_wifi]", MORE + "[env:Heltec_W
 open(os.path.join(src2, "variants", "heltec_v3", "platformio.ini"), "w").write(V3)
 open(os.path.join(src2, "variants", "rak4631", "platformio.ini"), "w").write("[env:RAK_4631_companion_radio_usb]\n\n[env:RAK_4631_companion_radio_ble]\n\n[env:RAK_4631_repeater]\n")
 bd = fb.boards(src2)
-ok("boards and their firmware types are found", sorted(bd["Heltec_v3"]) == ["companion_ble", "companion_usb", "companion_wifi", "repeater", "room_server", "sensor"]
+ok("boards and their firmware types are found", sorted(bd["Heltec_v3"]) == ["bridge_rs232", "companion_ble", "companion_usb", "companion_wifi", "repeater", "room_server", "sensor"]
    and sorted(bd["RAK_4631"]) == ["companion_ble", "companion_usb", "repeater"], {k: sorted(v) for k, v in bd.items()})
-ok("...a repeater bridge isn't mistaken for a repeater", bd["Heltec_v3"]["repeater"][0] == "Heltec_v3_repeater")
+ok("...a repeater bridge is its own type, not mistaken for a repeater", bd["Heltec_v3"]["repeater"][0] == "Heltec_v3_repeater" and bd["Heltec_v3"]["bridge_rs232"][0] == "Heltec_v3_repeater_bridge_rs232")
 ok("a board without Wi-Fi offers only USB and Bluetooth", fb.connections(bd["RAK_4631"]) == ["usb", "ble"])
 env, ini, make = fb.plan(bd["Heltec_v3"], "repeater")
 ok("a repeater is the board's own repeater build, unchanged", env == "Heltec_v3_repeater" and make(V3) == V3)

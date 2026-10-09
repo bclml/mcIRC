@@ -65,11 +65,12 @@ def world_cup(arg, get=mc.http_json):
 
 class Addon(AddonBase):
     title = "Fun bot"
-    version = "1.0.4"
+    version = "1.0.5"
     author = "mcIRC"
     description = ("dice, roll, magic8, joke, dadjoke, hacker, catfact and wc (World Cup scores and tables) - each switched on for the channels you "
                    "choose. Off until you switch it on.")
     tick_seconds = 0
+    switch = "enabled"           # its ON/OFF switch on the toolbar
 
     def on_load(self):
         self.limiter = mc.Limiter(per_user=int(self.api.get("cooldown", 20)), gap=5)

@@ -81,7 +81,7 @@
       "author": "bclml",
       "description": "Node clock, channel manager, backup & restore, firmware check / update, firmware builder - companion with USB / Bluetooth / Wi-Fi, repeater, room server or sensor (needs PlatformIO), path tools, packet monitor, radio health graphs and coverage map - in the Addons menu. Updating firmware from mcIRC needs 'pip install esptool'.",
       "path": "packages/node_tools",
-      "tested": "2026-10-04 with app 1.5.4 on a Heltec V3 (fw 1.16.0): every read checked on the real node; writing (clock set, channel edits, restore, firmware update) checked with a stand-in radio only. Wi-Fi firmware: built and flashed to a real Heltec V4 with app 2.0.1 (v1.17.1, found on the network, name and radio written over Wi-Fi)"
+      "tested": "2026-10-04 with app 1.5.4 on a Heltec V3 (fw 1.16.0): every read checked on the real node; writing (clock set, channel edits, restore, firmware update) checked with a stand-in radio only. Wi-Fi firmware: built and flashed to a real Heltec V4 with app 2.0.1 (v1.17.1, found on the network, name and radio written over Wi-Fi). Firmware builder (1.2.0, app 2.0.7): a Heltec V3 companion with USB + Bluetooth + Wi-Fi built with PlatformIO (not flashed yet); repeater, room server and sensor choices checked by tests only"
     },
     {
       "name": "map_uploader",

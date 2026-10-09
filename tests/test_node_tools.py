@@ -90,7 +90,7 @@ spec = importlib.util.spec_from_file_location("t_node_tools", os.path.join(ROOT,
 m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
 api = AddonAPI(app, "node_tools"); inst = m.Addon(api); api.display = inst.title; inst.on_load()
 am = app.addon_menu
-subs = [root.nametowidget(am.entrycget(i, "menu")) for i in range(am.index("end") + 1) if am.type(i) == "cascade" and am.entrycget(i, "label") == "MeshCore tools"]
+subs = [root.nametowidget(am.entrycget(i, "menu")) for i in range((am.index("end") if am.index("end") is not None else -1) + 1) if am.type(i) == "cascade" and am.entrycget(i, "label") == "MeshCore tools"]
 menu = [subs[-1].entrycget(i, "label") for i in range(subs[-1].index("end") + 1) if subs[-1].type(i) != "separator"] if subs else []
 ok("the tools are in one 'MeshCore tools' submenu of the Addons menu", all(any(t in l for l in menu) for t in ("Node clock", "Channels", "Backup", "Firmware", "Path tools", "Packet monitor", "Radio health", "Coverage", "Firmware builder")), menu)
 ok("...without 'MeshCore tools' repeated in every entry", menu and not any("MeshCore tools" in l for l in menu), menu)
@@ -101,7 +101,7 @@ ok("...and fill with the heard repeaters", [x[2] for x in inst.coverage(True)] =
 inst.open("monitor"); root.update()
 ok("the packet monitor lists the heard packets", len(inst.windows["monitor"].t.get_children()) == 4)
 inst.on_unload(); api._cleanup(); root.update()
-ok("unloading removes the submenu", not any(am.type(i) == "cascade" and am.entrycget(i, "label") == "MeshCore tools" for i in range(am.index("end") + 1))
+ok("unloading removes the submenu", not any(am.type(i) == "cascade" and am.entrycget(i, "label") == "MeshCore tools" for i in range((am.index("end") if am.index("end") is not None else -1) + 1))
    or "node_tools" in app.addons.loaded)                    # (an installed copy on this PC keeps its own)
 root.destroy()
 print("\nALL PASSED" if not fails else f"\n{len(fails)} FAILED: {fails}")

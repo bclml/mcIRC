@@ -39,6 +39,7 @@ class AddonAPI:
         self._app, self.name = app, name
         self.display = name   # the addon's human title once it is instantiated (shown in menus)
         self._commands, self._menu, self._layers, self._buttons, self._helps, self._actions = [], [], [], [], [], []
+        self._items = []          # (label, fn) of this addon's Addons-menu entries
 
     # -- settings (persisted in gui_settings.json under "addons") --
     def get(self, key, default=None): return self._app.settings.setdefault("addons", {}).get(self.name, {}).get(key, default)
@@ -116,8 +117,26 @@ class AddonAPI:
         self._app.commands[name.lower()] = (fn, help, self.name)
         self._commands.append(name.lower())
     def add_menu_item(self, label, fn):
-        self._app.addon_menu.add_command(label=f"{self.display}: {label}", command=fn)
-        self._menu.append(f"{self.display}: {label}")
+        """An entry in the Addons menu: 'Title: label' - or, once an addon has several, its own submenu named after it ('MeshCore tools >
+        Node clock...') so the name isn't repeated on every line."""
+        self._items.append((label, fn))
+        self._draw_menu()
+    def _draw_menu(self):
+        import tkinter as tk
+        m = self._app.addon_menu
+        for entry in self._menu:
+            try: m.delete(entry)
+            except Exception: pass
+        self._menu = []
+        if len(self._items) == 1:
+            label, fn = self._items[0]
+            m.add_command(label=f"{self.display}: {label}", command=fn)
+            self._menu.append(f"{self.display}: {label}")
+        elif self._items:
+            sub = tk.Menu(m, tearoff=0)
+            for label, fn in self._items: sub.add_command(label=label, command=fn)
+            m.add_cascade(label=self.display, menu=sub)
+            self._menu.append(self.display)
     def add_toolbar_button(self, text, fn):
         """Returns the tk.Button so you can change its text/colour later."""
         import tkinter as tk
@@ -211,7 +230,7 @@ class AddonAPI:
         for b in self._buttons:
             try: b.destroy()
             except Exception: pass
-        self._commands, self._menu, self._layers, self._buttons = [], [], [], []
+        self._commands, self._menu, self._layers, self._buttons, self._items = [], [], [], [], []
 
 
 class AddonManager:
@@ -515,7 +534,7 @@ AddonManager.update_installed = _update_installed
 # Catalog of tested addons (addons-catalog.json in the GitHub repo).  Only addons that have been reviewed and tested
 # by a maintainer are listed; the GUI's "Browse addons..." shows them and installs a chosen one with a click.
 # ===================================================================================================================
-import posixpath, urllib.request
+import posixpath, re, urllib.request
 
 REPO = "bclml/mcIRC"
 BRANCH = "master"
@@ -533,13 +552,33 @@ def fetch_catalog(raw=RAW, get=_http_get):
     return data.get("addons", [])
 
 
+OUTSIDE_REPO_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9-]{0,38}/[A-Za-z0-9_][A-Za-z0-9_.-]{0,99}")      # GitHub owner/repo; never "..", "/" or "%"
+COMMIT_RE = re.compile(r"[0-9a-f]{40}")
+
+
+def source_raw(entry, raw=RAW):
+    """Where a catalog entry's files come from: this project, or - an addon kept in someone else's GitHub repo ('repo') - that repo at
+    exactly the commit the maintainers reviewed ('ref').  A pinned commit can't change afterwards, so nobody gets unreviewed code."""
+    repo = entry.get("repo")
+    if not repo: return raw
+    if not OUTSIDE_REPO_RE.fullmatch(repo) or not COMMIT_RE.fullmatch(str(entry.get("ref", ""))):
+        raise ValueError(f"'{entry.get('name')}' must name its GitHub repo and the reviewed commit (40 hex characters)")
+    return f"https://raw.githubusercontent.com/{repo}/{entry['ref']}/"
+
+
 def install_from_catalog(entry, raw=RAW, get=_http_get):
-    """Downloads one catalog entry's package straight from the repo and installs it (same checks as a local install)."""
-    base = entry["path"].strip("/")
-    manifest = json.loads(get(f"{raw}{base}/addon.json").decode("utf-8"))
+    """Downloads one catalog entry's package - from this project or its own reviewed repo - and installs it (same checks as a local install)."""
+    raw = source_raw(entry, raw)
+    base = (entry.get("path") or "").strip("/")
+    prefix = base + "/" if base else ""
+    manifest = json.loads(get(f"{raw}{prefix}addon.json").decode("utf-8"))
+    if entry.get("repo"):                                     # an outside repo must deliver exactly the reviewed addon
+        if manifest.get("name") != entry.get("name"): raise ValueError(f"the repo's addon is '{manifest.get('name')}', not '{entry.get('name')}'")
+        if str(manifest.get("version")) != str(entry.get("version")): raise ValueError(
+            f"the reviewed commit has version {manifest.get('version')}, the catalog says {entry.get('version')}")
     files = {}
     for src, dest in manifest["files"].items():
-        repo_path = posixpath.normpath(posixpath.join(base, src))
+        repo_path = posixpath.normpath(posixpath.join(base, src)) if base else posixpath.normpath(src)
         if repo_path.startswith("..") or repo_path.startswith("/"): raise ValueError(f"unsafe path in package: {src}")
         files[dest] = get(raw + repo_path)
     return install_files(manifest, files, raw + base)

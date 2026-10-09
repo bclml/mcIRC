@@ -1,0 +1,33 @@
+name: upstream-check
+
+# Once a day: the outside projects the addon catalog follows (an addon kept in someone else's repo, or one our addons build on) - is
+# there a version newer than the reviewed one?  For each, a pull request labelled "upstream-update" moves the pin; merging it is the
+# approval (scripts/upstream_check.py, gui_sources.py).  Needs Settings > Actions > General > "Allow GitHub Actions to create and
+# approve pull requests".
+on:
+  schedule:
+    - cron: "17 13 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Look for new upstream versions and open review pull requests
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git config user.name "mcIRC upstream check"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          python scripts/upstream_check.py

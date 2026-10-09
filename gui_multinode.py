@@ -9,6 +9,7 @@ import os
 import threading
 import time
 
+import gui_nodestatus
 import meshcore_io as io
 
 POLL_SECONDS = 15
@@ -61,7 +62,11 @@ class ExtraNode:
 
     def stop(self): self.stop_evt.set()
 
+    def state(self, state):
+        self.app.q.put(("call", lambda: self.app.set_node_state(self.label, state)))
+
     def _run(self):
+        self.state("connecting")
         self.say(f"*** Connecting to node '{self.label}' ({' '.join(self.args)})...")
         while not self.stop_evt.is_set():                       # until it answers
             try:
@@ -76,19 +81,26 @@ class ExtraNode:
                 self.stop_evt.wait(15)
         if self.stop_evt.is_set(): return
         self.connected = True
+        self.state("connected")
         freq = self.info.get("radio_freq")
         self.app.q.put(("call", lambda: self.app.node_connected(self.label)))
         self.say(f"*** Connected to node '{self.label}': {self.info.get('name', '?')}" + (f", {freq} MHz" if freq else "")
                  + f". Channels: {', '.join(channel_display(n, i) for n, i in sorted(self.channels.items(), key=lambda x: x[1]))}")
-        last_contacts, was_down = 0.0, False
+        last_contacts, last_battery, was_down = 0.0, 0.0, False
         try:
             while not self.stop_evt.is_set():
                 try:
                     res = self.run_cmd(".sync_msgs", retries=1)
                     for kind, idx, text, nick, extra in io.parse_messages(f"{res.stdout}\n{res.stderr}"):
                         self.app.q.put(("xchat", self.label, kind, idx, text, nick, extra))
-                    if was_down: self.say(f"*** Node '{self.label}' answers again.")
+                    if was_down:
+                        self.say(f"*** Node '{self.label}' answers again.")
+                        self.state("connected")
                     was_down = False
+                    if time.time() - last_battery > gui_nodestatus.BATTERY_EVERY:
+                        last_battery = time.time()
+                        mv = gui_nodestatus.battery_mv(self.args, lock=self.lock, health=self.health)
+                        self.app.q.put(("battery", self.label, mv))
                     if time.time() - last_contacts > CONTACTS_EVERY:
                         last_contacts = time.time()
                         self.read_contacts()
@@ -98,9 +110,11 @@ class ExtraNode:
                     if self.health.is_down and not was_down:
                         was_down = True
                         self.say(f"*** Node '{self.label}' is not answering: {io.explain_failure(str(e))}", "error")
+                        self.state("down")
                 self.stop_evt.wait(POLL_SECONDS)
         finally:
             self.connected = False
+            self.state("stopped")
             self.app.q.put(("call", lambda: self.app.node_status(self.label, f"*** Disconnected from node '{self.label}'.", "info")))
 
     def read_contacts(self):
@@ -127,6 +141,8 @@ class MultiNodeMixin:
         return [c for c in self.settings.get("extra_nodes", []) if c.get("label") and c.get("enabled", True)]
 
     def start_extra_nodes(self):
+        on = {c["label"] for c in self.extra_node_configs()}
+        for label in [k for k in getattr(self, "_node_stat", {}) if k != "main" and k not in on]: self.drop_node_status(label)
         for cfg in self.extra_node_configs():
             n = self.extra_nodes.get(cfg["label"])
             if n is None or n.cfg != cfg: n = self.extra_nodes[cfg["label"]] = ExtraNode(self, cfg)
@@ -188,6 +204,7 @@ class MultiNodeMixin:
                                            + "Its windows are closed (their history stays in the logs folder).", parent=self.root): return
         n = self.extra_nodes.pop(label, None)
         if n: n.stop()
+        self.drop_node_status(label)
         self.settings["extra_nodes"] = [c for c in self.settings.get("extra_nodes", []) if c.get("label") != label]
         for name in [nm for nm in self.windows if split_tag(nm)[1] == label and not nm.startswith("@")]:
             w = self.windows.pop(name)

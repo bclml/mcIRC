@@ -4,6 +4,7 @@ import subprocess, sys, tkinter as tk, webbrowser
 from tkinter import ttk, messagebox
 
 import gui_addons as ga
+import gui_sources as gs
 import gui_update as gu
 from gui_common import BG
 
@@ -155,7 +156,17 @@ class CatalogDialog(tk.Toplevel):
             for e in r:
                 cur = have.get(e["name"])
                 state = "not installed" if not cur else "installed" if ga.vkey(cur["version"]) >= ga.vkey(e["version"]) else f"update ({cur['version']})"
-                self.t.insert("", "end", iid=e["name"], values=(e["title"], e["version"], e.get("author", ""), state, e.get("description", "")))
+                author = e.get("author", "") + (f" (github.com/{e['repo']})" if e.get("repo") else "")
+                self.t.insert("", "end", iid=e["name"], values=(e["title"], e["version"], author, state, e.get("description", "")))
+            follow = [e for e in r if gs.watched(e)]
+            if follow: self.app.bg(lambda: {e["name"]: gs.upstream_note(e) for e in follow}, notes_done)
+        def notes_done(notes):                              # newer upstream versions the maintainers haven't reviewed yet
+            if isinstance(notes, Exception) or not self.winfo_exists(): return
+            for name, note in notes.items():
+                if note and self.t.exists(name):
+                    vals = list(self.t.item(name, "values"))
+                    vals[3] = f"{vals[3]} - {note}"
+                    self.t.item(name, values=vals)
         self.app.bg(ga.fetch_catalog, done)
 
     def install(self):

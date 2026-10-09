@@ -39,6 +39,8 @@ import gui_skins
 import gui_echo
 import gui_rescue
 import gui_multinode
+import gui_nodestatus
+import gui_sources
 import gui_sounds
 from gui_private import PrivateMixin
 from gui_menus import MenusMixin
@@ -209,9 +211,14 @@ class CoreWorker:
             except Exception as e:
                 why = ea.explain_failure(str(e))
                 logging.warning(f"Could not read the node's own settings: {why}")
-            last_sync = last_resolve = 0
+            last_sync = last_resolve = last_battery = 0
             while not self.stop_evt.is_set():
                 now = time.time()
+                if now - last_battery >= gui_nodestatus.BATTERY_EVERY:         # it can answer here and still not transmit: watch the battery
+                    last_battery = now
+                    try: q.put(("battery", "main", gui_nodestatus.battery_mv(ea.CONNECTION_ARGS)))
+                    except ea.Cancelled: raise
+                    except Exception: pass
                 if not ea.CHANNEL_INDEX_BY_NAME and now - last_resolve > 60:
                     last_resolve = now
                     ea.resolve_channel_indices()
@@ -243,7 +250,7 @@ class QueueLogHandler(logging.Handler):
         if "[DIAGNOSTIC]" not in msg: self.q.put(("log", record.levelno, msg))
 
 
-class App(PrivateMixin, MenusMixin, CommandsMixin, gui_multinode.MultiNodeMixin):
+class App(PrivateMixin, MenusMixin, CommandsMixin, gui_multinode.MultiNodeMixin, gui_nodestatus.NodeStatusMixin):
     def __init__(self, root, demo=False):
         self.root, self.demo, self.connected = root, demo, False
         first_start = not os.path.exists(SETTINGS_PATH)          # a brand-new setup: the default addons get installed below
@@ -375,11 +382,13 @@ class App(PrivateMixin, MenusMixin, CommandsMixin, gui_multinode.MultiNodeMixin)
     def _status_bar(self):
         self.statusbar = bar = tk.Frame(self.root, bg=BG)
         bar.pack(side="bottom", fill="x")
-        self.sb_state = tk.Label(bar, bg=BG, relief="sunken", anchor="w", text="Not connected", width=34)
+        self.sb_state = tk.Label(bar, bg=BG, relief="sunken", anchor="w", text="Not connected", padx=4)
         self.sb_radio = tk.Label(bar, bg=BG, relief="sunken", anchor="w", text="")
         self.sb_clock = tk.Label(bar, bg=BG, relief="sunken", anchor="e", width=10)
         self.sb_warn = tk.Label(bar, bg=BG, fg="#c00000", relief="sunken", anchor="w", font=(gui_platform.UI_FONT_NAME, gui_platform.UI_FONT_SIZE, "bold"))
         self.sb_state.pack(side="left")
+        self.sb_nodes = tk.Frame(bar, bg=BG)                 # one status per node from Options > More nodes (gui_nodestatus.py)
+        self.sb_nodes.pack(side="left")
         self.sb_clock.pack(side="right")
         self.sb_radio.pack(side="left", fill="x", expand=True)
 
@@ -546,7 +555,7 @@ class App(PrivateMixin, MenusMixin, CommandsMixin, gui_multinode.MultiNodeMixin)
     def _h_state(self, state, detail):
         was = self.connected
         self.connected = state == "connected"
-        self.sb_state.config(text={"connecting": "Connecting...", "connected": f"Connected ({detail})", "stopped": "Not connected"}[state])
+        self.set_node_state("main", state, gui_nodestatus.describe_connection(detail.split()))
         gui_diag.event("state", f"{state} {'(' + gui_diag.describe_args(detail.split()) + ')' if detail else ''}")
         if self.connected and not was:
             self.addons.dispatch("on_connect")
@@ -592,6 +601,7 @@ class App(PrivateMixin, MenusMixin, CommandsMixin, gui_multinode.MultiNodeMixin)
         """The radio stopped answering / answers again / was restarted."""
         clock = lambda t: datetime.datetime.fromtimestamp(t).strftime("%H:%M")
         gui_diag.event("health", f"{ev} {info}")
+        if ev in ("down", "up"): self.set_node_state("main", "down" if ev == "down" else "connected")
         if ev == "down":
             self.sb_warn.config(text=f" RADIO NOT RESPONDING since {clock(info['since'])} ")
             self.sb_warn.pack(side="left", after=self.sb_state)
@@ -651,6 +661,10 @@ class App(PrivateMixin, MenusMixin, CommandsMixin, gui_multinode.MultiNodeMixin)
             r = gui_update.check()
             try: r["addons"] = ga.updates_available(installed, ga.fetch_catalog())
             except Exception: r["addons"] = []
+            r["reviews"] = []
+            if gui_sources.is_maintainer_copy():                # the maintainer's own copy: outside-addon updates waiting for review
+                try: r["reviews"] = gui_sources.pending_reviews()
+                except Exception: pass
             return r
         def done(r):
             if isinstance(r, Exception): return   # offline / GitHub unreachable: stay silent
@@ -660,6 +674,9 @@ class App(PrivateMixin, MenusMixin, CommandsMixin, gui_multinode.MultiNodeMixin)
             if r["addons"]:
                 self.status_line("*** Addon update" + ("s" if len(r["addons"]) > 1 else "") + " available: "
                                  + ", ".join(f"{name} {new}" for name, _, new, _ in r["addons"]) + " - Help > Check for updates.", "warn")
+            if r.get("reviews"):
+                self.status_line(f"*** {len(r['reviews'])} addon review{'s' if len(r['reviews']) > 1 else ''} waiting for you: "
+                                 + "; ".join(t for t, _ in r["reviews"]) + f" - https://github.com/{ga.REPO}/pulls?q=label%3A{gui_sources.REVIEW_LABEL}", "warn")
         self.bg(work, done)
 
     def auto_repair(self):
@@ -873,6 +890,7 @@ class App(PrivateMixin, MenusMixin, CommandsMixin, gui_multinode.MultiNodeMixin)
             if isinstance(r, Exception): return self.unsent(w, text, ea.explain_failure(str(r)))
             note = gui_echo.describe(r)
             if note and w is not None and mark: w.add_note(mark, f"({note})")
+            self.note_repeats(r)                                # several in a row nobody repeated: the radio may not be getting out
         self.bg(work, done)
 
     def note_packet(self, ev):

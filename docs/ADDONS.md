@@ -73,6 +73,26 @@ checks the manifest, destinations, syntax, that the addon loads, and that `on_lo
 3. Once it passes, the maintainer adds it to `addons-catalog.json`. From then on it shows up in
    *Browse online catalog* for everyone, and new versions you submit are re-tested before the catalog entry is bumped.
 
+### Keeping your addon in your own GitHub repo
+
+You don't have to move your code here. Put `addon.json` and your files in your own repo (at the top, or in a folder) and open an
+Addon submission issue with the repo's address. The catalog entry then points at your repo and **pins the exact commit that was
+reviewed**:
+
+```json
+{"name": "hello_mesh", "title": "Hello mesh", "version": "1.0.0", "author": "you",
+ "repo": "you/hello-mesh", "ref": "<40-character commit of the reviewed version>", "release": "v1.0.0", "path": "",
+ "description": "...", "tested": "..."}
+```
+
+mcIRC installs exactly that commit. When you publish a new release, a daily check here (`scripts/upstream_check.py`) opens a pull
+request labelled `upstream-update` that moves the pin; people see "v1.1.0 upstream (waiting for review)" in *Browse online catalog*,
+and get your new version with *Check for updates* once the maintainer has reviewed it and merged the pull request. Your release's
+`addon.json` version must match the version in the pull request.
+
+Addons that build on someone else's project (a library or tool from another repo) follow it the same way: an `"upstream": {"repo",
+"ref", "release"}` in the catalog entry and an `upstream.json` beside the addon.
+
 ### Review and test checklist
 
 - [ ] `check_package.py` passes

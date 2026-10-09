@@ -93,6 +93,19 @@ store["sources"]["Weekly reminder"] = True; a.apply_settings()
 ok("...after that, switching it on yourself is kept", ea.TX["sources"]["Weekly reminder"] is True)
 store.clear(); a.apply_settings()
 ok("a fresh install has it off", ea.TX["sources"]["Weekly reminder"] is False and ea.TX["sources"]["DriveBC"] is True)
+
+# the log rotated (5 MB) just before a restart: what was announced is in emergency_agent.log.1, the new log is almost empty
+rot = tempfile.mkdtemp(); cur = os.path.join(rot, "emergency_agent.log")
+with open(cur + ".2", "w", encoding="utf-8") as f:
+    f.write("x - INFO - Broadcasting NEW to Channel Index 4: [BC Transit] Nanaimo: 8 cancelled {id:ft-8}\n")
+with open(cur + ".1", "w", encoding="utf-8") as f:
+    f.write("x - INFO - Broadcasting NEW to Channel Index 4: [BC Transit] Nanaimo: 30 cancelled {id:ft-30}\n"
+            "x - INFO - Broadcasting CLEAR to Channel Index 4: [BC Transit] Nanaimo: 8 cancelled {id:ft-8}\n")
+with open(cur, "w", encoding="utf-8") as f: f.write("x - INFO - Syncing active data profiles from log traces...\n")
+ea.active_traffic_alerts.clear()
+with mock.patch.object(ea, "LOG_FILE_PATH", cur): ea.reload_active_alerts_from_log()
+ok("a restart right after the log rotated still knows what was announced (no repeats)", "BC Transit|ft-30" in ea.active_traffic_alerts
+   and "BC Transit|ft-8" not in ea.active_traffic_alerts, ea.active_traffic_alerts)
 os.unlink(log.name)
 print("\nALL PASSED" if not fails else f"\n{len(fails)} FAILED: {fails}")
 sys.exit(1 if fails else 0)

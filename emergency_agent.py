@@ -486,28 +486,34 @@ def _weather_guid(src, ttl):
     kinds = sorted(k.strip() for k in ttl.split(";") if k.strip() and not k.strip().upper().endswith(" ENDED"))
     return f"EC_REGION_{region}_{'_'.join(kinds)}" if kinds else None
 
+def _log_lines():
+    """Every line of the log, oldest first, across its rotated copies (emergency_agent.log.3 ... .1, then the log itself).  BUG FIX: only
+    the current file was replayed, so a restart soon after the log rotated at 5 MB found it nearly empty, forgot every alert already
+    announced and broadcast them all again."""
+    for path in [f"{LOG_FILE_PATH}.{n}" for n in range(3, 0, -1)] + [LOG_FILE_PATH]:
+        if os.path.exists(path):
+            with open(path, 'r', encoding='utf-8', errors='ignore') as f: yield from f
+
 def reload_active_alerts_from_log():
-    if not os.path.exists(LOG_FILE_PATH): return
     logging.info("Syncing active data profiles from log traces...")
     temp_active = {}
     new_re = re.compile(_LOG_LINE_RE_TMPL.format("NEW"))
     clear_re = re.compile(_LOG_LINE_RE_TMPL.format("CLEAR"))
     try:
-        with open(LOG_FILE_PATH, 'r', encoding='utf-8', errors='ignore') as f:
-            for line in f:
-                nm = new_re.search(line)
-                if nm:
-                    src, ttl, guid = nm.group(1).strip(), nm.group(2).strip(), nm.group(3)
-                    guid = guid or _weather_guid(src, ttl)
-                    if "5-Day Summary:" not in ttl and "3-Day Forecast:" not in ttl:
-                        key = f"{src}|{guid}" if guid else f"{src}|{ttl}"
-                        temp_active[key] = (src, ttl)
-                cm = clear_re.search(line)
-                if cm:
-                    src, ttl, guid = cm.group(1).strip(), cm.group(2).strip(), cm.group(3)
-                    for g in {guid, _weather_guid(src, ttl)} - {None}:
-                        temp_active.pop(f"{src}|{g}", None)
-                    temp_active.pop(f"{src}|{ttl}", None)
+        for line in _log_lines():
+            nm = new_re.search(line)
+            if nm:
+                src, ttl, guid = nm.group(1).strip(), nm.group(2).strip(), nm.group(3)
+                guid = guid or _weather_guid(src, ttl)
+                if "5-Day Summary:" not in ttl and "3-Day Forecast:" not in ttl:
+                    key = f"{src}|{guid}" if guid else f"{src}|{ttl}"
+                    temp_active[key] = (src, ttl)
+            cm = clear_re.search(line)
+            if cm:
+                src, ttl, guid = cm.group(1).strip(), cm.group(2).strip(), cm.group(3)
+                for g in {guid, _weather_guid(src, ttl)} - {None}:
+                    temp_active.pop(f"{src}|{g}", None)
+                temp_active.pop(f"{src}|{ttl}", None)
         for key, (src, ttl) in temp_active.items():
             if src.startswith("Weather Warning:"): active_weather_alerts[key] = (src, ttl)
             else: active_traffic_alerts[key] = (src, ttl)
@@ -525,17 +531,15 @@ def reload_critical_alert_ids_from_log():
     is exactly why quakes already announced in a previous run were being announced all over again.
     Pre-populating both id sets from past log lines before the loops start fixes it the same way
     reload_active_alerts_from_log() already does for traffic/weather."""
-    if not os.path.exists(LOG_FILE_PATH): return
     eq_re = re.compile(r'Earthquake M[\d.]+ detected near BC.*?\(([^)]+)\)\s*$')
     ts_re = re.compile(r'TSUNAMI \w+ detected affecting BC.*?\(([^)]+)\)\s*$')
     try:
-        with open(LOG_FILE_PATH, 'r', encoding='utf-8', errors='ignore') as f:
-            for line in f:
-                line = line.rstrip('\n')
-                m = eq_re.search(line)
-                if m: _earthquake_broadcast_ids.add(m.group(1))
-                m = ts_re.search(line)
-                if m: _tsunami_broadcast_ids.add(m.group(1))
+        for line in _log_lines():
+            line = line.rstrip('\n')
+            m = eq_re.search(line)
+            if m: _earthquake_broadcast_ids.add(m.group(1))
+            m = ts_re.search(line)
+            if m: _tsunami_broadcast_ids.add(m.group(1))
         logging.info(f"Restored {len(_earthquake_broadcast_ids)} earthquake + {len(_tsunami_broadcast_ids)} tsunami id(s) already announced in a previous run.")
     except Exception as e: logging.warning(f"Critical-alert id log sync failed: {e}")
 
@@ -686,14 +690,12 @@ def reload_weekly_ad_from_log():
     """The weekly reminder's "already sent this week" used to live only in memory, so every restart during Sunday 12:00-13:00 sent it
     again.  The log line it writes says when it last went out."""
     global last_weekly_ad_sent
-    if not os.path.exists(LOG_FILE_PATH): return
     try:
-        with open(LOG_FILE_PATH, "r", encoding="utf-8", errors="ignore") as f:
-            for line in f:
-                if "Sent weekly public-channel reminder" in line:
-                    try: d = datetime.datetime.strptime(line[:19], "%Y-%m-%d %H:%M:%S")
-                    except ValueError: continue
-                    last_weekly_ad_sent = (d.isocalendar()[0], d.isocalendar()[1])
+        for line in _log_lines():
+            if "Sent weekly public-channel reminder" in line:
+                try: d = datetime.datetime.strptime(line[:19], "%Y-%m-%d %H:%M:%S")
+                except ValueError: continue
+                last_weekly_ad_sent = (d.isocalendar()[0], d.isocalendar()[1])
     except Exception as e:
         logging.warning(f"Weekly reminder log check failed: {e}")
 

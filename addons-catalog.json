@@ -41,7 +41,7 @@
     {
       "name": "weather_bot",
       "title": "Weather bot",
-      "version": "1.0.7",
+      "version": "1.0.8",
       "author": "bclml",
       "description": "Answers weather commands in the channels you choose (default #weather): wx <place> (city, postal code, ZIP, node name or lat,lon), gwx, aqi, sun, moon, solar, sf, hfcond, satpass, airplanes, rain, aurora, channels, status, contact. Free data, no API keys. Off until you switch it on; rate-limited. satpass needs 'pip install sgp4'.",
       "path": "packages/weather_bot",
@@ -50,7 +50,7 @@
     {
       "name": "fun_bot",
       "title": "Fun bot",
-      "version": "1.0.6",
+      "version": "1.0.7",
       "author": "bclml",
       "description": "dice, roll, magic8, joke, dadjoke, hacker, catfact and wc (World Cup scores and tables), each switched on for the channels you choose. Off until you switch it on; rate-limited.",
       "path": "packages/fun_bot",
@@ -59,7 +59,7 @@
     {
       "name": "bot_help",
       "title": "Bot help",
-      "version": "1.0.5",
+      "version": "1.0.6",
       "author": "bclml",
       "description": "Answers 'bothelp' with the bot commands that work in that channel (Weather bot, Fun bot, Auto reply, ...), and can announce 'Type bothelp for a list of commands.' once a day at a set time. Choose which bots it lists. Off until you switch it on; rate-limited.",
       "path": "packages/bot_help",
@@ -68,7 +68,7 @@
     {
       "name": "channel_list",
       "title": "Channel list",
-      "version": "1.2.0",
+      "version": "1.2.1",
       "author": "bclml",
       "description": "Answers 'channel list' with the channels you keep in its list (add / remove / rename / reorder them in Options, and people can add one with 'channel list add #name' - checked names, at most 30, you see who added what; starts with 13 BC channels). Off until you switch it on; one answer per person per minute.",
       "path": "packages/channel_list",
@@ -114,7 +114,7 @@
     {
       "name": "mesh_bot",
       "title": "Mesh bot",
-      "version": "1.2.2",
+      "version": "1.2.3",
       "author": "bclml (commands after agessaman/meshcore-bot, MIT)",
       "description": "ping, hello, path, prefix, multitest, stats, sports, version and firmware (the newest MeshCore releases) - the agessaman/meshcore-bot commands mcIRC's other bots don't have - plus its greeter (a random greeting from a list you can edit), each switched on for the channels you choose. Off until you switch it on.",
       "path": "packages/mesh_bot",

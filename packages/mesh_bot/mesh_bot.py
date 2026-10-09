@@ -27,7 +27,7 @@ GREETING = cmds.DEFAULT_GREETINGS[0]                     # the single greeting o
 
 class Addon(AddonBase):
     title = "Mesh bot"
-    version = "1.2.2"
+    version = "1.2.3"
     author = "mcIRC (commands after agessaman/meshcore-bot, MIT)"
     description = ("ping, hello, path, prefix, multitest, stats, sports and version - the meshcore-bot commands mcIRC's other bots don't have - "
                    "plus its greeter for newcomers (a random greeting from your list), each switched on for the channels you choose. Off until you switch it on.")

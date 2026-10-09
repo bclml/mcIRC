@@ -23,6 +23,9 @@ C = {"wx", "sun", "joke"}
 ok("'wx Surrey' is the wx command with 'Surrey'", mc.parse_command("wx Surrey", C) == ("wx", "Surrey"))
 ok("'!wx V3T 1V8' works without a prefix set", mc.parse_command("!wx V3T 1V8", C) == ("wx", "V3T 1V8"))
 ok("the command must be the first word ('the sun is out' is chat)", mc.parse_command("the sun is out", C) is None)
+ok("other ways to call it: /wx, .wx, and after addressing the bot (@[mcIRC] wx, @mcIRC: wx)",
+   all(mc.parse_command(s, C) == ("wx", "Surrey") for s in ("/wx Surrey", ".wx Surrey", "@[mcIRC] wx Surrey", "@[mcIRC]: wx Surrey", "@mcIRC: wx Surrey")))
+ok("...but a mention followed by chat is still chat", mc.parse_command("@[Bob] see you later", C) is None and mc.parse_command("...", C) is None)
 ok("with prefix '!', plain 'wx' is ignored", mc.parse_command("wx 98101", C, "!") is None and mc.parse_command("!wx 98101", C, "!") == ("wx", "98101"))
 ok("channel lists: '#weather, Public' / 'all'", mc.channel_list("#weather, Public") == {"#weather", "public"} and mc.channel_list("all") == {"*"})
 ok("channel names match with or without '#'", mc.channel_ok("#Weather", mc.channel_list("weather")) and not mc.channel_ok("#bot-van", mc.channel_list("#weather")))

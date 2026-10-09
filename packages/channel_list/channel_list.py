@@ -26,7 +26,7 @@ def answer_text(channels, intro="Channels:"):
 
 class Addon(AddonBase):
     title = "Channel list"
-    version = "1.2.0"
+    version = "1.2.1"
     author = "mcIRC"
     description = ("Answers 'channel list' with the channels you keep in its list (add / remove / rename / reorder them in Options); "
                    "'channel list add #name' adds one from the mesh. Off until you switch it on.")

@@ -9,6 +9,7 @@ from gui_addons import AddonBase
 
 DEFAULT_TEXT = "Type bothelp for a list of commands."
 MAX_CHARS = 115
+ADDRESSED = re.compile(r"^@\[[^\]]*\]\s*[:,]?\s*|^@\S+[:,]\s*")       # '@[mcIRC] bothelp'
 
 
 def norm(ch):
@@ -48,7 +49,7 @@ def _wrap(text, limit):
 
 class Addon(AddonBase):
     title = "Bot help"
-    version = "1.0.5"
+    version = "1.0.6"
     author = "mcIRC"
     description = ("Answers 'bothelp' with the bot commands that work in that channel (Weather bot, Fun bot, Auto reply, ...), and can announce "
                    "'Type bothelp for a list of commands.' once a day at a set time. Off until you switch it on.")
@@ -68,8 +69,9 @@ class Addon(AddonBase):
     # ---- answering 'bothelp' ----
     def on_message(self, msg):
         if not self.api.get("enabled", False): return
-        text = (msg.get("text") or "").strip().lower()
-        if text not in ("bothelp", "!bothelp", "bothelp?", "!bothelp?"): return
+        text = ADDRESSED.sub("", (msg.get("text") or "").strip().lower(), count=1)
+        if text[:1] in "!/.": text = text[1:]
+        if text.rstrip("?") not in ("bothelp", "bot help", "help bot"): return          # bothelp, !bothelp, /bothelp, .bothelp, @[bot] bothelp
         if msg.get("dm") and not self.api.get("answer_dm", True): return
         now, who = time.time(), msg.get("nick", "?")
         if now - self.last_any < 5 or now - self.last_by.get(who, 0) < 60: return       # one answer per person per minute

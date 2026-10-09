@@ -21,14 +21,19 @@ def http_json(url, params=None, timeout=12, headers=None): return json.loads(htt
 
 
 # ---- commands ---------------------------------------------------------------------------------------------------------------------------
+CALL_MARKS = ("!", "/", ".")                                          # '!wx', '/wx', '.wx' - the ways other bots are called
+ADDRESSED = re.compile(r"^@\[[^\]]*\]\s*[:,]?\s*|^@\S+[:,]\s*")       # '@[mcIRC] wx ...', '@mcIRC: wx ...'
+
+
 def parse_command(text, commands, prefix=""):
     """'wx 98101' -> ('wx', '98101') when 'wx' is one of `commands`; None otherwise.  With a prefix ('!') only '!wx 98101' counts;
-    without one, '!wx' works as well as 'wx'.  The command has to be the first word, so normal chat rarely triggers it."""
-    t = (text or "").strip()
+    without one, '!wx', '/wx' and '.wx' work as well as 'wx', also after addressing the bot ('@[mcIRC] wx').  The command has to be
+    the first word, so normal chat rarely triggers it."""
+    t = ADDRESSED.sub("", (text or "").strip(), count=1)
     if prefix:
         if not t.startswith(prefix): return None
         t = t[len(prefix):]
-    elif t.startswith("!"):
+    elif t[:1] in CALL_MARKS:
         t = t[1:]
     word, _, arg = t.partition(" ")
     word = word.lower().rstrip("?.,!")

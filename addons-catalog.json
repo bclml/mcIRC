@@ -114,9 +114,9 @@
     {
       "name": "mesh_bot",
       "title": "Mesh bot",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "author": "bclml (commands after agessaman/meshcore-bot, MIT)",
-      "description": "ping, hello, path (the repeaters your message came through), prefix (who uses a key prefix), multitest (the paths your message took), stats (the mesh in 24 h), sports and version - the meshcore-bot commands mcIRC's other bots don't have - plus its greeter for newcomers (off by default). Each switched on for the channels you choose; answers in the channel or privately. Off until you switch it on.",
+      "description": "ping, hello, path (the repeaters your message came through) and prefix (who uses a key prefix) from mcIRC's own node memory, multitest (the paths your message took), stats (the mesh in 24 h), sports and version - the meshcore-bot commands mcIRC's other bots don't have - plus its greeter for newcomers (off by default). Each switched on for the channels you choose; answers in the channel or privately. Off until you switch it on.",
       "path": "packages/mesh_bot",
       "upstream": {
         "repo": "agessaman/meshcore-bot",

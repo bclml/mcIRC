@@ -24,7 +24,7 @@ GREETING = "Welcome to the mesh, @[{nick}]! Type bothelp for the bot commands."
 
 class Addon(AddonBase):
     title = "Mesh bot"
-    version = "1.0.0"
+    version = "1.0.1"
     author = "mcIRC (commands after agessaman/meshcore-bot, MIT)"
     description = ("ping, hello, path, prefix, multitest, stats, sports and version - the meshcore-bot commands mcIRC's other bots don't have - "
                    "plus its greeter for newcomers, each switched on for the channels you choose. Off until you switch it on.")
@@ -93,7 +93,8 @@ class Addon(AddonBase):
         raise ValueError("unknown command")
 
     def greet(self, msg):
-        """Once per newcomer: someone whose first message this is, and who wasn't in node memory when the greeter was switched on."""
+        """Once per newcomer: someone whose first message this is, and who wasn't in mcIRC's node memory (nodes.db, not the radio's
+        contact list) when the greeter was switched on."""
         if msg.get("dm") or not mc.channel_ok(msg.get("channel", ""), mc.channel_list(self.api.get("greet_channels", ""))): return
         nick = (msg.get("nick") or "").strip()
         if not nick or nick == "someone": return
@@ -140,7 +141,8 @@ class Addon(AddonBase):
             tk.Label(r, text=label, bg=bg).pack(side="left")
             tk.Entry(r, textvariable=var, width=width).pack(side="left", padx=4)
         tk.Label(f, bg=bg, fg="#555", wraplength=460, justify="left",
-                 text="A newcomer: someone not in your node memory when you switch the greeter on, speaking for the first time.").pack(anchor="w")
+                 text="A newcomer: someone who isn't in mcIRC's own memory of nodes (nodes.db on this PC - not the radio's contact list) when "
+                      "you switch the greeter on, speaking for the first time. path and prefix name repeaters from that same memory.").pack(anchor="w")
         return f
 
     def apply_options(self):

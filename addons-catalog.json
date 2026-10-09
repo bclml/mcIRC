@@ -50,7 +50,7 @@
     {
       "name": "fun_bot",
       "title": "Fun bot",
-      "version": "1.0.7",
+      "version": "1.0.8",
       "author": "bclml",
       "description": "dice, roll, magic8, joke, dadjoke, hacker, catfact and wc (World Cup scores and tables), each switched on for the channels you choose. Off until you switch it on; rate-limited.",
       "path": "packages/fun_bot",
@@ -114,7 +114,7 @@
     {
       "name": "mesh_bot",
       "title": "Mesh bot",
-      "version": "1.2.3",
+      "version": "1.2.4",
       "author": "bclml (commands after agessaman/meshcore-bot, MIT)",
       "description": "ping, hello, path, prefix, multitest, stats, sports, version and firmware (the newest MeshCore releases) - the agessaman/meshcore-bot commands mcIRC's other bots don't have - plus its greeter (a random greeting from a list you can edit), each switched on for the channels you choose. Off until you switch it on.",
       "path": "packages/mesh_bot",

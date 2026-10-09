@@ -24,7 +24,7 @@ class Fake:
         f = tk.Frame(parent); tk.Entry(f, textvariable=self.v).pack(); return f
     def apply_options(self): applied.append(self.v.get())
 fake = Fake()
-app.addons.loaded["fake"] = (fake, SimpleNamespace())
+app.addons.loaded["fake"] = (fake, __import__("gui_addons").AddonAPI(app, "fake"))
 app.addons.info = lambda n: ("Fake addon", "1.2.3", "", "Does fake things.") if n == "fake" else ("x", "1", "", "")
 app.addons._call = lambda name, hook, *a: getattr(app.addons.loaded[name][0], hook)(*a)
 

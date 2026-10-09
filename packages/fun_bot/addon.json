@@ -1,7 +1,7 @@
 {
   "name": "fun_bot",
   "title": "Fun bot",
-  "version": "1.0.7",
+  "version": "1.0.8",
   "description": "dice, roll, magic8, joke, dadjoke, hacker, catfact and wc (World Cup scores and tables) - each switched on for the channels you choose. Off until you switch it on.",
   "requires": [],
   "files": {

@@ -27,7 +27,7 @@ GREETING = cmds.DEFAULT_GREETINGS[0]                     # the single greeting o
 
 class Addon(AddonBase):
     title = "Mesh bot"
-    version = "1.2.3"
+    version = "1.2.4"
     author = "mcIRC (commands after agessaman/meshcore-bot, MIT)"
     description = ("ping, hello, path, prefix, multitest, stats, sports and version - the meshcore-bot commands mcIRC's other bots don't have - "
                    "plus its greeter for newcomers (a random greeting from your list), each switched on for the channels you choose. Off until you switch it on.")
@@ -154,7 +154,7 @@ class Addon(AddonBase):
             tk.Entry(grid, textvariable=self.v_ch[c], width=22).grid(row=i, column=1, padx=4, pady=1)
             tk.Label(grid, text=what, bg=bg, fg="#555", anchor="w").grid(row=i, column=2, sticky="w")
         r = tk.Frame(f, bg=bg); r.pack(anchor="w", pady=(6, 0))
-        tk.Button(r, text="Use #bot-van for all", command=lambda: [v.set("#bot-van") for v in self.v_ch.values()]).pack(side="left")
+        tk.Button(r, text="Same channel for all", command=self._same_for_all).pack(side="left")
         tk.Button(r, text="Clear all", command=lambda: [v.set("") for v in self.v_ch.values()]).pack(side="left", padx=4)
         for label, var, width in (("Command prefix (blank: 'ping' and '!ping' both work):", self.v_prefix, 4),
                                   ("Seconds before the same person gets another answer:", self.v_cool, 6),
@@ -179,6 +179,11 @@ class Addon(AddonBase):
                  text="A newcomer: someone who isn't in mcIRC's own memory of nodes (nodes.db on this PC - not the radio's contact list) when "
                       "you switch the greeter on, speaking for the first time. path and prefix name repeaters from that same memory.").pack(anchor="w")
         return f
+
+    def _same_for_all(self):
+        """The first channel filled in, for every command."""
+        first = next((v.get().strip() for v in self.v_ch.values() if v.get().strip()), "")
+        for v in self.v_ch.values(): v.set(first)
 
     def apply_options(self):
         greet_was = self.api.get("greet_channels", "")

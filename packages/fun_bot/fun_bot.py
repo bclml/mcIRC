@@ -65,7 +65,7 @@ def world_cup(arg, get=mc.http_json):
 
 class Addon(AddonBase):
     title = "Fun bot"
-    version = "1.0.7"
+    version = "1.0.8"
     author = "mcIRC"
     description = ("dice, roll, magic8, joke, dadjoke, hacker, catfact and wc (World Cup scores and tables) - each switched on for the channels you "
                    "choose. Off until you switch it on.")
@@ -87,7 +87,7 @@ class Addon(AddonBase):
     def on_unload(self): pass
 
     def where(self, cmd):
-        """Channels a command answers in: {'#bot-van', 'public'} / {'*'}; empty = switched off."""
+        """Channels a command answers in: {'#general', 'public'} / {'*'}; empty = switched off."""
         return mc.channel_list(self.api.get("channels", {}).get(cmd, ""))
 
     def on_message(self, msg):
@@ -144,7 +144,7 @@ class Addon(AddonBase):
             tk.Label(grid, text=what, bg=bg, fg="#555", anchor="w").grid(row=i, column=2, sticky="w")
         r = tk.Frame(f, bg=bg)
         r.pack(anchor="w", pady=(6, 0))
-        tk.Button(r, text="Use #bot-van for all", command=lambda: [v.set("#bot-van") for v in self.v_ch.values()]).pack(side="left")
+        tk.Button(r, text="Same channel for all", command=self._same_for_all).pack(side="left")
         tk.Button(r, text="Clear all", command=lambda: [v.set("") for v in self.v_ch.values()]).pack(side="left", padx=4)
         for label, var, width in (("Command prefix (blank: 'joke' and '!joke' both work; '!' = only '!joke'):", self.v_prefix, 4),
                                   ("Seconds before the same person gets another answer:", self.v_cool, 6)):
@@ -154,6 +154,11 @@ class Addon(AddonBase):
             tk.Entry(r, textvariable=var, width=width).pack(side="left", padx=4)
         tk.Checkbutton(f, text="Also answer private messages (for the commands that are on somewhere)", variable=self.v_dm, bg=bg).pack(anchor="w")
         return f
+
+    def _same_for_all(self):
+        """The first channel filled in, for every command."""
+        first = next((v.get().strip() for v in self.v_ch.values() if v.get().strip()), "")
+        for v in self.v_ch.values(): v.set(first)
 
     def apply_options(self):
         self.api.set("enabled", self.v_on.get())

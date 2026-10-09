@@ -1,0 +1,6 @@
+{
+  "repo": "agessaman/meshcore-bot",
+  "ref": "7a6580c608b6b9e5ac2f7df8c236c875e5cb4b22",
+  "release": "v1.1.0",
+  "note": "mesh_bot ports these meshcore-bot commands: ping, hello, path, prefix, multitest, stats, sports, version, greeter. A new upstream version means checking them for changes worth porting."
+}

@@ -1,0 +1,12 @@
+{
+  "name": "mesh_bot",
+  "title": "Mesh bot",
+  "version": "1.0.0",
+  "description": "ping, hello, path, prefix, multitest, stats, sports and version - the agessaman/meshcore-bot commands mcIRC's other bots don't have - plus its greeter, each switched on for the channels you choose. Off until you switch it on.",
+  "requires": [],
+  "files": {
+    "mesh_bot.py": "addons/mesh_bot.py",
+    "meshbot_cmds.py": "meshbot_cmds.py",
+    "meshbot_common.py": "meshbot_common.py"
+  }
+}

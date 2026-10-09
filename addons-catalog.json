@@ -110,6 +110,20 @@
         "release": "v2.2.0"
       },
       "tested": "2026-10-08 with app 2.0.5: messages, packet hashes and the log-in token checked against the upstream uploader's own code; MQTT connection, token renewal and offline status covered by tests with a fake broker; not yet tried against a real analyzer"
+    },
+    {
+      "name": "mesh_bot",
+      "title": "Mesh bot",
+      "version": "1.0.0",
+      "author": "bclml (commands after agessaman/meshcore-bot, MIT)",
+      "description": "ping, hello, path (the repeaters your message came through), prefix (who uses a key prefix), multitest (the paths your message took), stats (the mesh in 24 h), sports and version - the meshcore-bot commands mcIRC's other bots don't have - plus its greeter for newcomers (off by default). Each switched on for the channels you choose; answers in the channel or privately. Off until you switch it on.",
+      "path": "packages/mesh_bot",
+      "upstream": {
+        "repo": "agessaman/meshcore-bot",
+        "ref": "7a6580c608b6b9e5ac2f7df8c236c875e5cb4b22",
+        "release": "v1.1.0"
+      },
+      "tested": "2026-10-08 with app 2.0.6: every command covered by tests with fake node memory, heard packets and sports data; not yet tried on the mesh"
     }
   ]
 }

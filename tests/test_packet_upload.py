@@ -90,6 +90,8 @@ inst.on_tick()
 ok("a token about to run out is renewed (signed again) and the connection refreshed", all(c.reconnects == 1 for c in FakeClient.made) and len(signed) == 10)
 inst.on_disconnect()
 ok("disconnecting: 'offline' is sent and nothing more is wanted", all(c.pub[-1][1]["status"] == "offline" for c in FakeClient.made) and not app.raw_packets_wanted and not inst.clients)
+ok("...and 'offline' keeps the node's radio, model and firmware (the analyzers' observer list shows them)",
+   all(c.pub[-1][1]["radio"] != "unknown" and c.pub[-1][1]["model"] != "unknown" for c in FakeClient.made), [c.pub[-1][1] for c in FakeClient.made][:1])
 for f in fakes: f.stop()
 root.destroy()
 print("\nALL PASSED" if not fails else f"\n{len(fails)} FAILED: {fails}")

@@ -100,7 +100,7 @@
     {
       "name": "packet_upload",
       "title": "Packet upload",
-      "version": "1.0.2",
+      "version": "1.0.3",
       "author": "bclml (after agessaman/meshcore-packet-capture, MIT)",
       "description": "Sends the packets your node hears to community packet analyzers (MeshCore.ca, CascadiaMesh, LetsMesh and 14 more) over MQTT, on mcIRC's own connection, so they can map coverage and routes. Logs in with a token your node signs - no password, the private key never leaves the radio. Off until you switch it on and give your area code. Needs 'pip install paho-mqtt'.",
       "path": "packages/packet_upload",

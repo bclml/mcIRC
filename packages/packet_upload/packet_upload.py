@@ -33,7 +33,7 @@ def new_client(transport, client_id):
 
 class Addon(AddonBase):
     title = "Packet upload"
-    version = "1.0.2"
+    version = "1.0.3"
     author = "mcIRC (after agessaman/meshcore-packet-capture)"
     description = ("Sends the packets your node hears to community packet analyzers (MeshCore.ca, CascadiaMesh, LetsMesh, ...) so they can "
                    "map coverage and routes. Logs in with a token your node signs. Off until you switch it on and give your area code.")
@@ -155,7 +155,7 @@ class Addon(AddonBase):
         for c in self.clients.values():
             try:
                 if self.me: c["client"].publish(core.topic(area, self.me["key"], "status"),
-                                                json.dumps(core.status_message("offline", self.me["name"], self.me["key"])), qos=0, retain=True)
+                                                json.dumps(core.status_message("offline", self.me["name"], self.me["key"], self.me["model"], self.me["fw"], self.me["radio"])), qos=0, retain=True)
                 c["client"].disconnect(); c["client"].loop_stop()
             except Exception: pass
         self.clients = {}

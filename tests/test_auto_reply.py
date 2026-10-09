@@ -22,6 +22,7 @@ def make(rules=None, **settings):
     api.get = lambda k, d=None: store.get(k, d)
     api.set = lambda k, v: store.__setitem__(k, v)
     api.send = lambda ch, text: sent.append((ch, text))
+    api.reply = lambda msg, text: sent.append((msg["channel"], text))      # the same channel (or privately - test_private_replies)
     api.channels = lambda: CHANNELS
     a = ar.Addon(api); a.on_load()
     return a, sent, store

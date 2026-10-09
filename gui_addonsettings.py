@@ -29,6 +29,11 @@ class AddonSettingsWindow(tk.Toplevel):
             for label in ["main"] + extra:
                 self.node_vars[label] = tk.BooleanVar(value=label in on)
                 tk.Checkbutton(row, text="main node" if label == "main" else label, variable=self.node_vars[label], bg=BG).pack(side="left")
+        self.private_var = None
+        if self._is_bot(inst):                                 # an addon that answers people: answers in the channel or privately
+            self.private_var = tk.BooleanVar(value=bool(app.settings.get("addons", {}).get(name, {}).get("_reply_private", False)))
+            tk.Checkbutton(self, text="Send answers by private message instead of in the channel (to whoever asked)", variable=self.private_var,
+                           bg=BG, anchor="w").pack(fill="x", padx=10, pady=(4, 0))
         buttons = tk.Frame(self, bg=BG)
         buttons.pack(side="bottom", fill="x", padx=10, pady=8)
         ttk.Button(buttons, text="Cancel", command=self.destroy).pack(side="right")
@@ -55,7 +60,14 @@ class AddonSettingsWindow(tk.Toplevel):
             tk.Label(holder, text="This addon has no settings.", bg=BG).pack(anchor="w")
         self.transient(parent or app.root)
 
+    def _is_bot(self, inst):
+        """Answers people: it lists bot commands for 'bothelp', or says so (replies = True)."""
+        return getattr(inst, "replies", False) or any(getattr(api, "name", None) == self.name for api, _ in getattr(self.app, "bot_helps", []))
+
     def apply(self):
+        if self.private_var is not None:
+            self.app.settings.setdefault("addons", {}).setdefault(self.name, {})["_reply_private"] = bool(self.private_var.get())
+            self.app.save()
         if self.node_vars:
             self.app.settings.setdefault("addons", {}).setdefault(self.name, {})["_nodes"] = [k for k, v in self.node_vars.items() if v.get()]
             self.app.save()

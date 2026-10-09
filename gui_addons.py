@@ -24,6 +24,7 @@ class AddonBase:
     def on_disconnect(self): """The connection to the node ended."""
     def on_message(self, msg): """A chat message arrived. msg: dict(channel, channel_idx, nick, text, snr, hops, raw)."""
     def on_tick(self): """Called every `tick_seconds` seconds."""
+    def on_packet(self, pkt): """The main radio heard a packet: dict(t, type, route, path, snr, rssi, length) - for an advert also 'packet' (hex)."""
     def on_demo(self): """Only in `--demo` mode: fill your windows / map layers with fake data."""
     def on_theme(self, theme): """The colours changed (Options: colour theme or skin).  theme: dict of colours, see gui_themes.py."""
     def build_options(self, parent):
@@ -73,8 +74,13 @@ class AddonAPI:
         """Display name of the channel window in front ('#drivebc', 'Public'), or None for Status / private windows."""
         w = self._app.current
         return w.name if w is not None and w is not self._app.status and not w.name.startswith("@") else None
-    def reply(self, msg, text):
-        """Answer a message where it came from: its channel, or the person for a direct message (msg as given to on_message)."""
+    def reply(self, msg, text, private=None):
+        """Answer a message where it came from: its channel, or the person for a direct message (msg as given to on_message).
+        private=True (default: the addon's 'Send answers by private message' setting) answers a channel message privately instead."""
+        if private is None: private = bool(self.get("_reply_private", False))
+        if private and not msg.get("dm"):
+            self._app.q.put(("call", lambda: self._app.reply_privately(msg, text)))
+            return
         if msg.get("dm"):
             w = self._app.windows.get(msg["channel"])
             if w is not None: self._app.q.put(("call", lambda: self._app.send_dm(w, text)))

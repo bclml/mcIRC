@@ -73,6 +73,19 @@ class PrivateMixin:
         self.addons.dispatch("on_message", {"channel": w.name, "channel_idx": None, "nick": who, "text": text, "dm": True, "node": via,
                                              "snr": extra.get("snr"), "hops": hops, "raw": extra.get("raw")})
 
+    def reply_privately(self, msg, text):
+        """A bot's answer to a channel message, sent to the person who asked instead (on the node it came in on).  Someone not in node
+        memory yet can't be messaged: then the answer goes to the channel after all, and Status says why."""
+        nick = (msg.get("nick") or "").strip()
+        node = self.nodes.find_by_name(nick) if nick else None
+        if not node:
+            self.status_line(f"*** Couldn't answer {nick or 'someone'} privately (not in node memory yet) - answered in {msg.get('channel')} instead.", "warn")
+            return self.send_to(msg.get("channel"), text)
+        w = self.find_private_window(node["public_key"], node["name"]) or self._new_private(node["name"], node["public_key"])
+        if not w.key: w.key = node["public_key"]
+        if msg.get("node"): w.node = msg["node"]               # it came in on an extra node: the answer goes out there too
+        self.send_dm(w, text)
+
     def send_dm(self, w, text):
         key = w.key or (self.nodes.find_by_name(w.name[1:]) or {}).get("public_key")
         if getattr(w, "node", None) and key: return self.send_extra_dm(w, key, text)      # this person is on an extra node

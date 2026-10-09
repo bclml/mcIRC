@@ -14,7 +14,7 @@
     {
       "name": "auto_reply",
       "title": "Auto reply",
-      "version": "1.1.4",
+      "version": "1.1.5",
       "author": "bclml",
       "description": "Keyword rules: answer the words you choose on the channels you choose, with your own reply text, sent to the channels you pick. Comes with a 'test' rule.",
       "path": "packages/auto_reply",
@@ -82,6 +82,20 @@
       "description": "Node clock (check and set), channel manager (add / rename / re-key / remove, duplicates shown), backup & restore (settings, channels, contacts, optional identity), firmware check and update for ESP32 boards, a Wi-Fi firmware builder (your Wi-Fi in MeshCore's companion firmware, flashed and added as a node), a version list with the newest preselected, a Node: choice to work on any connected node, path tools (show / discover / reset / trace, repeater status and neighbours), live packet monitor, radio health graphs and a coverage map. Firmware updates need 'pip install esptool'.",
       "path": "packages/node_tools",
       "tested": "2026-10-04 with app 1.5.4 on a Heltec V3 (fw 1.16.0): every read checked on the real node; writing (clock set, channel edits, restore, firmware update) checked with a stand-in radio only. Wi-Fi firmware: built and flashed to a real Heltec V4 with app 2.0.1 (v1.17.1, found on the network, name and radio written over Wi-Fi)"
+    },
+    {
+      "name": "map_uploader",
+      "title": "Map uploader",
+      "version": "1.0.0",
+      "author": "bclml (Python port of recrof/map.meshcore.io-uploader, MIT)",
+      "description": "Puts the repeaters, room servers and sensors your node hears on the official MeshCore map (map.meshcore.io). Only adverts really signed by their node; each upload is signed by your node itself - its private key never leaves the radio. People's companions are never uploaded. Off until you switch it on.",
+      "path": "packages/map_uploader",
+      "upstream": {
+        "repo": "recrof/map.meshcore.io-uploader",
+        "ref": "dc88b71f45e0b900ba35d3e14b270bc4c4a8d536",
+        "release": ""
+      },
+      "tested": "2026-10-08 with app 2.0.4: decoding, signature checks, replay rules and the request covered by tests with real Ed25519-signed adverts; signing on a real node and a real upload not yet tried"
     }
   ]
 }

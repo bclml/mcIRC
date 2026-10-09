@@ -1,0 +1,6 @@
+{
+  "repo": "recrof/map.meshcore.io-uploader",
+  "ref": "dc88b71f45e0b900ba35d3e14b270bc4c4a8d536",
+  "release": "",
+  "note": "map_uploader is a Python port of this project: a new upstream version means checking whether the port needs the same change."
+}

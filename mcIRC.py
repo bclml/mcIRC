@@ -900,6 +900,7 @@ class App(PrivateMixin, MenusMixin, CommandsMixin, gui_multinode.MultiNodeMixin,
                "my_pos": (self.settings.get("node_lat"), self.settings.get("node_lon"))}      # where we were (MeshCore tools: wardrive log)
         self.packet_log.append(rec)
         del self.packet_log[:-1000]
+        if ev.get("packet") and hasattr(self, "addons"): self.addons.dispatch("on_packet", dict(rec, packet=ev["packet"]))     # adverts, whole
         if rec["path"]: self.note_signal("in", rec["path"], size=rec["size"])
 
     def note_signal(self, direction, path, idx=None, size=1):

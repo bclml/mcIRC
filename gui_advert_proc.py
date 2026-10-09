@@ -8,7 +8,8 @@ up), then stays connected for --seconds and prints one JSON line per event as it
     {"event": "contact", "contact": {...}}                a contact that was added or changed on the radio (name, type, position, ...)
     {"event": "new_contact", "contact": {...}}            an advert waiting for approval (the node is in manual-add mode)
     {"event": "rx", "path": "a1b2", "size": 1, "type": "GRP_TXT", "route": "FLOOD", "snr": 7.5, "rssi": -80, "length": 60}
-                                                          a packet the radio heard: its kind, route and signal only
+                                                          a packet the radio heard: its kind, route and signal only - an ADVERT
+                                                          (public, signed by its node) also with "packet": its bytes in hex (map uploader)
     {"event": "error", "message": "..."}
 
 No message text is ever read or printed here."""
@@ -52,10 +53,11 @@ async def run(a):
     mc.subscribe(EventType.NEW_CONTACT, on_new)
     mc.subscribe(EventType.ADVERTISEMENT, on_advert)
 
-    async def on_rx(ev):                    # every packet the radio heard: kind, route, signal - never its content (map signals, packet monitor)
+    async def on_rx(ev):                    # every packet the radio heard: kind, route, signal - never message content (map signals, packet monitor)
         d = ev.payload or {}
+        extra = {"packet": d.get("payload", "")} if d.get("payload_typename") == "ADVERT" else {}     # adverts are public and signed: whole
         out(event="rx", path=d.get("path", "") if d.get("path_len", 0) > 0 else "", size=d.get("path_hash_size", 1), type=d.get("payload_typename", ""),
-            route=d.get("route_typename", ""), snr=d.get("snr"), rssi=d.get("rssi"), length=d.get("payload_length"))
+            route=d.get("route_typename", ""), snr=d.get("snr"), rssi=d.get("rssi"), length=d.get("payload_length"), **extra)
     if getattr(EventType, "RX_LOG_DATA", None) is not None: mc.subscribe(EventType.RX_LOG_DATA, on_rx)      # (older meshcore libraries don't have it)
     try:
         await mc.commands.get_contacts(lastmod=a.lastmod)       # catch-up (silent when mcIRC knew nothing)

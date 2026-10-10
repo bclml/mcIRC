@@ -46,6 +46,7 @@ for w, mode in ((900, "cover"), (900, "stretch"), (900, "tile")):
 # ---- the real window
 root = tk.Tk()
 app = mcIRC.App(root, demo=True)
+app.settings["bots_in_public"] = True      # these tests answer in Public on purpose (the no-bots-in-Public rule: test_private_replies)
 root.update()
 ok("no banner without a skin", getattr(app, "_banner", None) is None)
 app.settings["skin"] = "Loose"; app.apply_theme(); root.update()

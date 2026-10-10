@@ -22,6 +22,7 @@ DEFAULT_SETTINGS = {
     "advert_listen": True,       # between polls, listen for adverts so new / changed nodes show up at once (USB and WiFi)
     "advert_notices": True,      # say in the Status window when a node is heard for the first time
     "show_time": True, "font_size": 10, "auto_connect": False,
+    "bots_in_public": False,       # bots never post in Public (the channel everyone hears); their answers there go privately
     "check_updates": True,       # look for a newer version at startup (at most once a day)
     "last_update_check": 0,
     "theme": "Classic mIRC", "skin": "None", "highlight_words": "",

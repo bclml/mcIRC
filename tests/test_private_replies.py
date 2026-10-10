@@ -80,6 +80,28 @@ with mock.patch.object(app.addons, "info", lambda n: (n, "1.0", "", "")):
     win = gui_addonsettings.AddonSettingsWindow(app, "tquiet")
     ok("an addon that answers nobody doesn't show it", win.private_var is None)
     win.destroy()
+# ---- nothing from bots in Public
+from unittest import mock as _mock
+calls = []
+papi = AddonAPI(app, "fun_bot")
+app.settings["bots_in_public"] = False
+while not app.q.empty(): app.q.get_nowait()
+with _mock.patch.object(app, "send_to", lambda ch, t, **k: calls.append(("channel", ch))), \
+        _mock.patch.object(app, "reply_privately", lambda m, t: calls.append(("private", m["nick"]))):
+    for ch in ("Public", "Public [wifi 1]", "#general"):
+        papi.reply({"channel": ch, "nick": "Ann", "text": "joke", "dm": False, "node": "main"}, "a joke", private=False)
+    papi.send("Public", "hello all"); papi.send(0, "hello all"); papi.send("#general", "hi")
+    while not app.q.empty():
+        item = app.q.get_nowait()
+        if item[0] == "call": item[1]()
+ok("bots never post in Public (any node's): an answer there goes to the person privately", calls.count(("private", "Ann")) == 2
+   and ("channel", "Public") not in calls and ("channel", "Public [wifi 1]") not in calls, calls)
+ok("...other channels as before; a bot's own post to Public is dropped", calls.count(("channel", "#general")) == 2 and len(calls) == 4, calls)
+calls.clear(); app.settings["bots_in_public"] = True
+with _mock.patch.object(app, "send_to", lambda ch, t, **k: calls.append(("channel", ch))):
+    papi.reply({"channel": "Public", "nick": "Ann", "text": "joke", "dm": False, "node": "main"}, "a joke", private=False)
+ok("...unless 'Let bots post in Public' is ticked in Options", calls == [("channel", "Public")], calls)
+app.settings["bots_in_public"] = False
 root.destroy()
 print("\nALL PASSED" if not fails else f"\n{len(fails)} FAILED: {fails}")
 sys.exit(1 if fails else 0)

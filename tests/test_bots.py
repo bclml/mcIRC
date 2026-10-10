@@ -87,6 +87,7 @@ ok("rain: tells when it starts", ws.rain(1, 1, "Hope", get=lambda *a, **k: steps
 # ---- the addons in the real window
 root = tk.Tk()
 app = mcIRC.App(root, demo=True); root.update()
+app.settings["bots_in_public"] = True      # these tests answer in Public on purpose (the no-bots-in-Public rule: test_private_replies)
 app.connected = True
 def run_now(fn, done):
     try: r = fn()

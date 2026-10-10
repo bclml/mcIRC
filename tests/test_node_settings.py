@@ -38,6 +38,7 @@ class Echo(AddonBase):
 
 root = tk.Tk()
 app = mcIRC.App(root, demo=True); root.update()
+app.settings["bots_in_public"] = True      # these tests answer in Public on purpose (the no-bots-in-Public rule: test_private_replies)
 for n in list(app.addons.loaded): app.addons.unload(n)
 app.save = lambda: None
 app.settings["extra_nodes"] = [{"label": "wifi 1", "mode": "tcp", "host": "x", "enabled": True}]

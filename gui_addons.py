@@ -105,8 +105,15 @@ class AddonAPI:
     def channel_index(self, name):
         from gui_common import channel_index
         return channel_index(name)
+    def _public_blocked(self, channel):
+        """Bots never post in Public (any node's) unless Options > Display 'Let bots post in Public' is ticked - the channel everyone hears."""
+        if self._app.settings.get("bots_in_public", False): return False
+        name = channel if isinstance(channel, str) else ("Public" if channel in (0, "0") else "")
+        return name.split(" [")[0].strip().lower() in ("public", "#public")
     def send(self, channel, text):
-        """Send `text` to a channel (display name like '#drivebc'/'Public', or an index). Runs in the background."""
+        """Send `text` to a channel (display name like '#general'/'Public', or an index). Runs in the background.  Not to Public (see above)."""
+        if self._public_blocked(channel):
+            return self._app.status_line(f"*** [{self.name}] Not posted in Public: bots don't post there (Options > Display > Let bots post in Public).", "warn")
         self._app.send_to(channel, text)
     def current_channel(self):
         """Display name of the channel window in front ('#drivebc', 'Public'), or None for Status / private windows."""
@@ -117,6 +124,7 @@ class AddonAPI:
         private=True (default: the addon's 'Send answers by private message' setting) answers a channel message privately instead."""
         if private is None:
             with self.for_node(msg.get("node") or "main"): private = bool(self.get("_reply_private", False))      # that node's choice
+        if not msg.get("dm") and self._public_blocked(msg.get("channel", "")): private = True     # in Public: only to the person who asked
         if private and not msg.get("dm"):
             self._app.q.put(("call", lambda: self._app.reply_privately(msg, text)))
             return

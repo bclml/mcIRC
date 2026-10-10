@@ -17,6 +17,7 @@ def ok(label, cond, detail=""):
 ok("it ships the same meshbot_common.py as the other bots", filecmp.cmp("packages/channel_list/meshbot_common.py", "packages/weather_bot/meshbot_common.py", shallow=False))
 root = tk.Tk()
 app = mcIRC.App(root, demo=True); root.update()
+app.settings["bots_in_public"] = True      # these tests answer in Public on purpose (the no-bots-in-Public rule: test_private_replies)
 app.connected = True
 sent = []
 app.send_to = lambda ch, text: sent.append((ch, text))

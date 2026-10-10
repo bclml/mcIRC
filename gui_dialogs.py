@@ -159,8 +159,8 @@ class OptionsDialog(tk.Toplevel):
         self._row(f, "Highlight words (comma separated):", "highlight_words", 24)
         tk.Label(f, text="@nickname and @[nick name] in messages are highlighted automatically (stronger when it is your name).", bg=BG, fg="#555", wraplength=420, justify="left").pack(anchor="w")
         tk.Checkbutton(f, text="Show timestamps", variable=self.vars["show_time"], bg=BG).pack(anchor="w", pady=(6, 0))
-        tk.Checkbutton(f, text="Let bots post in Public (off: no bot or greeter says anything there - their answers go to the person privately)",
-                       variable=self.vars["bots_in_public"], bg=BG).pack(anchor="w")
+        tk.Checkbutton(f, text="Let bots post in Public\n(off: bots and the greeter say nothing there - they answer the person privately)",
+                       variable=self.vars["bots_in_public"], bg=BG, justify="left", anchor="w").pack(anchor="w")
         self._row(f, "Font size:", "font_size", 4)
         tk.Checkbutton(f, text="Check for updates when the GUI starts (once a day)", variable=self.vars["check_updates"], bg=BG).pack(anchor="w", pady=(8, 0))
         tk.Checkbutton(f, text="Keep a log file per window (logs/ folder, one .txt each)", variable=self.vars["log_enabled"], bg=BG).pack(anchor="w", pady=(8, 0))

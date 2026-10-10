@@ -981,16 +981,16 @@ class App(PrivateMixin, MenusMixin, CommandsMixin, gui_multinode.MultiNodeMixin,
         ea.CHANNEL_INDEX_BY_NAME.update({"Public": 0, "drivebc": 3, "bcferries": 4, "bctransit": 5, "translink": 6, "weather": 7, "bot-van": 8})
         self.sb_state.config(text="Demo mode (no radio)")
         now = int(time.time())
-        spots = [("Surrey Repeater", 2, 49.13, -122.82, 60), ("Mt Seymour Rptr", 2, 49.37, -122.95, 300), ("Cypress Rptr", 2, 49.40, -123.20, 3000),
-                 ("Victoria Hub", 2, 48.46, -123.36, 900), ("Nanaimo Rptr", 2, 49.17, -123.94, 7200), ("Alice", 1, 49.28, -123.12, 120),
-                 ("Bob", 1, 49.19, -122.85, 30), ("Langley Room", 3, 49.10, -122.60, 5000), ("Tofino Sensor", 4, 49.15, -125.90, 600),
-                 ("Old Whistler Rptr", 2, 50.12, -122.95, 8 * 86400), ("Kamloops Rptr", 2, 50.67, -120.33, 2 * 86400)]
+        spots = [("Hilltop Repeater", 2, 49.13, -122.82, 60), ("Ridge Rptr", 2, 49.37, -122.95, 300), ("Summit Rptr", 2, 49.40, -123.20, 3000),
+                 ("Harbour Hub", 2, 48.46, -123.36, 900), ("Island Rptr", 2, 49.17, -123.94, 7200), ("Alice", 1, 49.28, -123.12, 120),
+                 ("Bob", 1, 49.19, -122.85, 30), ("Valley Room", 3, 49.10, -122.60, 5000), ("Coast Sensor", 4, 49.15, -125.90, 600),
+                 ("Old Pass Rptr", 2, 50.12, -122.95, 8 * 86400), ("Inland Rptr", 2, 50.67, -120.33, 2 * 86400)]
         radio = {f"{i + 16:02x}" * 32: {"public_key": f"{i + 16:02x}" * 32, "adv_name": n, "type": t, "adv_lat": la, "adv_lon": lo, "last_advert": now - a, "lastmod": now - a}
                  for i, (n, t, la, lo, a) in enumerate(spots)}
         self.nodes.update_from_radio(radio, now)
         self.nodes.update_from_radio({k: v for k, v in radio.items() if k not in list(radio)[-2:]}, now)  # last two fall off the radio but stay remembered
-        feed = [("in", 0, "Anyone copy from Langley?", "Alice", {"snr": 11.5, "hops": 2}),
-                ("in", 0, "Loud and clear in Surrey", "Bob", {"snr": 13.0, "hops": 0}),
+        feed = [("in", 0, "Anyone copy from the valley?", "Alice", {"snr": 11.5, "hops": 2}),
+                ("in", 0, "Loud and clear downtown", "Bob", {"snr": 13.0, "hops": 0}),
                 ("in", 8, "test", "Carol", {"snr": 9.25, "hops": 1})]
         for kind, idx, text, nick, extra in feed: self._h_chat(kind, idx, text, nick or self.settings["node_name"], extra)
         self._h_channels()

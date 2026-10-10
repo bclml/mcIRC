@@ -141,7 +141,7 @@ pump(0.3)
 ok("a DM is also marked NOT SENT while down", "NOT SENT" in alice.text.get("1.0", "end") and not calls)
 ok("advert listener stays off while the radio is down", app.adverts.enabled() is False)
 app.admin_pw = {}
-rpt_node = app.nodes.find_by_name("Surrey Repeater") or app.nodes.all()[0]
+rpt_node = app.nodes.find_by_name("Hilltop Repeater") or app.nodes.all()[0]
 rw = app.open_query(rpt_node["name"], rpt_node["public_key"]); calls.clear()
 app.send_remote(rw, "ver"); pump(0.3)
 ok("repeater commands also fail fast", not calls and "NOT SENT" in rw.text.get("1.0", "end"))

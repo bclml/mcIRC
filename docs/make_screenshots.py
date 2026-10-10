@@ -67,8 +67,8 @@ def steps():
     app.select_window("@Alice"); yield 800
     grab(root, "direct-messages.png")
 
-    rpt = app.nodes.find_by_name("Surrey Repeater")
-    app.open_query("Surrey Repeater", rpt["public_key"]); yield 400
+    rpt = app.nodes.find_by_name("Hilltop Repeater")
+    app.open_query("Hilltop Repeater", rpt["public_key"]); yield 400
     app.entry.delete(0, "end"); app.entry.insert(0, "/re"); app.cmd_popup.update("/re"); yield 700
     grab(root, "commands.png")
     app.cmd_popup.hide(); app.entry.delete(0, "end")

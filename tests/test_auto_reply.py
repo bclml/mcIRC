@@ -16,7 +16,7 @@ clock = [1000.0]
 ar.time.time = lambda: clock[0]
 CHANNELS = ["Public", "#bot-van", "#kod-bot", "#drivebc", "#weather"]
 def make(rules=None, **settings):
-    store, sent = dict(settings), []
+    store, sent = dict({"enabled": True}, **settings), []           # switched on (it is off until switched on: checked below)
     if rules is not None: store["rules"] = rules
     api = mock.MagicMock()
     api.get = lambda k, d=None: store.get(k, d)
@@ -32,7 +32,10 @@ def talk(a, sent, *args, **kw):
 R = lambda **kw: {"name": kw.pop("name", "r"), "enabled": True, "match": "exact", "listen": "", "reply_to": "", "cooldown": 20, "reply": "ok", **kw}
 
 # ---------- default rule ----------
-a, sent, _ = make()
+a, sent, store = make()
+store.pop("enabled")
+check("off until switched on: nothing is answered", talk(a, sent, "Public", "test") == [])
+store["enabled"] = True
 check("default rule: 'test' answered in the same channel", talk(a, sent, "Public", "test") == [("Public", "@[Bob] Test received, 2 hops")])
 check("'t' + case-insensitive; chat ignored", talk(a, sent, "#drivebc", "T", nick="Al") != [] and talk(a, sent, "Public", "testing 123") == [] and talk(a, sent, "Public", "hello") == [])
 check("direct messages ignored", talk(a, sent, "@Bob", "test", dm=True) == [])

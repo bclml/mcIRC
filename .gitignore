@@ -20,6 +20,9 @@ gui_settings.json
 nodes.db
 logs/
 
+# Area alerts' helper modules, installed next to the app (the source is packages/area_alerts)
+/aa_*.py
+
 # Installed addons are local to each PC (the source lives in packages/); only the template is tracked
 addons/*
 !addons/_example_addon.py

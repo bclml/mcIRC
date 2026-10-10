@@ -45,7 +45,7 @@ def match_rule(rule, text):
 
 class Addon(AddonBase):
     title = "Auto reply"
-    version = "1.1.6"
+    version = "1.1.7"
     author = "bclml"
     description = "Keyword rules: answer chosen words on chosen channels with your own text, to the channels you pick."
 
@@ -61,7 +61,7 @@ class Addon(AddonBase):
     # ---- the responder ----
     def help_for(self, channel, dm=False):
         """For 'bothelp': the words that get an answer in this channel."""
-        if dm or not self.api.get("enabled", True): return []
+        if dm or not self.api.get("enabled", False): return []
         here, words = norm(channel), []
         for r in self.api.get("rules", DEFAULT_RULES):
             listen = {norm(c) for c in split_list(r.get("listen", ""))}
@@ -70,7 +70,7 @@ class Addon(AddonBase):
         return words
 
     def on_message(self, msg):
-        if msg.get("dm") or not self.api.get("enabled", True): return
+        if msg.get("dm") or not self.api.get("enabled", False): return
         here, now = norm(msg["channel"]), time.time()
         for i, r in enumerate(self.api.get("rules", DEFAULT_RULES)):
             if not r.get("enabled", True): continue
@@ -95,7 +95,7 @@ class Addon(AddonBase):
             return
 
     # ---- on/off ----
-    def toggle(self): self._set(not self.api.get("enabled", True))
+    def toggle(self): self._set(not self.api.get("enabled", False))
 
     def _command(self, arg):
         if arg.strip().lower() in ("on", "off"): self._set(arg.strip().lower() == "on")
@@ -107,7 +107,7 @@ class Addon(AddonBase):
         self.api.log("Auto reply " + ("switched ON" if on else "switched OFF - nothing will be answered"), "info" if on else "warn")
 
     def _refresh_button(self):
-        on = self.api.get("enabled", True)
+        on = self.api.get("enabled", False)
         self.button.config(text="Auto reply: ON" if on else "Auto reply: OFF", fg="#006400" if on else "#cc0000")
 
     # ---- Options page: the list of rules ----
@@ -115,7 +115,7 @@ class Addon(AddonBase):
         bg = parent["bg"]
         f = tk.Frame(parent, bg=bg)
         self.rules = [dict(r) for r in self.api.get("rules", DEFAULT_RULES)]
-        self.enabled_var = tk.BooleanVar(value=self.api.get("enabled", True))
+        self.enabled_var = tk.BooleanVar(value=self.api.get("enabled", False))
         tk.Label(f, text="Auto reply", bg=bg, font=(gui_platform.DIALOG_FONT_NAME, 9, "bold")).pack(anchor="w")
         tk.Checkbutton(f, text="Auto reply is ON", variable=self.enabled_var, bg=bg).pack(anchor="w")
         cols = (("on", "On", 30), ("name", "Rule", 90), ("keywords", "Keywords", 110), ("listen", "Heard on", 90), ("to", "Replies to", 90))

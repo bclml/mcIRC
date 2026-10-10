@@ -46,27 +46,50 @@ got = src.gdacs(la, "orange", get=feed(events))
 ok("GDACS: only events near the area, from the chosen level up", [a.id for a in got] == ["gdacs:TC:1:Orange"] and "tropical cyclone" in got[0].text, got)
 ok("...a level up the same event is a new alert", src.gdacs(la, "orange", get=feed({"features": [gd("TC", "Red", -118.5, 33.0, 1)]}))[0].id == "gdacs:TC:1:Red")
 
-nws = {"features": [{"properties": {"id": "urn:1", "event": "Excessive Heat Warning", "severity": "Severe"}}]}
-got = src.weather(la, get=feed(nws))
-ok("US weather: the National Weather Service's alerts for the point", [a.text for a in got] == ["Excessive Heat Warning - Los Angeles (Severe, NWS)"], got)
+def nw(i, event, vtec="", status="Actual", mtype="Alert", ends="2099-01-01T00:00:00-08:00"):
+    return {"properties": {"id": i, "event": event, "severity": "Severe", "status": status, "messageType": mtype, "ends": ends,
+                           "parameters": {"VTEC": [vtec]} if vtec else {}}}
+asked = []
+nws = {"features": [nw("urn:1", "Excessive Heat Warning", "/O.NEW.KLOX.EH.W.0007.261010T1800Z-261011T0300Z/"),
+                    nw("urn:2", "Test Message", status="Test"), nw("urn:3", "Wind Advisory", mtype="Cancel"),
+                    nw("urn:4", "Frost Advisory", ends="2001-01-01T00:00:00Z")]}
+got = src.weather(la, get=lambda url, params=None, **k: asked.append(params) or nws)
+ok("US weather: the National Weather Service's real alerts for the point (no test messages, cancellations or ended ones)",
+   [a.text for a in got] == ["Excessive Heat Warning - Los Angeles (Severe, NWS)"] and asked[0].get("status") == "actual", (got, asked))
+upd = {"features": [nw("urn:9", "Excessive Heat Warning", "/O.EXT.KLOX.EH.W.0007.261010T1800Z-261011T0600Z/")]}
+ok("...an updated warning keeps its id (its event number), so it isn't sent again", src.weather(la, get=feed(upd))[0].id == got[0].id == "nws:KLOX.EH.W.0007")
+quakes = {"features": [{"id": "x1", "properties": {"mag": None, "place": "?"}, "geometry": {"coordinates": [-118, 34]}},
+                       {"id": "x2", "properties": {"mag": 5.1, "place": None}, "geometry": None}, quake]}
+ok("USGS: an earthquake missing its magnitude or position is skipped, not the area's other quakes", [a.id for a in src.usgs(la, get=feed(quakes))] == ["usgs:ci1"])
 
 def ma(ident, area, level, event="Moderate rain warning", lang="en-GB"):
     return {"alert": {"identifier": ident, "info": [{"language": lang, "event": event, "area": [{"areaDesc": area}],
                                                      "parameter": [{"valueName": "awareness_level", "value": level}]}]}}
-warnings = {"warnings": [ma("a", "Rhône", "2; yellow; Moderate"), ma("b", "Rhône", "1; green; Minor"), ma("c", "Gironde", "3; orange; Severe")]}
+old = ma("d", "Rhône", "3; orange; Severe", "Old storm warning"); old["alert"]["info"][0]["expires"] = "2001-01-01T00:00:00+00:00"
+cancel = ma("e", "Rhône", "3; orange; Severe", "Cancelled warning"); cancel["alert"]["msgType"] = "Cancel"
+warnings = {"warnings": [ma("a", "Rhône", "2; yellow; Moderate"), ma("b", "Rhône", "1; green; Minor"), ma("c", "Gironde", "3; orange; Severe"), old, cancel]}
 got = src.weather(lyon, get=feed(warnings))
-ok("Europe (MeteoAlarm): the warnings for the area's district (accents ignored), green ones left out",
+ok("Europe (MeteoAlarm): the warnings in force for the area's district (accents ignored); green, expired and cancelled ones left out",
    [a.text for a in got] == ["YELLOW Moderate rain warning - Lyon (MeteoAlarm)"], got)
 ok("...district names match as whole words ('Kreis Biberach' is Biberach, not 'Biberachstadt')",
    src._names_match({src._core("Kreis Biberach")}, "Landkreis Biberach") and not src._names_match({src._core("Kreis Biberach")}, "Biberachstadt"))
 ok("countries without an official feed here have no weather warnings (disasters and earthquakes still)", src.weather(places.make("JP", places.regions("JP")[0],
    places.areas("JP", places.regions("JP")[0])[0][0]), get=lambda *a, **k: 1 / 0) == [])
 
-atom = ("<feed><entry><id>urn:t1</id><title>Tsunami Warning for coastal areas of California</title><summary>Coastal areas of California and "
-        "Oregon</summary></entry><entry><id>urn:t2</id><title>Tsunami Information Statement</title><summary>No tsunami threat to California"
-        "</summary></entry></feed>")
+def entry(eid, title, category, region, note=""):     # as NOAA's Atom feeds have them: the title is only the region, the category in the summary
+    return (f"<entry><id>{eid}</id><title>{title}</title><summary type=\"xhtml\">&lt;strong&gt;Category:&lt;/strong&gt; {category} &lt;br/&gt;"
+            f"&lt;strong&gt;Affected Region:&lt;/strong&gt; {region} &lt;br/&gt; Note: * {note}</summary></entry>")
+atom = "<feed>" + "".join([
+    entry("urn:t1", "Coastal California", "Warning", "Coastal areas of California and Oregon"),
+    entry("urn:t2", "in Panama", "Information", "in Panama", "There is no tsunami danger for the U.S. West Coast, California or Alaska."),
+    entry("urn:t3", "Alaska Peninsula", "Warning", "Alaska Peninsula", "There is no tsunami danger for the U.S. West Coast, California or Hawaii."),
+    entry("urn:t4", "Andaman Sea", "Advisory", "Indian Ocean coasts")]) + "</feed>"
 got = src.tsunami(la, get=lambda url, **k: atom)
-ok("tsunami: a warning naming the area's region; statements with no threat left out", [a.id for a in got] == ["tsunami:urn:t1"] * 2, got)
+ok("tsunami: a warning naming the area's region (the category read from the summary, as in the real feeds)",
+   [a.id for a in got] == ["tsunami:urn:t1:warning"] * 2 and got[0].text == "TSUNAMI WARNING: Coastal areas of California and Oregon", got)
+ok("...information statements, and 'no tsunami danger for ...' notes, don't count", all(a.id.startswith("tsunami:urn:t1") for a in got))
+port_blair = places.make("IN", "Andaman and Nicobar", "Port Blair") or {"country": "IN", "country_name": "India", "region": "Andaman and Nicobar", "name": "Port Blair", "lat": 11.6, "lon": 92.7}
+ok("...names match whole words ('Indian Ocean' is not India)", src.tsunami(port_blair, get=lambda url, **k: atom) == [])
 
 # ---- public transit (GTFS-realtime service alerts)
 from google.transit import gtfs_realtime_pb2
@@ -197,11 +220,42 @@ bot.sent_times = [time.time() - 3000 + i for i in range(9)]; bot.queue = [src.Al
 bot.drain()
 ok("...and it waits when the hour's limit can't take every channel", len(api.sent) == n and bot.queue)
 bot.queue.clear(); api.s["broadcast"] = False
+# audit fixes: forgetting, new areas, switching off, unloading, the channel cap
+root = tk.Tk(); root.withdraw()
+api.s.update(enabled=True, broadcast=True, kinds={"weather": True}, channels={}, areas=[la]); bot.queue.clear(); bot.sent_times = []
+mod.src.SOURCES["weather"] = lambda a: [src.Alert("ec:Area:SNOWFALL", "weather", "SNOWFALL WARNING", "EC")]
+bot.check(); n = len(api.sent)
+mod.src.SOURCES["weather"] = lambda a: []
+bot.check()
+ok("a warning that ended is remembered for a while (a feed hiccup doesn't send it again)", "ec:Area:SNOWFALL" in api.s["seen"])
+api.s["seen"]["ec:Area:SNOWFALL"] -= mod.FORGET + 1; bot.check()
+mod.src.SOURCES["weather"] = lambda a: [src.Alert("ec:Area:SNOWFALL", "weather", "SNOWFALL WARNING", "EC")]
+bot.sent_times = []; bot.check(); bot.drain()
+ok("...but when the same kind of warning comes back later, it is announced again", api.sent[-1] == ("#weather", "SNOWFALL WARNING") and len(api.sent) == n + 1, api.sent[n:])
+api.s["seen"] = ["old-1", "old-2"]; bot.check()
+ok("...(the old 'seen' list is carried over)", isinstance(api.s["seen"], dict) and "old-1" in api.s["seen"])
+b6 = mod.Addon(API()); b6.on_load(); b6.api.s.update(enabled=True, broadcast=True, kinds={"weather": True}, areas=[la])
+b6.check(); ok("starting mcIRC: the first check only shows (nothing piled up while it was closed is broadcast)", not b6.queue and not b6.api.sent and b6.api.lines)
+b6.check(); b6.api.lines.clear(); b6.build_options(tk.Frame(root, bg="#eee")); b6.chosen.append(lyon); b6.apply_options()
+mod.src.SOURCES["weather"] = lambda a: [src.Alert("w-" + a["name"], "weather", "Storm " + a["name"], "x")]
+b6.check()
+ok("adding an area: what is in force there is only shown, not broadcast", not b6.queue and any("(in force) Storm Lyon" in t for _, t in b6.api.lines), b6.api.lines)
+b6.queue = [src.Alert("q", "weather", "waiting", "x")]; b6.api.s["enabled"] = False; b6.drain(); b6.on_tick()
+ok("switching it off stops broadcasting at once (nothing waiting goes out)", not b6.api.sent and not b6.queue)
+mod.src.SOURCES["weather"] = lambda a: [src.Alert("w-new", "weather", "New storm", "x")]
+b6.check(force=True)
+ok("...'Check now' while off shows what is in force, never sends", not b6.queue and not b6.api.sent and "New storm" in b6.api.lines[-1][1])
+b6.api.s["enabled"] = True; b6.on_tick(); b6.quiet_next = False
+late = []; b6.api.run_background = lambda fn, done=None: late.append(done)
+b6.check(); b6.on_unload(); late[0](([("x", src.Alert("w-late", "weather", "Late", "x"))], []))
+ok("unloading: a check still running finds nothing to send to", not b6.queue)
+api.s["channels"] = {"weather": " ".join(f"#c{i}" for i in range(12))}
+ok("one alert goes to at most 5 channels (the hourly limit can always be kept)", len(bot.channels_for(src.Alert("w", "weather", "x", ""))) == 5)
+api.s["channels"] = {}; bot.queue.clear(); api.s["broadcast"] = False
 api.s["channels"] = {"weather": "Public"}
 ok("a channel can be chosen per kind", bot.channel("weather") == "Public")     # (the core never lets an addon post in Public: test_private_replies)
 bot.on_unload()
 
-root = tk.Tk(); root.withdraw()
 api2 = API(); b2 = mod.Addon(api2); b2.on_load()
 frame = b2.build_options(tk.Frame(root, bg="#eee"))
 ok("settings: off and not broadcasting by default", not b2.v_on.get() and not b2.v_bc.get())
@@ -209,7 +263,7 @@ b2.c_box.set("France"); b2._fill_regions(); b2.r_box.set("Auvergne-Rhône-Alpes"
 ok("settings: country, then region, then area; added once", [places.label(a) for a in b2.chosen] == ["Lyon, Auvergne-Rhône-Alpes, France"])
 b2.v_on.set(True); b2.apply_options()
 ok("...saved, with the first check after switching on only showing", api2.s["enabled"] and api2.s["areas"][0]["name"] == "Lyon"
-   and api2.s["checked_once"] is False and api2.s["broadcast"] is False and api2.s["channels"]["weather"] == "#weather")
+   and b2.quiet_next and api2.s["broadcast"] is False and api2.s["channels"]["weather"] == "#weather")
 def labels(page):
     out = []
     def walk(w):

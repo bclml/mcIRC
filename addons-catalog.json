@@ -14,7 +14,7 @@
     {
       "name": "area_alerts",
       "title": "Area alerts",
-      "version": "1.3.0",
+      "version": "1.4.0",
       "author": "bclml",
       "description": "Natural disasters, earthquakes, tsunami, weather warnings, public transit alerts and road closures for the areas you choose anywhere in the world (country, region, area). Shown on this PC; broadcast to the mesh only if you tick it. Free sources; the few needing a free key say how to get it.",
       "path": "packages/area_alerts",
@@ -23,7 +23,7 @@
     {
       "name": "auto_reply",
       "title": "Auto reply",
-      "version": "1.1.6",
+      "version": "1.1.7",
       "author": "bclml",
       "description": "Keyword rules: answer the words you choose on the channels you choose, with your own reply text, sent to the channels you pick. Comes with a 'test' rule.",
       "path": "packages/auto_reply",

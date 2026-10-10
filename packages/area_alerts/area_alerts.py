@@ -30,12 +30,14 @@ DEFAULT_ON = ("disasters", "weather")
 CHECK_EVERY = 300            # seconds between checks
 GAP, PER_HOUR = 30, 10       # broadcasting limits
 MAX_WAITING = 30             # alerts waiting to be broadcast; the oldest are dropped past this
+MAX_CHANNELS = 5             # channels one alert may go to (each is a transmission)
+FORGET = 6 * 3600            # an alert not in force for this long is forgotten: if it comes back, it is announced again
 WINDOW = "Area alerts"
 
 
 class Addon(AddonBase):
     title = "Area alerts"
-    version = "1.3.0"
+    version = "1.4.0"
     author = "mcIRC"
     description = ("Natural disasters, earthquakes, tsunamis, weather warnings, public transit alerts and road closures for the areas you "
                    "choose anywhere in the world (country, region, area). Shown on this PC; broadcast to the mesh only if you tick it. "
@@ -47,14 +49,23 @@ class Addon(AddonBase):
         self.busy, self.last_check, self.queue, self.sent_times = False, 0.0, [], []
         self.source_of = {}                                 # alert id -> 'transit:<feed id>' / 'drivebc' / '511:<site>' (its own channel)
         self.current = []                                   # [(where, Alert)] from the last check
+        self.quiet_next = True                              # the first check (after starting, switching on, new areas ...) only shows
+        self.was_on, self.unloaded = self.api.get("enabled", False), False
         self.api.add_menu_item("Check now", lambda: self.check(force=True))
         self.api.add_menu_item("Alerts in force...", self.show_current)
 
-    def on_unload(self): self.queue.clear()
+    def on_unload(self):
+        self.queue.clear()
+        self.unloaded = True                                # a check still running finds nothing to send to
 
     # ---- checking ----
     def on_tick(self):
-        if not self.api.get("enabled", False): return
+        on = self.api.get("enabled", False)
+        if on and not self.was_on: self.quiet_next = True   # switched on (toolbar or settings): what is in force now is only shown
+        self.was_on = on
+        if not on:
+            self.queue.clear()
+            return
         self.drain()
         if time.time() - self.last_check >= CHECK_EVERY: self.check()
 
@@ -104,33 +115,39 @@ class Addon(AddonBase):
                     except Exception as e: errors.append(f"transit alerts of {f['provider']}: {e}")
             self.source_of.update(sources)
             return found, errors
-        self.api.run_background(work, self._checked)
+        show_only = not self.api.get("enabled", False)          # 'Check now' with the addon off: shown, never sent
+        self.api.run_background(work, lambda r: self._checked(r, show_only))
 
-    def _checked(self, r):
+    def _checked(self, r, show_only=False):
         self.busy = False
+        if self.unloaded: return
         if isinstance(r, Exception): return self.api.log(f"Area alerts: check failed: {r}", "warn")
         found, errors = r
         for e in errors[:3]: self.api.log(f"Area alerts: couldn't read {e}", "warn")
         self.current = found
-        seen = set(self.api.get("seen", []))
-        first = not self.api.get("checked_once", False)
-        new = [(lab, al) for lab, al in found if al.id not in seen]
-        for lab, al in new:
-            self.api.write(WINDOW, f"{'(in force) ' if first else ''}{al.text}  [{lab}]")
-            if not first and self.api.get("broadcast", False): self.queue.append(al)
+        now = time.time()
+        seen = self.api.get("seen", {})
+        seen = dict(seen) if isinstance(seen, dict) else {i: now for i in seen}         # (1.3 and older: a plain list)
+        quiet = show_only or self.quiet_next
+        for lab, al in found:
+            if al.id in seen: continue
+            self.api.write(WINDOW, f"{'(in force) ' if quiet else ''}{al.text}  [{lab}]")
+            if not quiet and self.api.get("broadcast", False): self.queue.append(al)
         del self.queue[:-MAX_WAITING]
-        self.api.set("seen", (list(seen) + [al.id for _, al in new])[-5000:])
-        self.api.set("checked_once", True)
+        seen.update({al.id: now for _, al in found})
+        keep = sorted(((t, i) for i, t in seen.items() if now - t < FORGET), reverse=True)[:5000]      # only what is (about) in force now
+        self.api.set("seen", {i: t for t, i in keep})
+        if not show_only: self.quiet_next = False
         self.drain()
 
     def drain(self):
         """Broadcast what is waiting: at most one every GAP seconds and PER_HOUR an hour."""
-        if not self.queue or not self.api.get("broadcast", False) or not self.api.connected: return
+        if not self.queue or not self.api.get("enabled", False) or not self.api.get("broadcast", False) or not self.api.connected: return
         now = time.time()
         self.sent_times = [t for t in self.sent_times if now - t < 3600]
         if len(self.sent_times) >= PER_HOUR or (self.sent_times and now - self.sent_times[-1] < GAP): return
         chans = self.channels_for(self.queue[0])
-        if self.sent_times and len(self.sent_times) + len(chans) > PER_HOUR: return     # every channel is one transmission
+        if len(self.sent_times) + len(chans) > PER_HOUR: return     # every channel is one transmission
         al = self.queue.pop(0)
         for ch in chans:
             self.api.send(ch, al.text)
@@ -157,7 +174,7 @@ class Addon(AddonBase):
             if not n.lstrip("#") or n.lstrip("#").lower() == "public": continue
             n = n if n.startswith("#") else "#" + n
             if n.lower() not in (o.lower() for o in out): out.append(n)
-        return out or [KINDS[al.kind][1]]
+        return out[:MAX_CHANNELS] or [KINDS[al.kind][1]]
 
     def channel(self, kind):
         return (self.api.get("channels", {}).get(kind) or KINDS[kind][1]).strip()
@@ -179,9 +196,9 @@ class Addon(AddonBase):
         tk.Checkbutton(f, text="Broadcast to the mesh (this transmits on your radio)", variable=self.v_bc, bg=bg,
                        font=("TkDefaultFont", 9, "bold")).pack(anchor="w")
         tk.Label(f, bg=bg, fg="#555", wraplength=560, justify="left", text=(
-            "Each alert once, at most one every 30 seconds and 10 messages an hour, never in Public. A channel box can hold several channels "
+            "Each alert once, at most one every 30 seconds and 10 messages an hour, never in Public. A channel box can hold up to 5 channels "
             "('#weather, #mcirc'): the alert goes to each. A channel your node doesn't have is added to it. "
-            "The first check only shows what is already in force.")).pack(anchor="w", padx=18)
+            "The first check (after starting mcIRC, switching on or adding areas) only shows what is already in force.")).pack(anchor="w", padx=18)
         self.keys = dict(g("keys", {}))
         self.key_vars = {}
         tabs = ttk.Notebook(f); tabs.pack(fill="both", expand=True, pady=4)
@@ -344,6 +361,7 @@ class Addon(AddonBase):
 
     def apply_options(self):
         was_on = self.api.get("enabled", False)
+        before = (self.api.get("areas", []), self.api.get("kinds", {}), self.api.get("transit_feeds", []))
         self.api.set("enabled", bool(self.v_on.get()))
         self.api.set("broadcast", bool(self.v_bc.get()))
         self.api.set("areas", self.chosen)
@@ -366,5 +384,6 @@ class Addon(AddonBase):
         keys = dict(self.keys)
         keys.update({slot: v.get().strip() for slot, v in self.key_vars.items()})
         self.api.set("keys", {k: v for k, v in keys.items() if v})
-        if self.v_on.get() and not was_on: self.api.set("checked_once", False)      # switched on: the first check only shows what is in force
+        if (self.v_on.get() and not was_on) or before != (self.api.get("areas", []), self.api.get("kinds", {}), self.api.get("transit_feeds", [])):
+            self.quiet_next = True          # switched on, or new areas / kinds / agencies: what is already in force there is only shown
         self.last_check = 0.0

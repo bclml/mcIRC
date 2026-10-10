@@ -7,6 +7,8 @@ id is stable (the same alert is not sent twice), text is ready for the mesh (sho
   weather    official weather warnings: Environment Canada, the US National Weather Service, MeteoAlarm (38 European countries)
 
 All are free and need no key."""
+import datetime
+import html
 import math
 import re
 import time
@@ -79,26 +81,38 @@ def usgs(area, min_mag=5.0, radius_km=300, hours=24, get=None, now=None):
                                      "minmagnitude": min_mag, "starttime": since, "orderby": "time"})
     out = []
     for f in data.get("features", []):
-        p = f.get("properties", {})
-        lon, lat = f.get("geometry", {}).get("coordinates", [0, 0])[:2]
-        d = int(km(area["lat"], area["lon"], lat, lon))
-        out.append(Alert(f"usgs:{f.get('id')}", "quakes", short(f"Earthquake M{p.get('mag', 0):.1f}: {p.get('place', '')} ({d} km from {area['name']})"), "USGS"))
+        p = f.get("properties") or {}
+        coords = (f.get("geometry") or {}).get("coordinates") or []
+        if p.get("mag") is None or len(coords) < 2 or coords[0] is None or coords[1] is None: continue     # incomplete: skipped, not the area
+        d = int(km(area["lat"], area["lon"], coords[1], coords[0]))
+        out.append(Alert(f"usgs:{f.get('id')}", "quakes", short(f"Earthquake M{p['mag']:.1f}: {p.get('place') or 'unknown place'} ({d} km from {area['name']})"), "USGS"))
     return out
 
 
+TSUNAMI_CATEGORIES = ("warning", "advisory", "watch", "threat")
+_NO_DANGER = re.compile(r"no tsunami (?:danger|threat)|no (?:danger|threat)|not expected to generate|does not pose|^\s*definition", re.I)
+
+
 def tsunami(area, get=None):
-    """Tsunami warnings / advisories / watches whose bulletin names the area's country or region."""
-    out, names = [], {n.lower() for n in (area.get("country_name"), area.get("region")) if n}
+    """Tsunami warnings / advisories / watches whose bulletin names the area's country or region (whole words).  The NOAA entries' title is
+    only the region ('in Panama'); the category is in the summary ('Category: Warning').  Sentences saying there is no danger somewhere
+    ('There is no tsunami danger for the U.S. West Coast, British Columbia, or Alaska') don't count as naming a place."""
+    out, wanted = [], {_plain(n) for n in (area.get("country_name"), area.get("region")) if n} - {""}
     for url in TSUNAMI_FEEDS:
         try: xml = (get or _get)(url, json=False)
         except Exception: continue
         for entry in re.findall(r"<entry\b.*?</entry>", xml, re.S):
+            text = re.sub(r"\s+", " ", html.unescape(re.sub(r"<[^>]+>", " ", html.unescape(entry)))).strip()
+            cat = re.search(r"Category:\s*([A-Za-z]+)", text)
+            category = cat.group(1).lower() if cat else ""
+            if category not in TSUNAMI_CATEGORIES: continue
+            parts = [x for x in re.split(r"(?<=[a-z]{2}[.!?])\s+(?=[A-Z])|\s\*\s|Definition:", text) if x.strip() and not _NO_DANGER.search(x)]
+            if not any(_names_match(wanted, x) for x in parts): continue
             title = re.sub(r"<[^>]+>", "", (re.search(r"<title[^>]*>(.*?)</title>", entry, re.S) or [None, ""])[1]).strip()
-            body = re.sub(r"<[^>]+>", " ", entry).lower()
-            if not re.search(r"\b(warning|advisory|watch|threat)\b", title.lower()) or "no tsunami" in body[:400]: continue
-            if not any(n in body for n in names): continue
+            region = re.search(r"Affected Region:\s*(.+?)(?:\s+Note:|\s+Definition:|$)", text)
             eid = (re.search(r"<id>(.*?)</id>", entry) or [None, title])[1]
-            out.append(Alert(f"tsunami:{eid}", "tsunami", short(f"TSUNAMI: {title}"), "NOAA"))
+            where = (region.group(1) if region else title).strip()
+            out.append(Alert(f"tsunami:{eid}:{category}", "tsunami", short(f"TSUNAMI {category.upper()}: {where}"), "NOAA"))
     return out
 
 
@@ -119,12 +133,24 @@ def _canada(area):
 
 
 def _nws(area, get=None):
-    data = (get or _get)(NWS_URL, {"point": f"{area['lat']:.4f},{area['lon']:.4f}"})
-    out = []
+    data = (get or _get)(NWS_URL, {"point": f"{area['lat']:.4f},{area['lon']:.4f}", "status": "actual"})
+    out, now = [], time.time()
     for f in data.get("features", []):
         p = f.get("properties", {})
-        out.append(Alert(f"nws:{p.get('id')}", "weather", short(f"{p.get('event', 'Weather alert')} - {area['name']} ({p.get('severity', '')}, NWS)"), "NWS"))
+        if (p.get("status") or "Actual") != "Actual" or p.get("messageType") == "Cancel": continue          # test messages, cancellations
+        if _past(p.get("ends") or p.get("expires"), now): continue
+        vtec = ((p.get("parameters") or {}).get("VTEC") or [""])[0]
+        m = re.match(r"/\w\.\w+\.(\w+)\.(\w+)\.(\w)\.(\d+)\.", vtec)        # office, phenomenon, significance, event number
+        key = ".".join(m.groups()) if m else f"{p.get('event')}:{(p.get('onset') or p.get('sent') or '')[:10]}"
+        out.append(Alert(f"nws:{key}", "weather", short(f"{p.get('event', 'Weather alert')} - {area['name']} ({p.get('severity', '')}, NWS)"), "NWS"))
     return out
+
+
+def _past(stamp, now):
+    """An ISO time ('2026-10-10T18:00:00-04:00') that has gone by."""
+    if not stamp: return False
+    try: return datetime.datetime.fromisoformat(stamp.replace("Z", "+00:00")).timestamp() < now
+    except ValueError: return False
 
 
 # words that only say what kind of district it is ('Kreis Biberach', 'Regierungsbezirk Stuttgart', 'Province of Rome')
@@ -154,7 +180,7 @@ def _meteoalarm(area, get=None):
     'Green' (no warning) entries are skipped."""
     data = (get or _get)(METEOALARM_URL.format(country=METEOALARM[area["country"]]), timeout=40)
     wanted = {_core(n) for n in (area["name"], area.get("district", ""), area.get("region", ""))} - {""}
-    out = []
+    out, now = [], time.time()
     for w in data.get("warnings", []):
         a = w.get("alert", {})
         infos = a.get("info", [])
@@ -162,7 +188,7 @@ def _meteoalarm(area, get=None):
         if not any(_names_match(wanted, ar.get("areaDesc", "")) for i in infos for ar in i.get("area", [])): continue
         level = next((p.get("value", "") for p in info.get("parameter", []) if p.get("valueName") == "awareness_level"), "")
         colour = level.split(";")[1].strip().upper() if level.count(";") >= 1 else ""
-        if colour == "GREEN": continue
+        if colour == "GREEN" or a.get("msgType") == "Cancel" or _past(info.get("expires"), now): continue        # no warning / over
         out.append(Alert(f"meteoalarm:{a.get('identifier')}", "weather",
                          short(f"{colour + ' ' if colour else ''}{info.get('event', 'weather warning')} - {area['name']} (MeteoAlarm)"), "MeteoAlarm"))
     return out

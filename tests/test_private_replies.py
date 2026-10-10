@@ -85,6 +85,8 @@ from unittest import mock as _mock
 calls = []
 papi = AddonAPI(app, "fun_bot")
 app.settings["bots_in_public"] = False
+import meshcore_io as _io
+_io.CHANNEL_INDEX_BY_NAME["#general"] = 5          # the node has #general (a missing channel would be added first: test_auto_channels)
 while not app.q.empty(): app.q.get_nowait()
 with _mock.patch.object(app, "send_to", lambda ch, t, **k: calls.append(("channel", ch))), \
         _mock.patch.object(app, "reply_privately", lambda m, t: calls.append(("private", m["nick"]))):

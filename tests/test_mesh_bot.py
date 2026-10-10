@@ -96,6 +96,15 @@ bot.on_message(msg("hello all", ch="Public", nick="Newbie"))
 import meshbot_cmds as mcmds
 ok("the greeter welcomes a newcomer once, with one of its greetings", len(sent) == 1 and sent[0][0] == "Public"
    and sent[0][1] in [mcmds.greeting_for("Newbie", g, "Public") for g in mcmds.DEFAULT_GREETINGS], sent)
+ok("known: another device of the same person in node memory", mcmds.known_node([{"name": "ka.Ann-repeater"}], "ka.Ann") and not mcmds.known_node([{"name": "Bob"}], "ka.Ann"))
+import tempfile as _tf
+_ld = _tf.mkdtemp()
+with open(os.path.join(_ld, "Public.txt"), "w", encoding="utf-8") as f:
+    f.write("Session Start: Fri Oct 09 09:00:00 2026\n[09:45] <Regular> Mornin' mesh\n[16:15] <Regular> Hola again\n[16:15] <Fresh> first words\n"
+            "[16:20] <Bob> @[Quiet One] hi\n")
+ok("known: wrote in the chat before (the greeted message itself is already in the log)", mcmds.known_from_logs(_ld, "Regular"))
+ok("...or was mentioned by someone", mcmds.known_from_logs(_ld, "Quiet One"))
+ok("...a first message only: a newcomer", not mcmds.known_from_logs(_ld, "Fresh"))
 sent.clear(); bot.on_message(msg("me again", ch="Public", nick="Newbie")); bot.on_message(msg("hi", ch="Public", nick="Old Timer"))
 ok("...not twice, and not people known before", sent == [], sent)
 app.settings["addons"]["mesh_bot"]["greet_lines"] = ["Hi {nick} in {channel}", "Yo {nick}"]

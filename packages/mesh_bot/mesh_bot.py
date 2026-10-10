@@ -27,7 +27,7 @@ GREETING = cmds.DEFAULT_GREETINGS[0]                     # the single greeting o
 
 class Addon(AddonBase):
     title = "Mesh bot"
-    version = "1.2.4"
+    version = "1.2.5"
     author = "mcIRC (commands after agessaman/meshcore-bot, MIT)"
     description = ("ping, hello, path, prefix, multitest, stats, sports and version - the meshcore-bot commands mcIRC's other bots don't have - "
                    "plus its greeter for newcomers (a random greeting from your list), each switched on for the channels you choose. Off until you switch it on.")
@@ -112,8 +112,8 @@ class Addon(AddonBase):
         return text
 
     def greet(self, msg):
-        """Once per newcomer: someone whose first message this is, and who wasn't in mcIRC's node memory (nodes.db, not the radio's
-        contact list) when the greeter was switched on."""
+        """Once per newcomer: someone speaking for the first time who mcIRC doesn't know - not in its node memory (nodes.db, not the radio's
+        contact list; another device of theirs counts too), never seen in the chat logs, not greeted before."""
         if msg.get("dm") or not mc.channel_ok(msg.get("channel", ""), mc.channel_list(self.api.get("greet_channels", ""))): return
         nick = (msg.get("nick") or "").strip()
         if not nick or nick == "someone": return
@@ -121,6 +121,8 @@ class Addon(AddonBase):
         if nick in seen: return
         seen.add(nick)
         self.api.set("greeted", sorted(seen)[-5000:])
+        if cmds.known_node(self.api.nodes.all(), nick) or cmds.known_from_logs(getattr(self.api, "log_dir", None), nick):
+            return                                                 # been around already (another device, or chatted before): no welcome
         line = cmds.pick_greeting(self.greetings(), getattr(self, "_last_greeting", None))
         self._last_greeting = line
         self.send(msg, cmds.greeting_for(nick, line, msg.get("channel", "")))

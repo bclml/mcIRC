@@ -114,7 +114,7 @@
     {
       "name": "mesh_bot",
       "title": "Mesh bot",
-      "version": "1.2.4",
+      "version": "1.2.5",
       "author": "bclml (commands after agessaman/meshcore-bot, MIT)",
       "description": "ping, hello, path, prefix, multitest, stats, sports, version and firmware (the newest MeshCore releases) - the agessaman/meshcore-bot commands mcIRC's other bots don't have - plus its greeter (a random greeting from a list you can edit), each switched on for the channels you choose. Off until you switch it on.",
       "path": "packages/mesh_bot",

@@ -253,3 +253,36 @@ def firmware_text(releases):
     parts = [f"{name} {newest[name][0]}" for _, name in FW_KINDS if name in newest]
     date = max(d for _, d in newest.values())
     return f"MeshCore firmware: {', '.join(parts)}" + (f" ({date})" if date else "") + " - github.com/meshcore-dev/MeshCore/releases"
+
+
+# ---- is this really a newcomer? ----
+def known_node(nodes, nick):
+    """In mcIRC's node memory: that exact name, or another device of the same person (a remembered node whose name starts with it,
+    e.g. 'Ann' and 'Ann-repeater')."""
+    n = (nick or "").strip()
+    if not n: return False
+    names = [(x.get("name") or "").strip() for x in nodes]
+    return n in names or (len(n) >= 4 and any(m.startswith(n) and m != n for m in names))
+
+
+def known_from_logs(log_dir, nick, tail_bytes=1024 * 1024):
+    """Has this name been in the chat before?  The message being greeted is already in the log, so: two or more lines written under
+    that name, or anyone having mentioned it (@[name]) - in any channel's log (private chats are not read)."""
+    import os
+    if not log_dir or not nick: return False
+    mentioned = f"@[{nick}]".encode()
+    lines = 0
+    try: files = os.listdir(log_dir)
+    except OSError: return False
+    for fn in files:
+        if not fn.endswith(".txt") or fn.startswith(("@", "Status", "gui_")): continue
+        try:
+            with open(os.path.join(log_dir, fn), "rb") as f:
+                f.seek(0, 2); f.seek(max(0, f.tell() - tail_bytes))
+                data = f.read()
+        except OSError:
+            continue
+        if mentioned in data: return True
+        lines += data.count(f"] <{nick}> ".encode())
+        if lines >= 2: return True
+    return False

@@ -54,13 +54,13 @@ ok("a full node: nothing is overwritten, the message is not sent", with_node(ful
    and not any(c[0] == "set_channel" for c in full.cmds), full.cmds)
 ok("...and it is not asked again on every alert", with_node(full, lambda: (io._added_or_failed.add("weather"), io.ensure_channel("#weather"))[1]) is None)
 
-# the BC traffic bot: only while broadcasting
+# the Traffic and weather addon: only while broadcasting
 n3 = Node()
 def resolve(muted):
     ea.TX["muted"] = muted
     with mock.patch.object(ea, "_channel_name_for_source", lambda s: "weather"):
         return ea._resolve_channel_idx("Weather Warning: Greater Calgary")
-ok("BC traffic bot, map only (not broadcasting): the node is left alone", with_node(n3, lambda: resolve(True)) is None and not any(c[0] == "set_channel" for c in n3.cmds))
+ok("Traffic and weather, map only (not broadcasting): the node is left alone", with_node(n3, lambda: resolve(True)) is None and not any(c[0] == "set_channel" for c in n3.cmds))
 ok("...broadcasting: the missing #weather is added and the alert goes there", with_node(n3, lambda: resolve(False)) == 3 and n3.slots[3] == "#weather")
 ea.TX["muted"] = True
 io.ON_CHANNELS_ADDED = None

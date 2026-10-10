@@ -478,6 +478,9 @@ def _resolve_channel_idx(source):
     name = _channel_name_for_source(source)
     if name is None: return None
     if name in io.CHANNEL_INDEX_BY_NAME: return io.CHANNEL_INDEX_BY_NAME[name]
+    if not TX["muted"] and hasattr(io, "ensure_channel"):      # broadcasting: a channel the node lacks is added (#name) instead of withholding
+        idx = io.ensure_channel(name)
+        if idx is not None: return idx
     if name not in _missing_channel_warned:
         logging.warning(f"Channel '#{name}' not found on this node — {source} alerts will be withheld "
                          f"(not sent to Public) until it's created. Create it with `add_channel {name} <key>` "

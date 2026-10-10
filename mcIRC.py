@@ -304,6 +304,7 @@ class App(PrivateMixin, MenusMixin, CommandsMixin, gui_multinode.MultiNodeMixin,
                 self.add_window(name, f"Private conversation with {name[1:]}" if name.startswith("@") else CHANNELS.get(name, "(restored from log)"))
         self.apply_settings()
         ea.GUI_CALLBACK = lambda kind, idx, text, nick, **extra: self.q.put(("chat", kind, idx, text, nick, extra))
+        ea.ON_CHANNELS_ADDED = lambda: self.q.put(("channels",))        # a channel an addon needed was added to the node: its window appears
         logging.getLogger().addHandler(QueueLogHandler(self.q))
         root.protocol("WM_DELETE_WINDOW", self.quit)
         self.select_window("Status")

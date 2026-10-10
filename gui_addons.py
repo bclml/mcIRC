@@ -114,7 +114,14 @@ class AddonAPI:
         """Send `text` to a channel (display name like '#general'/'Public', or an index). Runs in the background.  Not to Public (see above)."""
         if self._public_blocked(channel):
             return self._app.status_line(f"*** [{self.name}] Not posted in Public: bots don't post there (Options > Display > Let bots post in Public).", "warn")
+        if isinstance(channel, str) and " [" not in channel and self._app.connected and self._needs_channel(channel):
+            import meshcore_io as io                               # the node doesn't have it yet: add it (#name), then send
+            return self._app.bg(lambda: io.ensure_channel(channel), lambda idx: self._app.send_to(channel, text) if isinstance(idx, int) else
+                                self._app.status_line(f"*** [{self.name}] Couldn't add {channel} to the node - not sent.", "warn"))
         self._app.send_to(channel, text)
+    def _needs_channel(self, channel):
+        from gui_common import channel_index
+        return channel_index(channel) is None and channel.strip().lstrip("#").lower() not in ("", "public")
     def current_channel(self):
         """Display name of the channel window in front ('#drivebc', 'Public'), or None for Status / private windows."""
         w = self._app.current

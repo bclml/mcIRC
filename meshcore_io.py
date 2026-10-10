@@ -640,3 +640,43 @@ def parse_messages(combined):
             sender, body = split_sender(data.get("text", ""))
             out.append(("in", data.get("channel_idx", DEFAULT_CHANNEL_IDX), body, sender, {"snr": data.get("SNR"), "hops": data.get("path_len"), "raw": data}))
     return out
+
+
+# ---- channels an addon needs are added to the node --------------------------------------------------------------------------------------
+AUTO_ADD_CHANNELS = True        # a channel an addon posts to that the node lacks is added (a hashtag channel, like /join #name)
+ON_CHANNELS_ADDED = None        # set by the GUI: called after a channel was added (it re-reads the channel list and opens the window)
+_added_or_failed = set()        # channels tried this session (a full node is not asked again on every alert)
+
+
+def _channel_norm(name): return (name or "").strip().lstrip("#").lower()
+
+
+def ensure_channel(name):
+    """The node's slot for channel `name` ('#weather' / 'weather'); when the node doesn't have it, it is added as the hashtag channel
+    '#name' in the first free slot.  -> slot, or None (not connected, Public, no free slot, already failed).  Blocking: worker threads only."""
+    base = _channel_norm(name)
+    if not base or base == "public" or not CONNECTION_ARGS: return None
+    for n, idx in CHANNEL_INDEX_BY_NAME.items():
+        if _channel_norm(n) == base: return idx
+    if not AUTO_ADD_CHANNELS or base in _added_or_failed: return None
+    _added_or_failed.add(base)
+    try:
+        res = execute_mesh_command(CONNECTION_ARGS + [".get_channels"], timeout=40)
+        docs = json_docs(f"{res.stdout}\n{res.stderr}")
+        rows = next((d for d in docs if isinstance(d, list)), [d for d in docs if isinstance(d, dict)])
+        slots = [(c.get("channel_idx"), c.get("channel_name", "")) for c in rows if isinstance(c, dict) and c.get("channel_idx") is not None]
+        have = next((s for s, n in slots if n and _channel_norm(n) == base), None)
+        if have is None:
+            free = next((s for s, n in slots if s and not n), None)
+            if free is None:
+                logging.warning(f"Channel '#{base}' is needed but the node has no free channel slot - remove one (/part) to add it.")
+                return None
+            execute_mesh_command(CONNECTION_ARGS + ["set_channel", str(free), "#" + base], timeout=40)
+            logging.info(f"Added channel #{base} to the node (slot {free}) - an addon posts there. Anyone who joins #{base} shares it.")
+            have = free
+        resolve_channel_indices(attempts=1, retries=1, quiet=True)
+        if ON_CHANNELS_ADDED: ON_CHANNELS_ADDED()
+        return have
+    except Exception as e:
+        logging.warning(f"Couldn't add channel #{base} to the node: {e}")
+        return None

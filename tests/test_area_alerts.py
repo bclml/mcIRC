@@ -216,6 +216,29 @@ b3.build_options(tk.Frame(root, bg="#eee"))
 b3.key_vars["511:511.alberta.ca"].set("  MYKEY  "); b3.apply_options()
 ok("settings: a 511 key box for Alberta, with how to get the free key; the key is saved (trimmed) on this PC",
    b3.api.s["keys"] == {"511:511.alberta.ca": "MYKEY"} and any("my511/register" in t for t in labels(b3.traffic_page)), b3.api.s.get("keys"))
+ok("channel names for transit agencies and road sources read like the agencies", transit.slug({"provider": "TransLink Vancouver"}) == "translink"
+   and transit.slug({"provider": "BC Transit (Nanaimo)"}) == "bctransit" and transit.slug({"provider": "Edmonton Transit System"}) == "ets"
+   and transit.slug({"provider": "Metropolitan Transit Authority (MTA)"}) == "mta" and traffic.slug("drivebc") == "drivebc"
+   and traffic.slug("511:511.alberta.ca") == "511alberta")
+# an area with more than one transit agency: each its own channel (as TransLink and BC Transit had); one agency: #transit
+b4 = mod.Addon(API()); b4.on_load(); b4.api.s["areas"] = [lm, ab]
+b4.build_options(tk.Frame(root, bg="#eee"))
+lm_feeds = transit.feeds_for(lm)
+ok("settings: the Lower Mainland has more than one agency, so each has its own channel", len(lm_feeds) > 1
+   and {b4.tch_vars[f["id"]].get() for f in lm_feeds} >= {"#bctransit", "#translink"}, {f["provider"]: b4.tch_vars[f["id"]].get() for f in lm_feeds})
+ok("...and with two road sources (DriveBC, 511 Alberta) each has its own channel too",
+   b4.rch_vars["drivebc"].get() == "#drivebc" and b4.rch_vars["511:511.alberta.ca"].get() == "#511alberta")
+tl = next(f for f in lm_feeds if transit.slug(f) == "translink")
+b4.feed_vars[tl["id"]].set(True); b4.tch_vars[tl["id"]].set("#skytrain"); b4.apply_options()
+ok("...saved for the agencies ticked (a changed name kept)", b4.api.s["transit_channels"] == {tl["id"]: "#skytrain"}
+   and b4.api.s["traffic_channels"] == {"drivebc": "#drivebc", "511:511.alberta.ca": "#511alberta"}, (b4.api.s["transit_channels"], b4.api.s["traffic_channels"]))
+b5 = mod.Addon(API()); b5.on_load(); b5.api.s["areas"] = [ab]
+b5.build_options(tk.Frame(root, bg="#eee"))
+ok("...one agency and one road source: the kind's channels (#transit, #traffic)",
+   all(v.get() == "#transit" for v in b5.tch_vars.values()) and b5.rch_vars["511:511.alberta.ca"].get() == "#traffic")
+b4.source_of.update({"t9": f"transit:{tl['id']}", "r9": "511:511.alberta.ca", "r8": "drivebc"})
+ok("alerts go to their agency's / road source's channel", b4.channel_for(src.Alert("t9", "transit", "x", "")) == "#skytrain"
+   and b4.channel_for(src.Alert("r9", "traffic", "x", "")) == "#511alberta" and b4.channel_for(src.Alert("w", "weather", "x", "")) == "#weather")
 root.destroy()
 print("\nALL PASSED" if not fails else f"\n{len(fails)} FAILED: {fails}")
 sys.exit(1 if fails else 0)

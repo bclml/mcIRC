@@ -8,6 +8,7 @@ import gzip
 import json
 import re
 import time
+import unicodedata
 import zlib
 
 from aa_sources import Alert, UA, km, short
@@ -63,6 +64,20 @@ def label(f):
     return f"{who}{' - ' + name if name else ''}"
 
 
+def slug(f):
+    """A channel name for the agency: 'TransLink' -> 'translink', 'BC Transit (...)' -> 'bctransit', 'Edmonton Transit System' -> 'ets'."""
+    name = short_name(f["provider"])
+    s = re.sub(r"[^a-z0-9]", "", name.lower())
+    if len(s) > 14:
+        plain = unicodedata.normalize("NFKD", name).encode("ascii", "ignore").decode()            # 'Société' -> 'Societe'
+        words = [w.lower() for w in re.findall(r"[A-Za-z0-9]+", plain)]
+        initials = "".join(w[0] for w in words if w not in ("of", "and", "the", "de", "du", "la"))
+        if re.search(r"link|transit|metro|bus|rail|tram", words[0]) and 5 <= len(words[0]) <= 10: s = words[0]     # 'TransLink Vancouver'
+        elif len(initials) >= 3: s = initials                                                                  # 'Edmonton Transit System'
+        else: s = words[0][:14]                                                                                 # 'Burlington Transit'
+    return s or "transit"
+
+
 def key_help(f):
     """How to get the free key, in words people can follow."""
     where = f["info"] or "the agency's developer page"
@@ -107,7 +122,7 @@ def major(effect, text):
 
 def short_name(provider):
     """'Metropolitan Transit Authority (MTA)' -> 'MTA'."""
-    m = re.search(r"\(([^)|]{2,12})\)\s*$", provider or "")
+    m = re.search(r"\(([A-Z][A-Z0-9&.\-]{1,9})\)\s*$", provider or "")       # an acronym, not 'BC Transit (Nanaimo)'
     if m: return m.group(1)
     return re.split(r"\s*[(|]", provider or "")[0] or provider       # 'BC Transit (Central Fraser Valley| Chilliwack ...' -> 'BC Transit'
 

@@ -40,6 +40,32 @@ KINDS_511 = {"closures": "Closure", "accidentsAndIncidents": "Incident", "roadwo
 DEFAULT_KM = 40
 
 
+SLUGS = {"hotline.gov.sk.ca": "skhotline"}
+
+
+def slot_for(area):
+    """Which road source the area uses: 'drivebc', '511:<site>', or None."""
+    if (area.get("country"), area.get("region")) == ("CA", "British Columbia"): return "drivebc"
+    site = site_for(area)
+    return f"511:{site[0]}" if site else None
+
+
+def slug(slot):
+    """A channel name for the road source: 'drivebc', '511alberta', 'ontario511', '511nl' ..."""
+    if slot == "drivebc": return "drivebc"
+    host = slot.split(":", 1)[1]
+    if host in SLUGS: return SLUGS[host]
+    name = next(n for h, n, _ in SITES.values() if h == host)
+    s = re.sub(r"[^a-z0-9]", "", name.lower())
+    return s if len(s) <= 14 else re.sub(r"[^a-z0-9]", "", host.replace("www.", "").rsplit(".", 1)[0])
+
+
+def label(slot):
+    if slot == "drivebc": return "DriveBC"
+    host = slot.split(":", 1)[1]
+    return next(n for h, n, _ in SITES.values() if h == host)
+
+
 def site_for(area):
     """(host, name, developer page) of the 511 site covering the area, or None."""
     return SITES.get((area.get("country"), area.get("region")))

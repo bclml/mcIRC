@@ -34,7 +34,7 @@ WINDOW = "Area alerts"
 
 class Addon(AddonBase):
     title = "Area alerts"
-    version = "1.1.0"
+    version = "1.2.0"
     author = "mcIRC"
     description = ("Natural disasters, earthquakes, tsunamis, weather warnings, public transit alerts and road closures for the areas you "
                    "choose anywhere in the world (country, region, area). Shown on this PC; broadcast to the mesh only if you tick it. "
@@ -44,6 +44,7 @@ class Addon(AddonBase):
 
     def on_load(self):
         self.busy, self.last_check, self.queue, self.sent_times = False, 0.0, [], []
+        self.source_of = {}                                 # alert id -> 'transit:<feed id>' / 'drivebc' / '511:<site>' (its own channel)
         self.current = []                                   # [(where, Alert)] from the last check
         self.api.add_menu_item("Check now", lambda: self.check(force=True))
         self.api.add_menu_item("Alerts in force...", self.show_current)
@@ -68,10 +69,13 @@ class Addon(AddonBase):
                 "keys": dict(g("keys", {})), "feeds": list(g("transit_feeds", [])), "all": bool(g("transit_all", False)),
                 "road_km": int(g("traffic_km", traffic.DEFAULT_KM)), "roadwork": bool(g("roadwork", False))}
 
-        def add(found, where, got):
+        sources = {}
+
+        def add(found, where, got, source=None):
             texts = {al.text for w, al in found if w == where}
             for al in got:                          # the same warning for neighbouring districts: once per place
                 if al.text not in texts: found.append((where, al)); texts.add(al.text)
+                if source: sources[al.id] = source
 
         def work():
             found, errors = [], []
@@ -85,7 +89,7 @@ class Addon(AddonBase):
                             site = traffic.site_for(a)
                             got = traffic.traffic(a, opts["keys"].get(f"511:{site[0]}", "") if site else "", opts["road_km"], opts["roadwork"])
                         else: got = src.SOURCES[kind](a)
-                        add(found, places.label(a), got)
+                        add(found, places.label(a), got, traffic.slot_for(a) if kind == "traffic" else None)
                     except Exception as e:
                         errors.append(f"{kind} for {a.get('name')}: {e}")
             if "transit" in on:
@@ -95,8 +99,9 @@ class Addon(AddonBase):
                     if not f: continue
                     key = opts["keys"].get(f"transit:{fid}", "")
                     if f["auth"] and not key: continue
-                    try: add(found, transit.label(f), transit.alerts(f, key, opts["all"]))
+                    try: add(found, transit.label(f), transit.alerts(f, key, opts["all"]), f"transit:{fid}")
                     except Exception as e: errors.append(f"transit alerts of {f['provider']}: {e}")
+            self.source_of.update(sources)
             return found, errors
         self.api.run_background(work, self._checked)
 
@@ -124,13 +129,21 @@ class Addon(AddonBase):
         self.sent_times = [t for t in self.sent_times if now - t < 3600]
         if len(self.sent_times) >= PER_HOUR or (self.sent_times and now - self.sent_times[-1] < GAP): return
         al = self.queue.pop(0)
-        self.api.send(self.channel(al.kind), al.text)
+        self.api.send(self.channel_for(al), al.text)
         self.sent_times.append(now)
         if self.queue: self.api.after(GAP * 1000 + 500, self.drain)
 
     def kinds_on(self):
         saved = self.api.get("kinds", {})
         return [k for k in KINDS if saved.get(k, k in DEFAULT_ON)]
+
+    def channel_for(self, al):
+        """The alert's own channel: its transit agency's or road source's when one is set, else its kind's."""
+        src_ = self.source_of.get(al.id, "")
+        if src_.startswith("transit:"): own = self.api.get("transit_channels", {}).get(src_[8:])
+        elif src_: own = self.api.get("traffic_channels", {}).get(src_)
+        else: own = None
+        return (own or "").strip() or self.channel(al.kind)
 
     def channel(self, kind):
         return (self.api.get("channels", {}).get(kind) or KINDS[kind][1]).strip()
@@ -163,6 +176,7 @@ class Addon(AddonBase):
         self._areas_page(pages["Areas and alerts"], bg)
         self.transit_page, self.traffic_page = pages["Public transit"], pages["Traffic"]
         self.feed_vars = {fid: tk.BooleanVar(value=True) for fid in g("transit_feeds", [])}
+        self.tch_vars, self.rch_vars = {}, {}
         self.v_all = tk.BooleanVar(value=g("transit_all", False))
         self.v_km, self.v_roadwork = tk.StringVar(value=str(g("traffic_km", traffic.DEFAULT_KM))), tk.BooleanVar(value=g("roadwork", False))
         self._fill_transit(); self._fill_traffic()
@@ -236,7 +250,7 @@ class Addon(AddonBase):
         inner = self._scrolled(self.transit_page, bg)
         tk.Label(inner, bg=bg, wraplength=560, justify="left", text=(
             "The transit agencies serving your areas (from the Mobility Database). Tick the ones to follow. Alerts in force now; by default "
-            "only service stops and big delays.")).pack(anchor="w")
+            "only service stops and big delays. Where an area has more than one agency, each has its own channel.")).pack(anchor="w")
         tk.Checkbutton(inner, text="All their alerts (detours, stop changes, lifts out of service ... - many)", variable=self.v_all, bg=bg).pack(anchor="w")
         seen = set()
         for a in self.chosen:
@@ -246,7 +260,12 @@ class Addon(AddonBase):
             for f in feeds:
                 seen.add(f["id"])
                 var = self.feed_vars.setdefault(f["id"], tk.BooleanVar(value=False))
-                tk.Checkbutton(inner, text=transit.label(f) + ("   (free key needed)" if f["auth"] else ""), variable=var, bg=bg).pack(anchor="w", padx=10)
+                row = tk.Frame(inner, bg=bg); row.pack(anchor="w", fill="x", padx=10)
+                tk.Checkbutton(row, text=transit.label(f) + ("   (free key needed)" if f["auth"] else ""), variable=var, bg=bg).pack(side="left")
+                own = "#" + transit.slug(f) if len(feeds) > 1 or len(transit.feeds_for(a)) > 1 else self.ch_vars["transit"].get()
+                ch = self.tch_vars.setdefault(f["id"], tk.StringVar(value=self.api.get("transit_channels", {}).get(f["id"], own)))
+                tk.Entry(row, textvariable=ch, width=14).pack(side="right", padx=4)
+                tk.Label(row, text="channel:", bg=bg).pack(side="right")
                 if f["auth"]: self._key_row(inner, bg, f"transit:{f['id']}", transit.key_help(f), f["info"])
         if not seen:
             tk.Label(inner, bg=bg, fg="#555", wraplength=560, justify="left", text=(
@@ -256,16 +275,25 @@ class Addon(AddonBase):
     def _fill_traffic(self):
         bg = self.traffic_page["bg"]
         inner = self._scrolled(self.traffic_page, bg)
+        self._traffic_rows = set()
         tk.Label(inner, bg=bg, wraplength=560, justify="left", text=(
             "Road closures, crashes and incidents near your areas. British Columbia: DriveBC, no key. 20 other provinces, territories and "
-            "US states: their 511 site, each needs a free developer key.")).pack(anchor="w")
+            "US states: their 511 site, each needs a free developer key. With more than one road source, each has its own channel.")).pack(anchor="w")
         row = tk.Frame(inner, bg=bg); row.pack(anchor="w", pady=2)
         tk.Label(row, text="Within km of each area:", bg=bg).pack(side="left")
         tk.Entry(row, textvariable=self.v_km, width=5).pack(side="left", padx=4)
         tk.Checkbutton(inner, text="Roadwork too (only full closures otherwise)", variable=self.v_roadwork, bg=bg).pack(anchor="w")
-        sites = set()
+        sites, slots = set(), {traffic.slot_for(a) for a in self.chosen} - {None}
         for a in self.chosen:
             tk.Label(inner, text=f"{places.label(a)}: {traffic.available(a)}", bg=bg, anchor="w").pack(anchor="w", pady=(6, 0))
+            slot = traffic.slot_for(a)
+            if slot and slot not in self._traffic_rows:
+                self._traffic_rows.add(slot)
+                row = tk.Frame(inner, bg=bg); row.pack(anchor="w", padx=22)
+                own = "#" + traffic.slug(slot) if len(slots) > 1 else self.ch_vars["traffic"].get()
+                ch = self.rch_vars.setdefault(slot, tk.StringVar(value=self.api.get("traffic_channels", {}).get(slot, own)))
+                tk.Label(row, text=f"{traffic.label(slot)} goes to channel:", bg=bg).pack(side="left")
+                tk.Entry(row, textvariable=ch, width=14).pack(side="left", padx=4)
             site = traffic.site_for(a)
             if site and site[0] not in sites:
                 sites.add(site[0])
@@ -316,6 +344,10 @@ class Addon(AddonBase):
         try: self.api.set("traffic_km", max(5, min(300, int(self.v_km.get()))))
         except ValueError: pass
         self.api.set("roadwork", bool(self.v_roadwork.get()))
+        ticked = {fid for fid, v in self.feed_vars.items() if v.get()}
+        self.api.set("transit_channels", {fid: v.get().strip() for fid, v in self.tch_vars.items() if fid in ticked and v.get().strip()})
+        slots = {traffic.slot_for(a) for a in self.chosen} - {None}
+        self.api.set("traffic_channels", {slot: v.get().strip() for slot, v in self.rch_vars.items() if slot in slots and v.get().strip()})
         keys = dict(self.keys)
         keys.update({slot: v.get().strip() for slot, v in self.key_vars.items()})
         self.api.set("keys", {k: v for k, v in keys.items() if v})

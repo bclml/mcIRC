@@ -58,7 +58,9 @@ def feeds_for(area):
 
 def label(f):
     name = f["name"] if f["name"] and f["name"] != f["provider"] else ""
-    return f"{f['provider']}{' - ' + name if name else ''}"
+    who = re.sub(r"\s*\|\s*", ", ", f["provider"])         # 'BC Transit (Central Fraser Valley| Chilliwack| Agassiz-Harri' (cut at 60)
+    if who.count("(") > who.count(")"): who = re.sub(r",?\s*[^,(]*$", "", who) + "...)"
+    return f"{who}{' - ' + name if name else ''}"
 
 
 def key_help(f):

@@ -1,4 +1,4 @@
-"""Traffic and weather addon: DriveBC, BC Ferries, BC Transit, TransLink, weather, earthquake and tsunami feeds
+"""Traffic, transit and weather addon: DriveBC, BC Ferries, BC Transit, TransLink, weather, earthquake and tsunami feeds
 broadcast to the mesh, plus the weekly reminder.  Has a master mute and a switch per source.
 The chat GUI works fine with this addon disabled (Tools > Addons)."""
 import gui_platform
@@ -14,8 +14,8 @@ from gui_addons import AddonBase
 class Addon(AddonBase):
     # (The "test" auto-reply is its own addon now: Auto reply.)
     SOURCES = [k for k in ea.TX_SOURCES if k != "Test reply"]   # alert types with a switch on the Alerts tab
-    title = "Traffic and weather"
-    version = "1.3.1"
+    title = "Traffic, transit and weather"
+    version = "1.3.2"
     author = "built in"
     description = ("Traffic / ferry / transit / weather / earthquake / tsunami alerts. Keeps the map's DriveBC and earthquake layers up to date; "
                    "broadcasting them to the mesh is OFF until you switch it on.")
@@ -121,16 +121,16 @@ class Addon(AddonBase):
         """What the bot counts as active right now (announced and not cleared yet) - after a restart it is read back from its log."""
         lines = [f"[{src}] {title}" for src, title in sorted(set(ea.active_traffic_alerts.values()) | set(ea.active_weather_alerts.values()))]
         state = "map only - nothing is broadcast" if ea.TX["muted"] else "BROADCASTING"
-        return (f"Traffic and weather: {state}.  {len(lines)} active alert(s):\n\n" + "\n".join(lines)) if lines else f"Traffic and weather: {state}.  No active alerts."
+        return (f"Traffic, transit and weather: {state}.  {len(lines)} active alert(s):\n\n" + "\n".join(lines)) if lines else f"Traffic, transit and weather: {state}.  No active alerts."
 
     def show_active(self):
         show = getattr(self.api, "show_text", None)
-        if show: show("Traffic and weather - active alerts", self.active_text)
+        if show: show("Traffic, transit and weather - active alerts", self.active_text)
         else: self.api.notice(self.active_text())
 
     def _refresh_button(self):
         muted = ea.TX["muted"]
-        self.button.config(text="Traffic and weather: map only" if muted else "Traffic and weather: BROADCASTING", fg="#555555" if muted else "#006400")
+        self.button.config(text="Traffic, transit and weather: map only" if muted else "Traffic, transit and weather: BROADCASTING", fg="#555555" if muted else "#006400")
 
     # ---- map layers ----
     def _incidents(self):
@@ -156,7 +156,7 @@ class Addon(AddonBase):
         self.src = {k: tk.BooleanVar(value=saved.get(k, k != "Weekly reminder")) for k in self.SOURCES}
         self.broadcast = tk.BooleanVar(value=not g("muted", True))
         bg = parent["bg"]
-        tk.Label(f, text="Traffic and weather", bg=bg, font=(gui_platform.DIALOG_FONT_NAME, 9, "bold")).pack(anchor="w")
+        tk.Label(f, text="Traffic, transit and weather", bg=bg, font=(gui_platform.DIALOG_FONT_NAME, 9, "bold")).pack(anchor="w")
         nb = ttk.Notebook(f)
         nb.pack(fill="both", expand=True, pady=4)
         alerts, areas, accounts = (tk.Frame(nb, bg=bg, padx=8, pady=6) for _ in range(3))

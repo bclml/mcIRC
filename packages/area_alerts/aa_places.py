@@ -1,7 +1,7 @@
 """Area alerts: the places to choose from - country, then region (state / province / ...), then area.
 
 From GeoNames (geonames.org, CC BY 4.0): every country, its first-level regions, and its towns of 15,000 people or more
-(aa_world.py).  In Canada the regions also have the areas the Traffic and weather addon uses (ec_areas.py: metro regions
+(aa_world.py).  In Canada the regions also have the areas the Traffic, transit and weather addon uses (ec_areas.py: metro regions
 and districts about the size of the Lower Mainland, the North included)."""
 import base64
 import gzip

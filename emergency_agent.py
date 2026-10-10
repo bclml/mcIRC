@@ -21,7 +21,7 @@ ALERT_LOCATIONS = {}  # "<source>|<guid>" -> (lat, lon, label) for alerts that c
 ALERT_MAPINFO = {}    # "<source>|<guid>" -> (short map label, multi-line details) for the same alerts: what the map shows when you click the pin
 EARTHQUAKE_EVENTS = []  # recent BC-relevant quakes as (lat, lon, magnitude, place) for the GUI map
 
-# Broadcast switches (driven by the GUI's "Traffic and weather" addon; the console agent leaves everything on).
+# Broadcast switches (driven by the GUI's "Traffic, transit and weather" addon; the console agent leaves everything on).
 # Muting only stops TRANSMITTING: feeds keep being read and incident state keeps updating, so unmuting
 # never floods the mesh with alerts that were suppressed in the meantime.
 TX_SOURCES = ["DriveBC", "BC Ferries", "BC Transit", "TransLink", "Weather", "Earthquake", "Tsunami", "Weekly reminder", "Test reply"]
@@ -204,7 +204,7 @@ WEATHER_FEEDS = {
         "https://weather.gc.ca/rss/battleboard/bc41_e.xml",      # Howe Sound
     ]},
 }
-# The areas whose warnings (and 6 AM / 8 AM forecasts) are watched now - chosen in the Traffic and weather addon's settings, any province or territory
+# The areas whose warnings (and 6 AM / 8 AM forecasts) are watched now - chosen in the Traffic, transit and weather addon's settings, any province or territory
 # (ec_areas.AREAS).  An area with per-zone feeds above uses them; any other area asks Environment Canada's national alerts service.
 WEATHER_LOCATIONS = dict(WEATHER_FEEDS)
 

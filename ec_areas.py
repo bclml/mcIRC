@@ -1,4 +1,4 @@
-"""Weather areas for the Traffic and weather addon's Environment Canada warnings: about the size of the Lower Mainland, in every province and territory
+"""Weather areas for the Traffic, transit and weather addon's Environment Canada warnings: about the size of the Lower Mainland, in every province and territory
 (metro regions, regional districts / municipalities, census divisions, administrative regions; hub-and-district in the North).
 
 An area is (name, lat, lon) at its centre.  The three original BC regions keep their own per-zone Environment Canada feeds (in

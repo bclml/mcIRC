@@ -113,7 +113,7 @@ def weather(area, get=None):
 
 
 def _canada(area):
-    import ec_areas                     # Environment Canada (shared with the Traffic and weather addon)
+    import ec_areas                     # Environment Canada (shared with the Traffic, transit and weather addon)
     return [Alert(f"ec:{area['name']}:{k}", "weather", short(f"{k} - {area['name']} (Environment Canada)"), "Environment Canada")
             for k in sorted(ec_areas.alerts_near(area["lat"], area["lon"]))]
 

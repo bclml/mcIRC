@@ -2,7 +2,7 @@ import os as _os; _os.environ["MCIRC_NO_LOG_FILE"] = "1"      # tests must never
 import os, sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT); os.chdir(ROOT)
-"""Traffic and weather: Environment Canada weather warnings for areas in any province or territory, picked by province then area.  No radio, no
+"""Traffic, transit and weather: Environment Canada weather warnings for areas in any province or territory, picked by province then area.  No radio, no
 internet (a stand-in for Environment Canada's alerts service)."""
 import asyncio, importlib.util, tkinter as tk
 from unittest import mock

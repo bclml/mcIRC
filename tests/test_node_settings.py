@@ -93,6 +93,20 @@ app.settings["extra_nodes"] = []
 win = gs.AddonSettingsWindow(app, "echo"); root.update()
 ok("with one node there are no tabs - the window is as before", not hasattr(win, "tab_buttons"))
 win.destroy()
+
+class OldAPI:                                   # mcIRC still running an older core (not restarted since the update)
+    store = {}
+    def get(self, k, d=None): return self.store.get(k, d)
+    def set(self, k, v): self.store[k] = v
+    def _draw_switch(self): pass
+app.settings["extra_nodes"] = [{"label": "wifi 1", "mode": "tcp", "host": "x", "enabled": True}]
+bot2 = Echo(OldAPI()); app.addons.loaded["echo"] = (bot2, bot2.api)
+win = gs.AddonSettingsWindow(app, "echo"); root.update()
+ok("with an older core still running: no node tabs, but the page itself is there and saves", not hasattr(win, "tab_buttons")
+   and win.page is not None and win.inst.v_greeting.get() == "Hello")
+win.inst.v_greeting.set("Yo"); win.apply()
+ok("...and saving works", OldAPI.store.get("greeting") == "Yo", OldAPI.store)
+win.destroy()
 root.destroy()
 print("\nALL PASSED" if not fails else f"\n{len(fails)} FAILED: {fails}")
 sys.exit(1 if fails else 0)

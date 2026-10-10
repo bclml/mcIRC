@@ -27,7 +27,7 @@ GREETING = cmds.DEFAULT_GREETINGS[0]                     # the single greeting o
 
 class Addon(AddonBase):
     title = "Mesh bot"
-    version = "1.2.5"
+    version = "1.2.6"
     author = "mcIRC (commands after agessaman/meshcore-bot, MIT)"
     description = ("ping, hello, path, prefix, multitest, stats, sports and version - the meshcore-bot commands mcIRC's other bots don't have - "
                    "plus its greeter for newcomers (a random greeting from your list), each switched on for the channels you choose. Off until you switch it on.")
@@ -114,6 +114,7 @@ class Addon(AddonBase):
     def greet(self, msg):
         """Once per newcomer: someone speaking for the first time who mcIRC doesn't know - not in its node memory (nodes.db, not the radio's
         contact list; another device of theirs counts too), never seen in the chat logs, not greeted before."""
+        if not self.api.get("greet_on", True): return            # the greeter's own on/off (its channels and greetings are kept)
         if msg.get("dm") or not mc.channel_ok(msg.get("channel", ""), mc.channel_list(self.api.get("greet_channels", ""))): return
         nick = (msg.get("nick") or "").strip()
         if not nick or nick == "someone": return
@@ -125,7 +126,10 @@ class Addon(AddonBase):
             return                                                 # been around already (another device, or chatted before): no welcome
         line = cmds.pick_greeting(self.greetings(), getattr(self, "_last_greeting", None))
         self._last_greeting = line
-        self.send(msg, cmds.greeting_for(nick, line, msg.get("channel", "")))
+        text = cmds.greeting_for(nick, line, msg.get("channel", ""))
+        private = bool(self.api.get("greet_private", False))     # only to the newcomer: nothing in the channel
+        for i, part in enumerate(mc.split_message(text, limit=mc.MAX_CHARS, max_parts=2)):
+            self.api.after(5000 + i * 9000, lambda p=part: self.api.reply(msg, p, private=private))
 
     def greetings(self):
         """The greetings to pick from: the list from the settings, or 1.0.x's single line if it was changed, else the defaults."""
@@ -165,7 +169,13 @@ class Addon(AddonBase):
             tk.Label(r, text=label, bg=bg).pack(side="left")
             tk.Entry(r, textvariable=var, width=width).pack(side="left", padx=4)
         tk.Checkbutton(f, text="Also answer private messages (for the commands that are on somewhere)", variable=self.v_dm, bg=bg).pack(anchor="w")
-        tk.Label(f, text="Greeter (sends on its own - once per newcomer; blank = off):", bg=bg, font=("TkDefaultFont", 9, "bold")).pack(anchor="w", pady=(8, 0))
+        tk.Label(f, text="Greeter (sends on its own - once per newcomer):", bg=bg, font=("TkDefaultFont", 9, "bold")).pack(anchor="w", pady=(8, 0))
+        self.v_greet_on = tk.BooleanVar(value=g("greet_on", True))
+        self.v_greet_private = tk.BooleanVar(value=g("greet_private", False))
+        tk.Checkbutton(f, text="Greet newcomers (off: no greetings at all - the channels and greetings below are kept)", variable=self.v_greet_on,
+                       bg=bg).pack(anchor="w")
+        tk.Checkbutton(f, text="Welcome them by private message only (nothing is said in the channel)", variable=self.v_greet_private,
+                       bg=bg).pack(anchor="w")
         r = tk.Frame(f, bg=bg); r.pack(fill="x", pady=1)
         tk.Label(r, text="Greet newcomers in channels:", bg=bg).pack(side="left")
         tk.Entry(r, textvariable=self.v_greet_ch, width=22).pack(side="left", padx=4)
@@ -178,8 +188,10 @@ class Addon(AddonBase):
                   command=lambda: (self.greet_box.delete("1.0", "end"), self.greet_box.insert("1.0", "\n".join(cmds.DEFAULT_GREETINGS)))).pack(side="left")
         tk.Label(r, bg=bg, fg="#555", text="  Plain text only - the mesh can't carry mIRC colours.").pack(side="left")
         tk.Label(f, bg=bg, fg="#555", wraplength=460, justify="left",
-                 text="A newcomer: someone who isn't in mcIRC's own memory of nodes (nodes.db on this PC - not the radio's contact list) when "
-                      "you switch the greeter on, speaking for the first time. path and prefix name repeaters from that same memory.").pack(anchor="w")
+                 text="A newcomer: someone speaking for the first time whom mcIRC doesn't know - not in its own memory of nodes (nodes.db on "
+                      "this PC; another device of theirs counts), never seen in the chat logs, never greeted. mcIRC can only know who is new "
+                      "to it, not to the mesh - in busy shared channels a private welcome is kinder. path and prefix name repeaters from the "
+                      "same memory.").pack(anchor="w")
         return f
 
     def _same_for_all(self):
@@ -201,4 +213,6 @@ class Addon(AddonBase):
         if greet and not greet_was:                              # greeter switched on: everyone already known is not a newcomer
             self.api.set("greeted", sorted({n["name"] for n in self.api.nodes.all() if n.get("name")})[-5000:])
         self.api.set("greet_channels", greet)
+        self.api.set("greet_on", bool(self.v_greet_on.get()))
+        self.api.set("greet_private", bool(self.v_greet_private.get()))
         self.api.set("greet_lines", cmds.greeting_lines(self.greet_box.get("1.0", "end")) or list(cmds.DEFAULT_GREETINGS))

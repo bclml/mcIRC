@@ -118,6 +118,19 @@ del app.settings["addons"]["mesh_bot"]["greet_lines"]
 app.settings["addons"]["mesh_bot"]["greet_text"] = "Howdy {nick}"
 ok("a greeting changed in 1.0.x is kept", bot.greetings() == ["Howdy {nick}"])
 del app.settings["addons"]["mesh_bot"]["greet_text"]
+how = []
+real_reply = api.reply
+api.reply = lambda m, text, private=None: how.append((m["nick"], private))
+app.settings["addons"]["mesh_bot"]["greet_private"] = True
+bot.on_message(msg("first time", ch="Public", nick="Shy One"))
+ok("greeter 'by private message only': the welcome goes to the newcomer alone, nothing in the channel", how == [("Shy One", True)], how)
+app.settings["addons"]["mesh_bot"].update(greet_private=False, greet_on=False)
+how.clear(); bot.on_message(msg("first time", ch="Public", nick="Another One"))
+ok("greeter switched off: no greeting (its channels and greetings are kept)", how == [] and app.settings["addons"]["mesh_bot"]["greet_channels"] == "Public", how)
+app.settings["addons"]["mesh_bot"]["greet_on"] = True
+how.clear(); bot.on_message(msg("first time", ch="Public", nick="Third One"))
+ok("...on again, in the channel as before", how == [("Third One", False)], how)
+api.reply = real_reply
 ok("...otherwise the default greetings, Invision-style ones included", bot.greetings() == mcmds.DEFAULT_GREETINGS and any("graced us" in g for g in bot.greetings()))
 page = bot.build_options(tk.Frame(root)); bot.v_greet_ch.set("#weather"); bot.v_greet_ch.set("")
 bot.greet_box.delete("1.0", "end"); bot.greet_box.insert("1.0", "One {nick}\n\n  Two {nick}  \n")

@@ -3,6 +3,7 @@ The addon builds the page itself (build_options); OK / Apply call its apply_opti
 
 With more than one node connected the window has a tab per node besides 'All nodes': every setting can be made for one node only (what a
 node doesn't set comes from 'All nodes'), and the addon then answers each node with that node's settings."""
+import contextlib
 import tkinter as tk
 from tkinter import messagebox, ttk
 
@@ -25,6 +26,7 @@ class AddonSettingsWindow(tk.Toplevel):
         tk.Label(head, text=f"{title}  {ver}", bg=BG, font=(gui_platform.UI_FONT_NAME, 11, "bold"), anchor="w").pack(anchor="w")
         if desc: tk.Label(head, text=desc, bg=BG, fg="#555", wraplength=680, justify="left", anchor="w").pack(anchor="w")
         self.extra = [c["label"] for c in app.settings.get("extra_nodes", []) if c.get("label")]
+        if not hasattr(self.api, "own_settings"): self.extra = []      # mcIRC not restarted since an update: no node tabs, the rest works
         self.tab = ALL
         self.tab_var = tk.StringVar(value=ALL)
         if self.extra:                                          # one tab per node, besides the defaults for all of them
@@ -68,6 +70,7 @@ class AddonSettingsWindow(tk.Toplevel):
 
     def _ctx(self):
         """The settings the page reads and writes: the defaults, or the open node's own (with=own: saving makes them that node's)."""
+        if not hasattr(self.api, "for_node"): return contextlib.nullcontext()
         return self.api.for_node(self.tab or None, own=bool(self.tab))
 
     def switch(self, node):
@@ -101,13 +104,14 @@ class AddonSettingsWindow(tk.Toplevel):
             self.toolbar_var = tk.BooleanVar(value=bool(self.api.get("_toolbar", True)))
             tk.Checkbutton(self.top, text="Show its ON/OFF switch on the toolbar", variable=self.toolbar_var, bg=BG, anchor="w").pack(fill="x")
         self.page = None
-        self.api._ctx.seen = self.inherited = {}               # what this tab showed from 'All nodes' (see _prune)
+        self.inherited = {}                                     # what this tab showed from 'All nodes' (see _prune)
+        if hasattr(self.api, "_ctx"): self.api._ctx.seen = self.inherited
         try:
             with self._ctx(): self.page = self.inst.build_options(self.holder)
         except Exception as e:
             tk.Label(self.holder, text=f"This addon's settings page failed to open:\n{e}", bg=BG, fg="#c00000", justify="left").pack(anchor="w")
         finally:
-            self.api._ctx.seen = None
+            if hasattr(self.api, "_ctx"): self.api._ctx.seen = None
         if self.page is not None: self.page.pack(fill="both", expand=True)
         elif not self.holder.winfo_children():
             tk.Label(self.holder, text="This addon has no settings.", bg=BG).pack(anchor="w")

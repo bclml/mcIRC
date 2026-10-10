@@ -12,6 +12,15 @@
       "tested": "2026-10-03 with app 1.5.2"
     },
     {
+      "name": "area_alerts",
+      "title": "Area alerts",
+      "version": "1.0.0",
+      "author": "bclml",
+      "description": "Natural disasters, earthquakes, tsunami and official weather warnings for the areas you choose anywhere in the world (country, region, area). Shown on this PC; broadcast to the mesh only if you tick it. Free sources, no key.",
+      "path": "packages/area_alerts",
+      "tested": "2026-10-09 with app 3.0.0"
+    },
+    {
       "name": "auto_reply",
       "title": "Auto reply",
       "version": "1.1.6",

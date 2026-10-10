@@ -1,0 +1,16 @@
+{
+  "name": "area_alerts",
+  "title": "Area alerts",
+  "version": "1.0.0",
+  "description": "Natural disasters (GDACS), earthquakes (USGS), tsunami warnings (NOAA) and official weather warnings (Environment Canada, US NWS, MeteoAlarm for 38 European countries) for the areas you choose anywhere in the world: country, region, area. Shown on this PC; broadcast to the mesh only if you tick it. Free sources, no key. Off until you switch it on.",
+  "requires": [
+    "requests"
+  ],
+  "files": {
+    "area_alerts.py": "addons/area_alerts.py",
+    "aa_sources.py": "aa_sources.py",
+    "aa_places.py": "aa_places.py",
+    "aa_world.py": "aa_world.py",
+    "../../ec_areas.py": "ec_areas.py"
+  }
+}

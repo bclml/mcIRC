@@ -178,7 +178,7 @@ BLOCKLIST = [
 # WARNING - RAINFALL" entry, matching what the user's phone had just alerted on. Each broad region
 # here needs several of these zone feeds, not one — a warning for, say, Surrey doesn't show up on
 # the Greater Victoria feed at all, they're independent per-zone documents.
-WEATHER_LOCATIONS = {
+WEATHER_FEEDS = {
     "Lower Mainland": {"lat": 49.19, "lon": -122.85, "feeds": [
         "https://weather.gc.ca/rss/battleboard/bcrm1516_e.xml",  # Metro Vancouver - central (Vancouver/Burnaby/New West)
         "https://weather.gc.ca/rss/battleboard/bcrm28_e.xml",    # Metro Vancouver - North Shore
@@ -204,6 +204,23 @@ WEATHER_LOCATIONS = {
         "https://weather.gc.ca/rss/battleboard/bc41_e.xml",      # Howe Sound
     ]},
 }
+# The areas whose warnings (and 6 AM / 8 AM forecasts) are watched now - chosen in the BC traffic bot's settings, any province or territory
+# (ec_areas.AREAS).  An area with per-zone feeds above uses them; any other area asks Environment Canada's national alerts service.
+WEATHER_LOCATIONS = dict(WEATHER_FEEDS)
+
+
+def set_weather_areas(names):
+    """Watch these areas (names from ec_areas.AREAS); none known: the three original BC regions."""
+    import ec_areas
+    chosen = {}
+    for name in names or []:
+        a = ec_areas.find(name)
+        if a is None: continue
+        chosen[name] = dict(WEATHER_FEEDS[name]) if name in WEATHER_FEEDS else {"lat": a[2], "lon": a[3], "feeds": None, "province": a[0]}
+    WEATHER_LOCATIONS.clear()
+    WEATHER_LOCATIONS.update(chosen or WEATHER_FEEDS)
+
+
 WEATHER_EMOJIS = {0: "☀️", 1: "☀️", 2: "⛅", 3: "☁️", 45: "🌫️", 48: "🌫️", 51: "🌦️", 53: "🌦️", 55: "🌦️", 61: "🌧️", 63: "🌧️", 65: "🌧️", 71: "❄️", 73: "❄️", 75: "❄️", 80: "🌧️", 81: "🌧️", 82: "🌧️", 95: "⛈️"}
 
 # --- LOGGING SETUP ---
@@ -1194,7 +1211,12 @@ async def scrape_weather_warnings():
         # collects the distinct warning "kind" (e.g. "YELLOW WARNING - RAINFALL") active anywhere in
         # the region, deduped, instead of broadcasting each sub-zone's copy separately.
         region_kinds = set()
-        for feed_url in profile["feeds"]:
+        if not profile.get("feeds"):                               # an area outside the original three: the national alerts service
+            try:
+                import ec_areas
+                region_kinds |= ec_areas.alerts_near(profile["lat"], profile["lon"])
+            except Exception as e: logging.warning(f"Environment Canada alerts for {region} could not be read: {e}")
+        for feed_url in profile.get("feeds") or []:
             try:
                 res = requests.get(feed_url, headers=hdrs, timeout=10)
                 if res.status_code != 200: continue

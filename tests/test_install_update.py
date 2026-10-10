@@ -16,7 +16,7 @@ def check(label, cond, detail=""):
 def sandbox():
     """A temp copy of the app (code + packages) plus 'user data' that must never be touched."""
     d = tempfile.mkdtemp(prefix="sbx_")
-    for f in ("emergency_agent.py", "mcIRC.py", "meshcore_io.py", "VERSION", "README.md", "addons-catalog.json"):
+    for f in ("emergency_agent.py", "ec_areas.py", "mcIRC.py", "meshcore_io.py", "VERSION", "README.md", "addons-catalog.json"):
         shutil.copy(os.path.join(REAL, f), d)
     for f in os.listdir(REAL):
         if f.startswith("gui_") and f.endswith(".py"): shutil.copy(os.path.join(REAL, f), d)

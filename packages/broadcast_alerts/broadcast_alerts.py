@@ -15,7 +15,7 @@ class Addon(AddonBase):
     # (The "test" auto-reply is its own addon now: Auto reply.)
     SOURCES = [k for k in ea.TX_SOURCES if k != "Test reply"]   # alert types with a switch on the Alerts tab
     title = "BC traffic bot"
-    version = "1.2.4"
+    version = "1.3.0"
     author = "built in"
     description = ("Traffic / ferry / transit / weather / earthquake / tsunami alerts. Keeps the map's DriveBC and earthquake layers up to date; "
                    "broadcasting them to the mesh is OFF until you switch it on.")
@@ -103,6 +103,9 @@ class Addon(AddonBase):
         ea.USE_SCOPES = g("use_scopes", False)
         ea.REGION_SCOPES = {"Lower Mainland": g("scope_lm", ""), "Vancouver Island": g("scope_vi", ""), "Sunshine Coast": g("scope_sc", "")}
         ea.TRANSLINK_API_KEY = g("translink_key", "").strip() or os.environ.get("TRANSLINK_API_KEY", "").strip() or None
+        if hasattr(ea, "set_weather_areas"):                      # which areas' Environment Canada warnings and forecasts are watched
+            import ec_areas
+            ea.set_weather_areas(g("weather_areas", list(ec_areas.DEFAULT_AREAS)))
 
     def set_muted(self, muted):
         self.api.set("muted", muted)
@@ -156,9 +159,11 @@ class Addon(AddonBase):
         tk.Label(f, text="BC traffic bot", bg=bg, font=(gui_platform.DIALOG_FONT_NAME, 9, "bold")).pack(anchor="w")
         nb = ttk.Notebook(f)
         nb.pack(fill="both", expand=True, pady=4)
-        alerts, accounts = (tk.Frame(nb, bg=bg, padx=8, pady=6) for _ in range(2))
+        alerts, areas, accounts = (tk.Frame(nb, bg=bg, padx=8, pady=6) for _ in range(3))
         nb.add(alerts, text="Alerts")
+        nb.add(areas, text="Weather areas")
         nb.add(accounts, text="Accounts & scopes")
+        self._areas_page(areas, bg)
 
         tk.Checkbutton(alerts, text="Broadcast alerts to the mesh (this transmits on your radio)", variable=self.broadcast, bg=bg, wraplength=400, justify="left", anchor="w",
                        font=(gui_platform.UI_FONT_NAME, gui_platform.UI_FONT_SIZE, "bold")).pack(anchor="w")
@@ -181,8 +186,41 @@ class Addon(AddonBase):
         tk.Checkbutton(accounts, text="Prefix alerts with region scope codes", variable=self.v["use_scopes"], bg=bg).pack(anchor="w", pady=4)
         return f
 
+    def _areas_page(self, page, bg):
+        """Province / territory, then its areas: the Environment Canada warnings (and daily forecasts) the bot watches."""
+        import ec_areas
+        self.area_vars = {}
+        chosen = set(self.api.get("weather_areas", list(ec_areas.DEFAULT_AREAS)))
+        tk.Label(page, bg=bg, fg="#555", justify="left", wraplength=420, text=(
+            "Weather warnings (and the 6 AM / 8 AM forecasts) for the areas ticked here go to #weather. Pick a province or territory, then tick "
+            "its areas - about the size of the Lower Mainland each. Ticks in other provinces are kept.")).pack(anchor="w")
+        top = tk.Frame(page, bg=bg); top.pack(fill="x", pady=4)
+        tk.Label(top, text="Province / territory:", bg=bg).pack(side="left")
+        prov = ttk.Combobox(top, values=list(ec_areas.AREAS), state="readonly", width=28)
+        prov.pack(side="left", padx=4)
+        self.areas_count = tk.Label(top, bg=bg, fg="#555")
+        self.areas_count.pack(side="left", padx=6)
+        box = tk.Frame(page, bg=bg); box.pack(fill="both", expand=True)
+        for p, areas in ec_areas.AREAS.items():
+            for a in areas: self.area_vars[a[0]] = tk.BooleanVar(value=a[0] in chosen)
+
+        def count():
+            n = sum(v.get() for v in self.area_vars.values())
+            self.areas_count.config(text=f"{n} area{'s' if n != 1 else ''} ticked in all")
+
+        def show(_=None):
+            for w in box.winfo_children(): w.destroy()
+            for i, a in enumerate(ec_areas.AREAS[prov.get()]):
+                tk.Checkbutton(box, text=a[0], variable=self.area_vars[a[0]], bg=bg, anchor="w", command=count).grid(row=i // 2, column=i % 2, sticky="w", padx=4)
+        prov.bind("<<ComboboxSelected>>", show)
+        first = next((p for p, areas in ec_areas.AREAS.items() if any(a[0] in chosen for a in areas)), "British Columbia")
+        prov.set(first); show(); count()
+
     def apply_options(self):
         for k, var in self.v.items(): self.api.set(k, var.get())
+        if getattr(self, "area_vars", None):
+            import ec_areas
+            self.api.set("weather_areas", [a[0] for areas in ec_areas.AREAS.values() for a in areas if self.area_vars[a[0]].get()])
         self.api.set("muted", not self.broadcast.get())
         self.api.set("sources", {k: var.get() for k, var in self.src.items()})
         self.apply_settings()

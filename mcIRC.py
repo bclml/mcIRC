@@ -384,6 +384,22 @@ class App(PrivateMixin, MenusMixin, CommandsMixin, gui_multinode.MultiNodeMixin,
             b = tk.Button(bar, image=self.icons[item[0]], command=item[2], bg=BG, relief="flat", overrelief="raised", bd=1, width=22, height=22, takefocus=False)
             b.pack(side="left", padx=1, pady=2)
             gui_style.Tooltip(b, item[1])
+        self.public_btn = tk.Button(bar, command=self.toggle_bots_in_public, bg=BG, relief="flat", overrelief="raised", padx=8, pady=2, takefocus=False)
+        self.public_btn.pack(side="left", padx=1, pady=2)       # the addons' ON/OFF switches follow it
+        gui_style.Tooltip(self.public_btn, "May bots and the greeter post in Public? Off: they answer people there privately")
+        self.paint_public_btn()
+
+    def toggle_bots_in_public(self):
+        self.settings["bots_in_public"] = not self.settings.get("bots_in_public", False)
+        self.save()
+        self.paint_public_btn()
+        self.status_line("*** Bots in Public: " + ("ON - bots and the greeter may post there" if self.settings["bots_in_public"]
+                                                   else "OFF - bots answer people in Public privately"), "warn" if self.settings["bots_in_public"] else "info")
+
+    def paint_public_btn(self):
+        on = bool(self.settings.get("bots_in_public", False))
+        if getattr(self, "public_btn", None) is not None:
+            self.public_btn.config(text=f"Bots in Public: {'ON' if on else 'OFF'}", fg="#c00000" if on else "#555555")
 
     def _status_bar(self):
         self.statusbar = bar = tk.Frame(self.root, bg=BG)
@@ -732,6 +748,7 @@ class App(PrivateMixin, MenusMixin, CommandsMixin, gui_multinode.MultiNodeMixin,
 
     def apply_settings(self):
         s = self.settings
+        self.paint_public_btn()                                # Options > Display may have changed it
         ea.BOT_NICK = s["node_name"]
         self.font.configure(size=s["font_size"])
         if hasattr(self, "tree"): self.apply_theme()

@@ -102,6 +102,13 @@ with _mock.patch.object(app, "send_to", lambda ch, t, **k: calls.append(("channe
     papi.reply({"channel": "Public", "nick": "Ann", "text": "joke", "dm": False, "node": "main"}, "a joke", private=False)
 ok("...unless 'Let bots post in Public' is ticked in Options", calls == [("channel", "Public")], calls)
 app.settings["bots_in_public"] = False
+app.paint_public_btn()
+ok("the toolbar has a 'Bots in Public' switch, OFF by default", app.public_btn.cget("text") == "Bots in Public: OFF")
+app.save = lambda: None
+app.public_btn.invoke(); root.update()
+ok("...pressing it lets bots post in Public (shown in red)", app.settings["bots_in_public"] is True and app.public_btn.cget("text") == "Bots in Public: ON")
+app.public_btn.invoke(); root.update()
+ok("...and off again", app.settings["bots_in_public"] is False and app.public_btn.cget("text") == "Bots in Public: OFF")
 root.destroy()
 print("\nALL PASSED" if not fails else f"\n{len(fails)} FAILED: {fails}")
 sys.exit(1 if fails else 0)

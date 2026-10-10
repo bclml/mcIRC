@@ -186,6 +186,17 @@ ok("transit: the agencies ticked are checked; one needing a key is skipped until
 ok("...its alerts go to #transit", api.sent[n:] == [("#transit", f"{open_feed['provider']}: Line 1 suspended")], api.sent[n:])
 api.s["keys"] = {f"transit:{keyed['id']}": "K1"}; asked.clear(); bot.check()
 ok("...with its key, it is checked too", (keyed["id"], "K1") in asked, asked)
+# more than one channel per kind / agency / road source
+api.s["channels"] = {"weather": "#weather, #mcirc public #Weather"}
+ok("a channel box can hold several channels: each once, never Public", bot.channels_for(src.Alert("w", "weather", "x", "")) == ["#weather", "#mcirc"])
+api.s["broadcast"] = True; bot.queue = [src.Alert("w7", "weather", "Storm", "NWS")]; bot.sent_times = []; n = len(api.sent)
+bot.drain()
+ok("...the alert goes to each of them (each one transmission toward the hourly limit)", api.sent[n:] == [("#weather", "Storm"), ("#mcirc", "Storm")]
+   and len(bot.sent_times) == 2, api.sent[n:])
+bot.sent_times = [time.time() - 3000 + i for i in range(9)]; bot.queue = [src.Alert("w8", "weather", "Storm 2", "NWS")]; n = len(api.sent)
+bot.drain()
+ok("...and it waits when the hour's limit can't take every channel", len(api.sent) == n and bot.queue)
+bot.queue.clear(); api.s["broadcast"] = False
 api.s["channels"] = {"weather": "Public"}
 ok("a channel can be chosen per kind", bot.channel("weather") == "Public")     # (the core never lets an addon post in Public: test_private_replies)
 bot.on_unload()

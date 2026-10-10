@@ -8,6 +8,7 @@ Off until switched on.  Switched on, alerts show in the 'Area alerts' window on 
 to the mesh' ticked - each alert once, at most one every 30 seconds and 10 an hour, each kind to its own channel (added to the node when
 missing; never Public).  The first check after switching on only shows what is already in force.  Keys stay in this PC's settings and
 never appear in messages or logs."""
+import re
 import time
 import tkinter as tk
 import webbrowser
@@ -34,7 +35,7 @@ WINDOW = "Area alerts"
 
 class Addon(AddonBase):
     title = "Area alerts"
-    version = "1.2.0"
+    version = "1.3.0"
     author = "mcIRC"
     description = ("Natural disasters, earthquakes, tsunamis, weather warnings, public transit alerts and road closures for the areas you "
                    "choose anywhere in the world (country, region, area). Shown on this PC; broadcast to the mesh only if you tick it. "
@@ -128,9 +129,12 @@ class Addon(AddonBase):
         now = time.time()
         self.sent_times = [t for t in self.sent_times if now - t < 3600]
         if len(self.sent_times) >= PER_HOUR or (self.sent_times and now - self.sent_times[-1] < GAP): return
+        chans = self.channels_for(self.queue[0])
+        if self.sent_times and len(self.sent_times) + len(chans) > PER_HOUR: return     # every channel is one transmission
         al = self.queue.pop(0)
-        self.api.send(self.channel_for(al), al.text)
-        self.sent_times.append(now)
+        for ch in chans:
+            self.api.send(ch, al.text)
+            self.sent_times.append(now)
         if self.queue: self.api.after(GAP * 1000 + 500, self.drain)
 
     def kinds_on(self):
@@ -144,6 +148,16 @@ class Addon(AddonBase):
         elif src_: own = self.api.get("traffic_channels", {}).get(src_)
         else: own = None
         return (own or "").strip() or self.channel(al.kind)
+
+    def channels_for(self, al):
+        """Every channel the alert goes to: a channel box may hold several ('#weather, #mcirc'), each once, never Public."""
+        out = []
+        for n in re.split(r"[,;\s]+", self.channel_for(al)):
+            n = n.strip()
+            if not n.lstrip("#") or n.lstrip("#").lower() == "public": continue
+            n = n if n.startswith("#") else "#" + n
+            if n.lower() not in (o.lower() for o in out): out.append(n)
+        return out or [KINDS[al.kind][1]]
 
     def channel(self, kind):
         return (self.api.get("channels", {}).get(kind) or KINDS[kind][1]).strip()
@@ -165,7 +179,8 @@ class Addon(AddonBase):
         tk.Checkbutton(f, text="Broadcast to the mesh (this transmits on your radio)", variable=self.v_bc, bg=bg,
                        font=("TkDefaultFont", 9, "bold")).pack(anchor="w")
         tk.Label(f, bg=bg, fg="#555", wraplength=560, justify="left", text=(
-            "Each alert once, at most one every 30 seconds and 10 an hour, never in Public. A channel your node doesn't have is added to it. "
+            "Each alert once, at most one every 30 seconds and 10 messages an hour, never in Public. A channel box can hold several channels "
+            "('#weather, #mcirc'): the alert goes to each. A channel your node doesn't have is added to it. "
             "The first check only shows what is already in force.")).pack(anchor="w", padx=18)
         self.keys = dict(g("keys", {}))
         self.key_vars = {}
@@ -210,7 +225,7 @@ class Addon(AddonBase):
             self.k_vars[k] = tk.BooleanVar(value=saved.get(k, k in DEFAULT_ON))
             self.ch_vars[k] = tk.StringVar(value=chans.get(k, default_ch))
             tk.Checkbutton(kinds, text=title, variable=self.k_vars[k], bg=bg, anchor="w").grid(row=i, column=0, sticky="w")
-            tk.Entry(kinds, textvariable=self.ch_vars[k], width=12).grid(row=i, column=1, padx=4)
+            tk.Entry(kinds, textvariable=self.ch_vars[k], width=20).grid(row=i, column=1, padx=4)
         opt = tk.Frame(page, bg=bg); opt.pack(fill="x", pady=2)
         self.v_level = tk.StringVar(value=g("min_level", "orange"))
         self.v_mag, self.v_rad = tk.StringVar(value=str(g("min_mag", 5.0))), tk.StringVar(value=str(g("quake_radius", 300)))
@@ -264,7 +279,7 @@ class Addon(AddonBase):
                 tk.Checkbutton(row, text=transit.label(f) + ("   (free key needed)" if f["auth"] else ""), variable=var, bg=bg).pack(side="left")
                 own = "#" + transit.slug(f) if len(feeds) > 1 or len(transit.feeds_for(a)) > 1 else self.ch_vars["transit"].get()
                 ch = self.tch_vars.setdefault(f["id"], tk.StringVar(value=self.api.get("transit_channels", {}).get(f["id"], own)))
-                tk.Entry(row, textvariable=ch, width=14).pack(side="right", padx=4)
+                tk.Entry(row, textvariable=ch, width=22).pack(side="right", padx=4)
                 tk.Label(row, text="channel:", bg=bg).pack(side="right")
                 if f["auth"]: self._key_row(inner, bg, f"transit:{f['id']}", transit.key_help(f), f["info"])
         if not seen:
@@ -293,7 +308,7 @@ class Addon(AddonBase):
                 own = "#" + traffic.slug(slot) if len(slots) > 1 else self.ch_vars["traffic"].get()
                 ch = self.rch_vars.setdefault(slot, tk.StringVar(value=self.api.get("traffic_channels", {}).get(slot, own)))
                 tk.Label(row, text=f"{traffic.label(slot)} goes to channel:", bg=bg).pack(side="left")
-                tk.Entry(row, textvariable=ch, width=14).pack(side="left", padx=4)
+                tk.Entry(row, textvariable=ch, width=22).pack(side="left", padx=4)
             site = traffic.site_for(a)
             if site and site[0] not in sites:
                 sites.add(site[0])

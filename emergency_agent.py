@@ -58,6 +58,9 @@ CHANNEL_NAMES = {
     "TransLink": "translink",
 }
 WEATHER_CHANNEL_NAME = "weather"  # covers Environment Canada warnings + the daily 6AM/8AM forecast broadcasts
+# More than one channel per kind (set by the addon's Channels tab): {"Weather": ["weather", "mcirc"], "DriveBC": [...]}.  The first is the
+# kind's channel (the log and restarts go by it); each alert is also sent, once, to the others - never to Public.  Empty: the names above.
+CHANNEL_LISTS = {}
 
 _missing_channel_warned = set()  # so the "channel not found, falling back" warning only logs once per channel, not every single broadcast
 
@@ -465,10 +468,38 @@ def get_applicable_scope(text, forced_region=None):
 
 
 
+def _kind_of_source(source):
+    return "Weather" if source.startswith("Weather Warning:") or source in ("WX_6AM", "WX_8AM") else source
+
+
+def _channel_names_for_source(source):
+    """Every channel the source's alerts go to, its own first."""
+    kind = _kind_of_source(source)
+    names = [n.strip().lstrip("#").lower() for n in CHANNEL_LISTS.get(kind, []) if n.strip().lstrip("#")]
+    names = [n for i, n in enumerate(names) if n != "public" and n not in names[:i]]
+    if names: return names
+    own = WEATHER_CHANNEL_NAME if kind == "Weather" else CHANNEL_NAMES.get(source)
+    return [own] if own else []
+
+
 def _channel_name_for_source(source):
-    if source.startswith("Weather Warning:") or source in ("WX_6AM", "WX_8AM"):
-        return WEATHER_CHANNEL_NAME
-    return CHANNEL_NAMES.get(source)
+    names = _channel_names_for_source(source)
+    return names[0] if names else None
+
+
+def _extra_channel_idxs(source, main_idx):
+    """The slots of the source's other channels (added to the node when missing and broadcasting); never Public, never the main one twice."""
+    out = []
+    for name in _channel_names_for_source(source)[1:]:
+        idx = next((i for n, i in io.CHANNEL_INDEX_BY_NAME.items() if n.strip().lstrip("#").lower() == name), None)
+        if idx is None and not TX["muted"] and hasattr(io, "ensure_channel"): idx = io.ensure_channel(name)
+        if idx is None:
+            if name not in _missing_channel_warned:
+                logging.warning(f"Channel '#{name}' not found on this node - {source} alerts are not sent there until it exists.")
+                _missing_channel_warned.add(name)
+            continue
+        if idx != 0 and idx != main_idx and idx not in out: out.append(idx)
+    return out
 
 
 def _resolve_channel_idx(source):
@@ -481,6 +512,8 @@ def _resolve_channel_idx(source):
     name = _channel_name_for_source(source)
     if name is None: return None
     if name in io.CHANNEL_INDEX_BY_NAME: return io.CHANNEL_INDEX_BY_NAME[name]
+    have = next((i for n, i in io.CHANNEL_INDEX_BY_NAME.items() if n.strip().lstrip("#").lower() == name), None)
+    if have is not None and have != 0: return have
     if not TX["muted"] and hasattr(io, "ensure_channel"):      # broadcasting: a channel the node lacks is added (#name) instead of withholding
         idx = io.ensure_channel(name)
         if idx is not None: return idx
@@ -600,6 +633,15 @@ def broadcast_via_cli(source, title, description, is_clear=False, forced_region=
     except Exception as err:
         logging.error(f"Mesh CLI broadcast failed: {err}")
         io.queue_for_retry(chan_idx, msg, "clear" if is_clear else "new", guid, is_clear)       # sent later if the radio comes back in time
+    for idx in _extra_channel_idxs(source, chan_idx):                                           # the kind's other channels (Channels tab)
+        time.sleep(BROADCAST_PACING_SECONDS)
+        try:
+            execute_mesh_command(io.CONNECTION_ARGS + ["chan", str(idx), msg])
+            _emit("out", idx, msg, alert="clear" if is_clear else "new")
+            logging.info(f"Also sent to Channel Index {idx}: [{source}] {title}")             # (not a 'Broadcasting' line: restarts go by the main one)
+        except Exception as err:
+            logging.error(f"Mesh CLI broadcast to channel {idx} failed: {err}")
+            io.queue_for_retry(idx, msg, "clear" if is_clear else "new")
 
 def handle_weather_broadcast(source, title, body, is_clear=False, specific_region=None, guid=None):
     # guid is logged as {id:...} so a restart recognises the warning again (without it every restart broadcast NEW + CLEARED)

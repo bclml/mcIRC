@@ -2,7 +2,7 @@
 broadcast to the mesh, plus the weekly reminder.  Has a master mute and a switch per source.
 The chat GUI works fine with this addon disabled (Tools > Addons)."""
 import gui_platform
-import asyncio, logging, os, threading
+import asyncio, logging, os, re, threading
 import tkinter as tk
 from tkinter import ttk
 
@@ -11,11 +11,23 @@ import meshcore_io as io
 from gui_addons import AddonBase
 
 
+CHANNEL_KINDS = ("DriveBC", "BC Ferries", "BC Transit", "TransLink", "Weather")
+
+
+def split_channels(text):
+    """'#weather, #mcirc' / 'weather mcirc' -> ['weather', 'mcirc']: each once, never Public."""
+    out = []
+    for n in re.split(r"[,;\s]+", text or ""):
+        n = n.strip().lstrip("#").lower()
+        if n and n != "public" and n not in out: out.append(n)
+    return out
+
+
 class Addon(AddonBase):
     # (The "test" auto-reply is its own addon now: Auto reply.)
     SOURCES = [k for k in ea.TX_SOURCES if k != "Test reply"]   # alert types with a switch on the Alerts tab
     title = "Traffic, transit and weather"
-    version = "1.3.3"
+    version = "1.4.0"
     author = "built in"
     description = ("Traffic / ferry / transit / weather / earthquake / tsunami alerts. Keeps the map's DriveBC and earthquake layers up to date; "
                    "broadcasting them to the mesh is OFF until you switch it on.")
@@ -102,6 +114,8 @@ class Addon(AddonBase):
         for k in self.SOURCES: ea.TX["sources"][k] = saved.get(k, k != "Weekly reminder")
         ea.USE_SCOPES = g("use_scopes", False)
         ea.REGION_SCOPES = {"Lower Mainland": g("scope_lm", ""), "Vancouver Island": g("scope_vi", ""), "Sunshine Coast": g("scope_sc", "")}
+        if hasattr(ea, "CHANNEL_LISTS"):                          # more than one channel per kind (Channels tab)
+            ea.CHANNEL_LISTS = {k: split_channels(v) for k, v in g("channel_lists", {}).items() if split_channels(v)}
         ea.TRANSLINK_API_KEY = g("translink_key", "").strip() or os.environ.get("TRANSLINK_API_KEY", "").strip() or None
         if hasattr(ea, "set_weather_areas"):                      # which areas' Environment Canada warnings and forecasts are watched
             import ec_areas
@@ -159,11 +173,13 @@ class Addon(AddonBase):
         tk.Label(f, text="Traffic, transit and weather", bg=bg, font=(gui_platform.DIALOG_FONT_NAME, 9, "bold")).pack(anchor="w")
         nb = ttk.Notebook(f)
         nb.pack(fill="both", expand=True, pady=4)
-        alerts, areas, accounts = (tk.Frame(nb, bg=bg, padx=8, pady=6) for _ in range(3))
+        alerts, areas, chans, accounts = (tk.Frame(nb, bg=bg, padx=8, pady=6) for _ in range(4))
         nb.add(alerts, text="Alerts")
         nb.add(areas, text="Weather areas")
+        nb.add(chans, text="Channels")
         nb.add(accounts, text="Accounts & scopes")
         self._areas_page(areas, bg)
+        self._channels_page(chans, bg)
 
         tk.Checkbutton(alerts, text="Broadcast alerts to the mesh (this transmits on your radio)", variable=self.broadcast, bg=bg, wraplength=400, justify="left", anchor="w",
                        font=(gui_platform.UI_FONT_NAME, gui_platform.UI_FONT_SIZE, "bold")).pack(anchor="w")
@@ -185,6 +201,21 @@ class Addon(AddonBase):
         for label, key in (("Scope  Lower Mainland:", "scope_lm"), ("Scope  Vancouver Island:", "scope_vi"), ("Scope  Sunshine Coast:", "scope_sc")): row(accounts, label, key, 10)
         tk.Checkbutton(accounts, text="Prefix alerts with region scope codes", variable=self.v["use_scopes"], bg=bg).pack(anchor="w", pady=4)
         return f
+
+    def _channels_page(self, page, bg):
+        """The channels each kind of alert goes to: one or more, separated by commas."""
+        saved = self.api.get("channel_lists", {})
+        self.chan_vars = {}
+        tk.Label(page, bg=bg, fg="#555", justify="left", wraplength=420, text=(
+            "Each kind of alert can go to more than one channel - separate them with commas, e.g. '#weather, #mcirc'. The first is its own "
+            "channel; every alert is also sent once to the others (one more transmission each). Never Public. A channel your node doesn't "
+            "have is added to it when broadcasting.")).pack(anchor="w")
+        grid = tk.Frame(page, bg=bg); grid.pack(anchor="w", pady=6)
+        for i, kind in enumerate(CHANNEL_KINDS):
+            default = "#" + (ea.WEATHER_CHANNEL_NAME if kind == "Weather" else ea.CHANNEL_NAMES[kind])
+            self.chan_vars[kind] = tk.StringVar(value=saved.get(kind, default))
+            tk.Label(grid, text=kind + ":", bg=bg, width=12, anchor="w").grid(row=i, column=0, sticky="w")
+            tk.Entry(grid, textvariable=self.chan_vars[kind], width=36).grid(row=i, column=1, sticky="w", pady=2)
 
     def _areas_page(self, page, bg):
         """Province / territory, then its areas: the Environment Canada warnings (and daily forecasts) the bot watches."""
@@ -221,6 +252,13 @@ class Addon(AddonBase):
         if getattr(self, "area_vars", None):
             import ec_areas
             self.api.set("weather_areas", [a[0] for areas in ec_areas.AREAS.values() for a in areas if self.area_vars[a[0]].get()])
+        if getattr(self, "chan_vars", None):
+            lists = {}
+            for kind, var in self.chan_vars.items():
+                names = split_channels(var.get())
+                default = ea.WEATHER_CHANNEL_NAME if kind == "Weather" else ea.CHANNEL_NAMES[kind]
+                if names and names != [default]: lists[kind] = ", ".join("#" + n for n in names)
+            self.api.set("channel_lists", lists)
         self.api.set("muted", not self.broadcast.get())
         self.api.set("sources", {k: var.get() for k, var in self.src.items()})
         self.apply_settings()

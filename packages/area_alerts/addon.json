@@ -1,7 +1,7 @@
 {
   "name": "area_alerts",
   "title": "Area alerts",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "description": "Natural disasters (GDACS), earthquakes (USGS), tsunami warnings (NOAA), official weather warnings (Environment Canada, US NWS, MeteoAlarm for 38 European countries), public transit service alerts (489 agencies in 28 countries) and road closures (DriveBC and 20 other 511 sites) for the areas you choose anywhere in the world: country, region, area. Shown on this PC; broadcast to the mesh only if you tick it. Most sources are free with no key; the ones needing a free key say how to get it. Off until you switch it on.",
   "requires": [
     "requests",

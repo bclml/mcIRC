@@ -69,6 +69,25 @@ with mock.patch.object(bot, "_mode_changed", lambda: None), mock.patch.object(bo
 ok("ticks in any province are saved and watched", set(api.get("weather_areas")) == {"Lower Mainland", "Vancouver Island", "Greater Calgary"}
    and set(ea.WEATHER_LOCATIONS) == {"Lower Mainland", "Vancouver Island", "Greater Calgary"}, api.get("weather_areas"))
 ea.set_weather_areas([])
+# ---- more than one channel per kind (Channels tab)
+import meshcore_io as _io
+sent = []
+with mock.patch.object(ea, "execute_mesh_command", lambda args, **k: sent.append(tuple(args[-3:-1]))), \
+        mock.patch.object(ea, "_emit", lambda *a, **k: None), mock.patch.object(ea.time, "sleep", lambda s: None), \
+        mock.patch.object(_io, "CONNECTION_ARGS", ["x"]), mock.patch.dict(_io.CHANNEL_INDEX_BY_NAME, {"#drivebc": 2, "#weather": 4, "#mcirc": 10, "Public": 0}, clear=True), \
+        mock.patch.dict(ea.TX, {"muted": False}), mock.patch.dict(ea.TX["sources"], {"Weather": True, "DriveBC": True}):
+    ea.CHANNEL_LISTS = {"Weather": ["weather", "mcirc", "public", "weather"]}
+    ea.broadcast_via_cli("Weather Warning: Lower Mainland", "SNOWFALL", "x")
+    ok("a weather warning goes to #weather and to the other channels listed - once each, never Public", sent == [("chan", "4"), ("chan", "10")], sent)
+    sent.clear(); ea.broadcast_via_cli("DriveBC", "Hwy 1", "crash")
+    ok("...other kinds keep their one channel", sent == [("chan", "2")], sent)
+    sent.clear(); ea.CHANNEL_LISTS = {"DriveBC": ["mcirc", "drivebc"]}; ea.broadcast_via_cli("DriveBC", "Hwy 1", "crash")
+    ok("...the first channel listed is the kind's own", sent == [("chan", "10"), ("chan", "2")], sent)
+    ea.CHANNEL_LISTS = {}
+spec = importlib.util.spec_from_file_location("t_ba_channels", os.path.join(ROOT, "packages", "broadcast_alerts", "broadcast_alerts.py"))
+ba = importlib.util.module_from_spec(spec); spec.loader.exec_module(ba)
+ok("the Channels tab reads 'one, two' lists (commas or spaces, # or not, each once, no Public)",
+   ba.split_channels("#weather, mcirc  Public #Weather") == ["weather", "mcirc"])
 root.destroy()
 import importlib, logging
 before = len(logging.getLogger('').handlers)

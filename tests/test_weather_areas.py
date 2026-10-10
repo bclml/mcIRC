@@ -70,5 +70,10 @@ ok("ticks in any province are saved and watched", set(api.get("weather_areas")) 
    and set(ea.WEATHER_LOCATIONS) == {"Lower Mainland", "Vancouver Island", "Greater Calgary"}, api.get("weather_areas"))
 ea.set_weather_areas([])
 root.destroy()
+import importlib, logging
+before = len(logging.getLogger('').handlers)
+importlib.reload(ea); importlib.reload(ea)
+ok("the engine reloaded (addon updated) doesn't write every log line twice", len(logging.getLogger('').handlers) == before,
+   (before, len(logging.getLogger('').handlers)))
 print("\nALL PASSED" if not fails else f"\n{len(fails)} FAILED: {fails}")
 sys.exit(1 if fails else 0)

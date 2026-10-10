@@ -239,8 +239,11 @@ console = logging.StreamHandler()
 console.setFormatter(_log_formatter)
 console.addFilter(RedactFilter())
 logging.getLogger('').setLevel(logging.INFO)
-logging.getLogger('').addHandler(_file_handler)
-logging.getLogger('').addHandler(console)
+for _old in [h for h in logging.getLogger('').handlers if getattr(h, "_mcirc_agent", False)]:   # this module loaded again (the addon was
+    logging.getLogger('').removeHandler(_old); _old.close()                                      # updated / reloaded): every line was written twice
+for _h in (_file_handler, console):
+    _h._mcirc_agent = True
+    logging.getLogger('').addHandler(_h)
 # Kept as two separate state dicts so the traffic loop (1 min) and weather loop (10 min)
 # can each detect their own new/cleared incidents without stepping on each other's state.
 active_traffic_alerts = {}

@@ -1,4 +1,7 @@
-"""Runs every tests/test_*.py in its own process and prints a summary.   python tests/run_tests.py [name ...]
+"""Runs every tests/test_*.py in its own process and prints a summary.   python tests/run_tests.py [-j N] [name ...]
+
+Several tests run at the same time (one per CPU core, at most 8; -j 1 runs them one by one).  The tests that look at the PC's running
+processes (SERIAL) run alone, after the others.
 
 A test passes when it exits with code 0, prints no "[FAIL]" line and ends with PASS / ALL PASSED.  Tests that cannot run on this system are skipped, not failed:
 the launcher tests are Windows only, and the GUI tests need a display (on Linux CI: `xvfb-run -a python tests/run_tests.py`).
@@ -7,12 +10,14 @@ import os
 import subprocess
 import sys
 import time
+from concurrent.futures import ThreadPoolExecutor
 
 if hasattr(sys.stdout, "reconfigure"): sys.stdout.reconfigure(encoding="utf-8", errors="replace")      # test output contains emoji; Windows consoles often are not UTF-8
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 WINDOWS_ONLY = {"test_cancel", "test_launcher"}                       # use .cmd stand-ins, tasklist, PowerShell, WinForms
+SERIAL = {"test_cancel", "test_launcher", "test_logo", "test_multinode"}     # they look at the PC's processes and windows, or are timing-sensitive: alone
 NO_DISPLAY_OK = {"test_updater", "test_addon_helpers", "test_weather_restart", "test_diag", "test_portable", "test_install_update", "test_146", "test_health"}     # (the GUI ones are skipped without a display)
 
 
@@ -36,31 +41,48 @@ def run_one(name):
     return passed, "\n".join(failed[:8] + ((lines[-12:] + (p.stderr or "").splitlines()[-25:]) if not passed and not failed else [])), time.time() - t0
 
 
+def check_package(pkg):
+    d = os.path.join(ROOT, "packages", pkg)
+    r = subprocess.run([sys.executable, os.path.join(ROOT, "packages", "check_package.py"), d], capture_output=True, text=True, encoding="utf-8", errors="replace", cwd=ROOT,
+                       env=dict(os.environ, MCIRC_NO_LOG_FILE="1"))
+    return r.returncode == 0, (r.stdout + r.stderr)[-600:]
+
+
 def main(argv):
+    jobs = min(4, os.cpu_count() or 2)
+    if "-j" in argv:
+        i = argv.index("-j")
+        jobs = max(1, int(argv[i + 1])); argv = argv[:i] + argv[i + 2:]
+    t0 = time.time()
     names = [os.path.splitext(f)[0] for f in sorted(os.listdir(HERE)) if f.startswith("test_") and f.endswith(".py")]
     if argv: names = [n for n in names if n in argv or n + ".py" in argv]
-    results, skipped = [], []
+    results, skipped, todo = [], [], []
     for n in names:
         if n in WINDOWS_ONLY and os.name != "nt": skipped.append((n, "Windows only")); continue
         if n not in NO_DISPLAY_OK and not has_display(): skipped.append((n, "needs a display (use xvfb-run)")); continue
-        ok, detail, secs = run_one(n)
+        todo.append(n)
+
+    def report(n, outcome):
+        ok, detail, secs = outcome
         results.append((n, ok))
         print(f"{'PASS' if ok else 'FAIL'}  {n}  ({secs:.0f}s)")
         if not ok: print("      " + detail.replace("\n", "\n      "))
         sys.stdout.flush()
+    with ThreadPoolExecutor(max_workers=jobs) as pool:                    # each test is its own process: they can run side by side
+        futures = {n: pool.submit(run_one, n) for n in todo if n not in SERIAL}
+        for n, f in futures.items(): report(n, f.result())
+    for n in todo:
+        if n in SERIAL: report(n, run_one(n))                             # alone, after the others
     # the addon validators
-    for pkg in sorted(os.listdir(os.path.join(ROOT, "packages"))):
-        d = os.path.join(ROOT, "packages", pkg)
-        if not os.path.isdir(d) or not os.path.exists(os.path.join(d, "addon.json")): continue
-        r = subprocess.run([sys.executable, os.path.join(ROOT, "packages", "check_package.py"), d], capture_output=True, text=True, encoding="utf-8", errors="replace", cwd=ROOT,
-                           env=dict(os.environ, MCIRC_NO_LOG_FILE="1"))
-        ok = r.returncode == 0
-        results.append((f"check_package {pkg}", ok))
-        print(f"{'PASS' if ok else 'FAIL'}  check_package {pkg}")
-        if not ok: print("      " + (r.stdout + r.stderr)[-600:].replace("\n", "\n      "))
+    pkgs = [p for p in sorted(os.listdir(os.path.join(ROOT, "packages"))) if os.path.exists(os.path.join(ROOT, "packages", p, "addon.json"))] if not argv else []
+    with ThreadPoolExecutor(max_workers=jobs) as pool:
+        for pkg, (ok, out) in zip(pkgs, pool.map(check_package, pkgs)):
+            results.append((f"check_package {pkg}", ok))
+            print(f"{'PASS' if ok else 'FAIL'}  check_package {pkg}")
+            if not ok: print("      " + out.replace("\n", "\n      "))
     for n, why in skipped: print(f"SKIP  {n}  ({why})")
     bad = [n for n, ok in results if not ok]
-    print(f"\n{len(results) - len(bad)} passed, {len(bad)} failed, {len(skipped)} skipped")
+    print(f"\n{len(results) - len(bad)} passed, {len(bad)} failed, {len(skipped)} skipped  ({time.time() - t0:.0f}s, {jobs} at a time)")
     return 1 if bad else 0
 
 

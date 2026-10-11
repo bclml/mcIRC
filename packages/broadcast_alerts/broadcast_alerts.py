@@ -27,7 +27,7 @@ class Addon(AddonBase):
     # (The "test" auto-reply is its own addon now: Auto reply.)
     SOURCES = [k for k in ea.TX_SOURCES if k != "Test reply"]   # alert types with a switch on the Alerts tab
     title = "Traffic, transit and weather"
-    version = "1.4.0"
+    version = "1.5.0"
     author = "built in"
     description = ("Traffic / ferry / transit / weather / earthquake / tsunami alerts. Keeps the map's DriveBC and earthquake layers up to date; "
                    "broadcasting them to the mesh is OFF until you switch it on.")
@@ -105,6 +105,7 @@ class Addon(AddonBase):
     # ---- settings / mute ----
     def apply_settings(self):
         g = self.api.get
+        was_used = any(g(k, None) is not None for k in ("sources", "muted", "weather_areas", "weekly_opt_in", "translink_key"))   # (before anything is saved below)
         ea.TX["muted"] = g("muted", True)         # broadcasting is OFF unless the user turned it on (an existing "muted" setting is kept)
         saved = g("sources", {})
         if not g("weekly_opt_in", False) and saved.get("Weekly reminder", True):      # the Sunday reminder on Public is opt-in now (it was on by default)
@@ -114,8 +115,17 @@ class Addon(AddonBase):
         for k in self.SOURCES: ea.TX["sources"][k] = saved.get(k, k != "Weekly reminder")
         ea.USE_SCOPES = g("use_scopes", False)
         ea.REGION_SCOPES = {"Lower Mainland": g("scope_lm", ""), "Vancouver Island": g("scope_vi", ""), "Sunshine Coast": g("scope_sc", "")}
-        if hasattr(ea, "CHANNEL_LISTS"):                          # more than one channel per kind (Channels tab)
-            ea.CHANNEL_LISTS = {k: split_channels(v) for k, v in g("channel_lists", {}).items() if split_channels(v)}
+        if hasattr(ea, "CHANNEL_LISTS"):                          # the channels per kind (Channels tab); blank = not sent
+            lists = g("channel_lists", None)
+            if not g("channels_v2", False):                       # 1.4 and older: built-in channels, only changes saved - an install that was
+                used = was_used                                   # in use
+                old = dict(lists or {})                           # keeps them; a new one starts blank (each station chooses its own)
+                lists = {k: old.get(k) or (("#" + (ea.WEATHER_CHANNEL_NAME if k == "Weather" else ea.CHANNEL_NAMES[k])) if used else "")
+                         for k in CHANNEL_KINDS}
+                self.api.set("channel_lists", lists)
+                self.api.set("channels_v2", True)
+            lists = lists or {}
+            ea.CHANNEL_LISTS = {k: split_channels(lists.get(k, "")) for k in CHANNEL_KINDS}
         ea.TRANSLINK_API_KEY = g("translink_key", "").strip() or os.environ.get("TRANSLINK_API_KEY", "").strip() or None
         if hasattr(ea, "set_weather_areas"):                      # which areas' Environment Canada warnings and forecasts are watched
             import ec_areas
@@ -204,16 +214,16 @@ class Addon(AddonBase):
 
     def _channels_page(self, page, bg):
         """The channels each kind of alert goes to: one or more, separated by commas."""
-        saved = self.api.get("channel_lists", {})
+        saved = self.api.get("channel_lists", {}) or {}
         self.chan_vars = {}
         tk.Label(page, bg=bg, fg="#555", justify="left", wraplength=420, text=(
-            "Each kind of alert can go to more than one channel - separate them with commas, e.g. '#weather, #mcirc'. The first is its own "
-            "channel; every alert is also sent once to the others (one more transmission each). Never Public. A channel your node doesn't "
-            "have is added to it when broadcasting.")).pack(anchor="w")
+            "The channels each kind of alert goes to. Blank: that kind is not broadcast. Choose channels your own group uses - if every "
+            "station sent to the same channel, the same alert would go out many times. More than one: separate them with commas, e.g. "
+            "'#traffic-mygroup, #mcirc' (each is one more transmission). Never Public. A channel your node doesn't have is added to it "
+            "when broadcasting.")).pack(anchor="w")
         grid = tk.Frame(page, bg=bg); grid.pack(anchor="w", pady=6)
         for i, kind in enumerate(CHANNEL_KINDS):
-            default = "#" + (ea.WEATHER_CHANNEL_NAME if kind == "Weather" else ea.CHANNEL_NAMES[kind])
-            self.chan_vars[kind] = tk.StringVar(value=saved.get(kind, default))
+            self.chan_vars[kind] = tk.StringVar(value=saved.get(kind, ""))
             tk.Label(grid, text=kind + ":", bg=bg, width=12, anchor="w").grid(row=i, column=0, sticky="w")
             tk.Entry(grid, textvariable=self.chan_vars[kind], width=36).grid(row=i, column=1, sticky="w", pady=2)
 
@@ -253,12 +263,12 @@ class Addon(AddonBase):
             import ec_areas
             self.api.set("weather_areas", [a[0] for areas in ec_areas.AREAS.values() for a in areas if self.area_vars[a[0]].get()])
         if getattr(self, "chan_vars", None):
-            lists = {}
-            for kind, var in self.chan_vars.items():
-                names = split_channels(var.get())
-                default = ea.WEATHER_CHANNEL_NAME if kind == "Weather" else ea.CHANNEL_NAMES[kind]
-                if names and names != [default]: lists[kind] = ", ".join("#" + n for n in names)
+            lists = {kind: ", ".join("#" + n for n in split_channels(var.get())) for kind, var in self.chan_vars.items()}
             self.api.set("channel_lists", lists)
+            self.api.set("channels_v2", True)
+            if self.broadcast.get() and not any(lists.values()) and hasattr(self.api, "notice"):
+                self.api.notice("Traffic, transit and weather: broadcasting is on, but no channel is chosen (Settings > Channels) - nothing "
+                                "will be sent until you choose one.", "warn")
         self.api.set("muted", not self.broadcast.get())
         self.api.set("sources", {k: var.get() for k, var in self.src.items()})
         self.apply_settings()

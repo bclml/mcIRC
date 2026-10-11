@@ -58,8 +58,9 @@ CHANNEL_NAMES = {
     "TransLink": "translink",
 }
 WEATHER_CHANNEL_NAME = "weather"  # covers Environment Canada warnings + the daily 6AM/8AM forecast broadcasts
-# More than one channel per kind (set by the addon's Channels tab): {"Weather": ["weather", "mcirc"], "DriveBC": [...]}.  The first is the
-# kind's channel (the log and restarts go by it); each alert is also sent, once, to the others - never to Public.  Empty: the names above.
+# The channels per kind (set by the addon's Channels tab): {"Weather": ["weather", "mcirc"], "DriveBC": [...]}.  The first is the kind's
+# channel (the log and restarts go by it); each alert is also sent, once, to the others - never to Public.  A kind set to [] is not sent
+# (new installs start blank, so stations don't all post to the same channels); a kind not in it uses the names above (the console agent).
 CHANNEL_LISTS = {}
 
 _missing_channel_warned = set()  # so the "channel not found, falling back" warning only logs once per channel, not every single broadcast
@@ -477,7 +478,7 @@ def _channel_names_for_source(source):
     kind = _kind_of_source(source)
     names = [n.strip().lstrip("#").lower() for n in CHANNEL_LISTS.get(kind, []) if n.strip().lstrip("#")]
     names = [n for i, n in enumerate(names) if n != "public" and n not in names[:i]]
-    if names: return names
+    if names or kind in CHANNEL_LISTS: return names          # set by the addon: blank = this kind isn't sent
     own = WEATHER_CHANNEL_NAME if kind == "Weather" else CHANNEL_NAMES.get(source)
     return [own] if own else []
 
@@ -618,6 +619,13 @@ def broadcast_via_cli(source, title, description, is_clear=False, forced_region=
         # Same "Broadcasting ... to Channel Index N:" wording as a real send (prefixed so it's obvious in the
         # log) so reload_active_alerts_from_log() still sees this alert as already announced after a restart.
         logging.info(f"[MUTED - not transmitted] Broadcasting {'CLEAR' if is_clear else 'NEW'} to Channel Index {chan_idx if chan_idx is not None else 0}: [{source}] {title}{guid_tag}")
+        return
+    if chan_idx is None and _kind_of_source(source) in CHANNEL_LISTS and not CHANNEL_LISTS[_kind_of_source(source)]:
+        kind = _kind_of_source(source)
+        if ("nochan", kind) not in _missing_channel_warned:
+            logging.warning(f"No channel is chosen for {kind} alerts (Traffic, transit and weather > Settings > Channels) - they are not broadcast.")
+            _missing_channel_warned.add(("nochan", kind))
+        logging.info(f"Not broadcast (no channel chosen): {'CLEAR' if is_clear else 'NEW'} [{source}] {title}{guid_tag}")
         return
     if chan_idx is None:
         # Never fall back to Public (0) for a category alert — see _resolve_channel_idx. The

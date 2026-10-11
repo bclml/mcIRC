@@ -88,6 +88,36 @@ spec = importlib.util.spec_from_file_location("t_ba_channels", os.path.join(ROOT
 ba = importlib.util.module_from_spec(spec); spec.loader.exec_module(ba)
 ok("the Channels tab reads 'one, two' lists (commas or spaces, # or not, each once, no Public)",
    ba.split_channels("#weather, mcirc  Public #Weather") == ["weather", "mcirc"])
+# channels start blank for a new install (stations don't all post to the same channels); an install that was in use keeps its channels
+class FakeApi:
+    def __init__(self, store): self.s = dict(store); self.notes = []
+    def get(self, k, d=None): return self.s.get(k, d)
+    def set(self, k, v): self.s[k] = v
+    def notice(self, t, level="info"): self.notes.append(t)
+def applied(store):
+    b = ba.Addon.__new__(ba.Addon); b.api = FakeApi(store)
+    with mock.patch.object(ea, "set_weather_areas", lambda *a: None):
+        b.apply_settings()
+    return b, dict(ea.CHANNEL_LISTS)
+b, lists = applied({})
+ok("a new install: every channel blank - nothing is broadcast until the station chooses its own", all(v == [] for v in lists.values())
+   and set(lists) == set(ba.CHANNEL_KINDS) and all(v == "" for v in b.api.s["channel_lists"].values()), lists)
+b, lists = applied({"muted": False, "sources": {"DriveBC": True}, "channel_lists": {}})
+ok("an install that was in use keeps the channels it broadcast to (1.4 saved '{}' for 'all built-in')", lists["DriveBC"] == ["drivebc"]
+   and lists["Weather"] == ["weather"] and lists["TransLink"] == ["translink"], lists)
+b, lists = applied({"muted": False, "channel_lists": {"Weather": "#weather, #mcirc"}})
+ok("...and its own changes", lists["Weather"] == ["weather", "mcirc"] and lists["DriveBC"] == ["drivebc"], lists)
+b, lists = applied({"muted": False, "channels_v2": True, "channel_lists": {"DriveBC": "", "Weather": "#wx-mygroup"}})
+ok("...a box emptied later stays empty", lists["DriveBC"] == [] and lists["Weather"] == ["wx-mygroup"], lists)
+sent = []
+with mock.patch.object(ea, "execute_mesh_command", lambda args, **k: sent.append(tuple(args[-3:-1]))), \
+        mock.patch.object(ea, "_emit", lambda *a, **k: None), mock.patch.object(_io, "CONNECTION_ARGS", ["x"]), \
+        mock.patch.dict(_io.CHANNEL_INDEX_BY_NAME, {"#drivebc": 2, "Public": 0}, clear=True), \
+        mock.patch.dict(ea.TX, {"muted": False}), mock.patch.dict(ea.TX["sources"], {"DriveBC": True}):
+    ea.CHANNEL_LISTS = {"DriveBC": []}
+    ea.broadcast_via_cli("DriveBC", "Hwy 1", "crash")
+ok("a kind with no channel chosen is not broadcast - never to Public, never to the old built-in channel", sent == [], sent)
+ea.CHANNEL_LISTS = {}
 root.destroy()
 import importlib, logging
 before = len(logging.getLogger('').handlers)

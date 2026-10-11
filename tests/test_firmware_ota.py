@@ -137,6 +137,32 @@ ok("every built-in and local-group preset is a valid MeshCore radio setting", al
 ok("valid() refuses bad values", not pr.valid("1000", "62.5", "7", "5") and not pr.valid("910", "62.5", "13", "5") and not pr.valid("910", "62.5", "7", "4"))
 
 # ---- the window: each box only where it makes sense
+# ---- the screen's Wi-Fi page (press and hold: Wi-Fi on / off) in companion builds with Wi-Fi
+src = tempfile.mkdtemp()
+os.makedirs(os.path.join(src, "examples", "companion_radio", "ui-new"))
+UI = ('#ifdef WIFI_SSID\n  #include <WiFi.h>\n#endif\n  enum HomePage {\n    BLUETOOTH,\n    ADVERT,\n    Count\n  };\n'
+      '    } else if (_page == HomePage::BLUETOOTH) {\n      x();\n    } else if (_page == HomePage::ADVERT) {\n      y();\n    }\n'
+      '    if (c == KEY_ENTER && _page == HomePage::BLUETOOTH) {\n      return true;\n    }\n    if (c == KEY_ENTER && _page == HomePage::ADVERT) {\n      return true;\n    }\n')
+MAIN = '  bool wifi_needs_reconnect = false;\nvoid loop() {\n  if (wifi_needs_reconnect && (millis() - last > 10000)) {\n  }\n}\n'
+open(os.path.join(src, "examples", "companion_radio", "ui-new", "UITask.cpp"), "w").write(UI)
+open(os.path.join(src, "examples", "companion_radio", "main.cpp"), "w").write(MAIN)
+ok("Wi-Fi page: added to the companion firmware's screen menu", fb.add_wifi_page(src))
+u = open(os.path.join(src, "examples", "companion_radio", "ui-new", "UITask.cpp")).read()
+m = open(os.path.join(src, "examples", "companion_radio", "main.cpp")).read()
+ok("...a page between Bluetooth and Advert, shown only in builds with Wi-Fi", "    BLUETOOTH,\n#ifdef WIFI_SSID\n    WIFI_PAGE," in u
+   and u.index("HomePage::WIFI_PAGE) {   //") < u.index("} else if (_page == HomePage::ADVERT)"))
+ok("...press and hold switches Wi-Fi off (WIFI_OFF) and back on (WiFi.begin)", "WiFi.mode(WIFI_OFF)" in u and "WiFi.begin(WIFI_SSID, WIFI_PWD)" in u
+   and "extern bool mcirc_wifi_off;" in u)
+ok("...switched off there, the firmware's automatic reconnect leaves it off", "bool mcirc_wifi_off = false;" in m and "wifi_needs_reconnect && !mcirc_wifi_off &&" in m)
+ok("...added once (a second build changes nothing)", fb.add_wifi_page(src) and open(os.path.join(src, "examples", "companion_radio", "main.cpp")).read() == m
+   and open(os.path.join(src, "examples", "companion_radio", "ui-new", "UITask.cpp")).read() == u)
+odd = tempfile.mkdtemp()
+os.makedirs(os.path.join(odd, "examples", "companion_radio", "ui-new"))
+open(os.path.join(odd, "examples", "companion_radio", "ui-new", "UITask.cpp"), "w").write("something else\n")
+open(os.path.join(odd, "examples", "companion_radio", "main.cpp"), "w").write(MAIN)
+ok("...a MeshCore version that looks different is left as it is (the build goes ahead without the page)", not fb.add_wifi_page(odd)
+   and open(os.path.join(odd, "examples", "companion_radio", "main.cpp")).read() == MAIN)
+
 import tkinter as tk
 root = tk.Tk(); root.withdraw()
 class API:

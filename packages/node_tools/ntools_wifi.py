@@ -409,6 +409,9 @@ class FirmwareBuilderWindow(ToolWindow, OtaSteps, PresetSteps):
             try:
                 with open(ini_path, "w", encoding="utf-8") as f: f.write(make(original))
                 if otafix: self.install_otafix_step()                          # the bootloader first, then the firmware on top of it
+                if kind == "companion" and "wifi" in conns:                     # the screen's Wi-Fi page: press and hold switches Wi-Fi
+                    self.write("Wi-Fi page on the screen (press and hold: Wi-Fi on / off): "
+                               + ("added\n" if fb.add_wifi_page(source_dir(self.tag)) else "not available for this MeshCore version\n"))
                 for target in (["erase"] if erase else []) + ["upload"]:
                     self.write(f"\n== pio run -e {env} -t {target} --upload-port {port}\n")
                     p = subprocess.Popen(self.pio + ["run", "-e", env, "-t", target, "--upload-port", port], cwd=source_dir(self.tag),

@@ -128,3 +128,63 @@ for _k in ("observer", "observer_room"):
                  "Community firmware: it repeats like a repeater and also sends what it hears to the analyzers you pick.")
 AFTER["terminal_chat"] = "Terminal chat: open the board's USB port in a serial terminal (115200 baud) and type 'help'."
 AFTER["kiss_modem"] = "KISS modem: point your KISS software at the board's USB port (115200 baud)."
+
+
+# ---- the Wi-Fi page: press and hold switches Wi-Fi on or off (companion builds with Wi-Fi) ----
+WIFI_PAGE_MARK = "mcIRC: Wi-Fi page"
+_UI_EDITS = [   # (anchor, text put before it) in examples/companion_radio/ui-new/UITask.cpp
+    ("    ADVERT,\n", "#ifdef WIFI_SSID\n    WIFI_PAGE,   // " + WIFI_PAGE_MARK + "\n#endif\n"),
+    ("    } else if (_page == HomePage::ADVERT) {\n",
+     "#ifdef WIFI_SSID\n"
+     "    } else if (_page == HomePage::WIFI_PAGE) {   // " + WIFI_PAGE_MARK + ": on / off, and the address\n"
+     "      display.setColor(UIColor::primary_txt);\n"
+     "      display.setTextSize(2);\n"
+     "      display.drawTextCentered(display.width() / 2, 20, mcirc_wifi_off ? \"Wi-Fi OFF\" : \"Wi-Fi ON\");\n"
+     "      display.setTextSize(1);\n"
+     "      if (!mcirc_wifi_off) {\n"
+     "        IPAddress ip = WiFi.localIP();\n"
+     "        if (WiFi.status() == WL_CONNECTED) snprintf(tmp, sizeof(tmp), \"IP: %d.%d.%d.%d\", ip[0], ip[1], ip[2], ip[3]);\n"
+     "        else snprintf(tmp, sizeof(tmp), \"joining Wi-Fi...\");\n"
+     "        display.drawTextCentered(display.width() / 2, 40, tmp);\n"
+     "      }\n"
+     "      display.setColor(UIColor::secondary_txt);\n"
+     "      display.drawTextCentered(display.width() / 2, 64 - 11, \"toggle: \" PRESS_LABEL);\n"
+     "#endif\n"),
+    ("    if (c == KEY_ENTER && _page == HomePage::ADVERT) {\n",
+     "#ifdef WIFI_SSID\n"
+     "    if (c == KEY_ENTER && _page == HomePage::WIFI_PAGE) {   // " + WIFI_PAGE_MARK + ": press and hold switches Wi-Fi\n"
+     "      mcirc_wifi_off = !mcirc_wifi_off;\n"
+     "      if (mcirc_wifi_off) { WiFi.disconnect(true); WiFi.mode(WIFI_OFF); _task->showAlert(\"Wi-Fi off\", 1000); }\n"
+     "      else { WiFi.mode(WIFI_STA); WiFi.begin(WIFI_SSID, WIFI_PWD); _task->showAlert(\"Wi-Fi on\", 1000); }\n"
+     "      return true;\n"
+     "    }\n"
+     "#endif\n"),
+]
+_UI_INCLUDE = ("  #include <WiFi.h>\n", "  extern bool mcirc_wifi_off;   // " + WIFI_PAGE_MARK + " (main.cpp)\n")         # (put after the anchor)
+_MAIN_EDITS = [   # examples/companion_radio/main.cpp
+    ("  bool wifi_needs_reconnect = false;\n", "  bool mcirc_wifi_off = false;   // " + WIFI_PAGE_MARK + ": switched off there - no automatic reconnect\n", "after"),
+    ("  if (wifi_needs_reconnect && (millis()", "  if (wifi_needs_reconnect && !mcirc_wifi_off && (millis()", "replace"),
+]
+
+
+def add_wifi_page(src):
+    """Adds the Wi-Fi page to the companion firmware's screen menu in the unpacked source `src`: it shows Wi-Fi ON / OFF and the address;
+    press and hold switches Wi-Fi off or back on (until the next restart).  Only in builds with Wi-Fi (#ifdef WIFI_SSID).  Done once;
+    -> True when the source has it, False when this MeshCore version doesn't look as expected (then the build goes ahead without it)."""
+    import os
+    ui = os.path.join(src, "examples", "companion_radio", "ui-new", "UITask.cpp")
+    main = os.path.join(src, "examples", "companion_radio", "main.cpp")
+    try:
+        with open(ui, encoding="utf-8") as f: u = f.read()
+        with open(main, encoding="utf-8") as f: m = f.read()
+    except OSError:
+        return False
+    if WIFI_PAGE_MARK in u and WIFI_PAGE_MARK in m: return True
+    if any(u.count(a) != 1 for a, _ in _UI_EDITS) or u.count(_UI_INCLUDE[0]) != 1 or any(m.count(a) != 1 for a, _, _ in _MAIN_EDITS):
+        return False
+    for anchor, text in _UI_EDITS: u = u.replace(anchor, text + anchor)
+    u = u.replace(_UI_INCLUDE[0], _UI_INCLUDE[0] + _UI_INCLUDE[1])
+    for anchor, text, how in _MAIN_EDITS: m = m.replace(anchor, anchor + text if how == "after" else text)
+    with open(ui, "w", encoding="utf-8", newline="") as f: f.write(u)
+    with open(main, "w", encoding="utf-8", newline="") as f: f.write(m)
+    return True

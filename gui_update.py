@@ -55,7 +55,8 @@ def check(get=_http_get, raw=RAW):
     """-> {'local','remote','newer'}; raises on network errors (callers decide whether to stay silent)."""
     remote = get(raw + "VERSION").decode("utf-8").strip()
     local = local_version()
-    return {"local": local, "remote": remote, "newer": vkey(remote) > vkey(local)}
+    import gui_platform                                      # (shown as '2026.10.10-1'; compared as numbers)
+    return {"local": gui_platform.shown_version(local), "remote": gui_platform.shown_version(remote), "newer": vkey(remote) > vkey(local)}
 
 
 def missing_required(base=BASE_DIR):

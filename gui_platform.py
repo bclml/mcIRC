@@ -19,8 +19,18 @@ def edition_label():
     return "" if IS_WIN else f"{OS_NAME} edition {UNIX_EDITION_VERSION} (experimental)"
 
 
+def shown_version(v):
+    """mcIRC's versions are dates: year.month.day and that day's release number - stored with dots ('2026.10.10.1', so every older mcIRC's
+    updater still sees it as newer) and shown as '2026.10.10-1'.  Older versions ('3.1.0') are shown as they are."""
+    v = str(v or "").strip()
+    parts = v.split(".")
+    if len(parts) == 4 and all(p.isdigit() for p in parts) and len(parts[0]) == 4: return ".".join(parts[:3]) + "-" + parts[3]
+    return v
+
+
 def version_text(app_version):
     """What About / bug reports show: '1.2.0' on Windows, '1.2.0 - Linux edition 0.1.0 (experimental)' elsewhere."""
+    app_version = shown_version(app_version)
     return app_version if IS_WIN else f"{app_version} - {edition_label()}"
 
 

@@ -139,7 +139,9 @@ class Addon(AddonBase):
     @staticmethod
     def _app_version():
         try:
-            with open(os.path.join(BASE_DIR, "VERSION")) as f: return f.read().strip()
+            with open(os.path.join(BASE_DIR, "VERSION")) as f: v = f.read().strip()
+            import gui_platform
+            return gui_platform.shown_version(v) if hasattr(gui_platform, "shown_version") else v
         except OSError: return "?"
 
     # ---- optional rain warning ----

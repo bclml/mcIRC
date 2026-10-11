@@ -89,5 +89,17 @@ with mock.patch.object(io_mod, "_run_cli", return_value=R(dm)), mock.patch.objec
     ok("MCIRC_DEBUG_RAW=1 switches the raw dump back on for debugging", any("[DIAGNOSTIC] Raw .sync_msgs output" in l for l in lines))
 logging.getLogger().removeHandler(h)
 shutil.rmtree(work, ignore_errors=True)
+
+# ---- date versions: year.month.day and the day's release number (stored '2026.10.10.1', shown '2026.10.10-1')
+import gui_addons, gui_platform
+old_vkey = lambda v: tuple(int(p) for p in str(v).strip().lstrip("v").split("."))      # the updater of mcIRC 3.1 and older
+ok("an older mcIRC's updater sees the date version as newer (stored with dots)", old_vkey("2026.10.10.1") > old_vkey("3.1.0"))
+ok("...and the next release of the same day as newer again", gui_addons.vkey("2026.10.10.2") > gui_addons.vkey("2026.10.10.1") and gui_addons.vkey("2026.10.11.1") > gui_addons.vkey("2026.10.10.9"))
+ok("...the shown form compares the same way", gui_addons.vkey("2026.10.10-2") > gui_addons.vkey("2026.10.10.1") > gui_addons.vkey("3.1.0"))
+ok("shown as '2026.10.10-1'; older versions as they are", gui_platform.shown_version("2026.10.10.1") == "2026.10.10-1" and gui_platform.shown_version("3.1.0") == "3.1.0")
+ok("the VERSION file is a date version (year.month.day.release)", len(gu.local_version().split(".")) == 4 and gu.local_version().split(".")[0].isdigit()
+   and len(gu.local_version().split(".")[0]) == 4, gu.local_version())
+r = gu.check(get=lambda url: b"2026.10.10.1\n")
+ok("'Check for updates' shows both versions as dates", r["remote"] == "2026.10.10-1" and "." in r["local"])
 print("\nALL PASSED" if not fails else f"\n{len(fails)} FAILED: {fails}")
 sys.exit(1 if fails else 0)

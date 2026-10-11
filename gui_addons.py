@@ -516,8 +516,8 @@ PIP_MODULES = {"paho-mqtt": "paho.mqtt", "requests": "requests", "gtfs-realtime-
 
 
 def vkey(version):
-    """'1.10.2' -> (1, 10, 2) so versions compare numerically; junk compares lowest."""
-    try: return tuple(int(p) for p in str(version).strip().lstrip("v").split("."))
+    """'1.10.2' -> (1, 10, 2) so versions compare numerically ('2026.10.10-1' too: (2026, 10, 10, 1)); junk compares lowest."""
+    try: return tuple(int(p) for p in re.split(r"[.-]", str(version).strip().lstrip("v")))
     except ValueError: return (0,)
 
 

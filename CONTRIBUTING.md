@@ -30,9 +30,15 @@ people choose from and download inside the app.
 
 ## Run the tests
 
-`python tests/run_tests.py` runs the whole suite (about 3 minutes). On Linux without a display use `xvfb-run -a python tests/run_tests.py`; run a single test with `python tests/run_tests.py test_updater`.
+`python tests/run_tests.py` runs the whole suite (about 2½ minutes, 4 tests at a time; `-j 1` runs them one by one). On Linux without a display use `xvfb-run -a python tests/run_tests.py`; run a single test with `python tests/run_tests.py test_updater`.
 The tests use fake radios only, never touch a real node, your settings or the bot's real log, and run automatically on GitHub (Windows and Linux) for every push and pull request.
 Please add or update a test when you fix a bug.
+
+## Version numbers
+
+mcIRC's version is the release date and that day's release number: **2026.10.10-1** is the first release of 10 October 2026, **2026.10.10-2** the second.
+The `VERSION` file (and `pyproject.toml` / `uv.lock`) store it with dots - `2026.10.10.1` - so the updater of every older mcIRC still sees it as newer;
+mcIRC shows it with the dash. Release tags: `v2026.10.10-1`. Addons keep their own `1.2.3` versions.
 
 ## Ground rules
 

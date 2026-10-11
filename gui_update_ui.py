@@ -40,7 +40,7 @@ class UpdateDialog(tk.Toplevel):
         self.btn_restart = ttk.Button(b, text="Restart now", command=self.restart, state="disabled")
         for w in (self.btn_check, self.btn_go, self.btn_restart): w.pack(side="left", padx=3)
         ttk.Button(b, text="Close", command=self.destroy).pack(side="right")
-        self.head.config(text=f"Installed version: {gu.local_version()}")
+        self.head.config(text=f"Installed version: {gui_platform.shown_version(gu.local_version())}")
         if auto_check: self.check()
 
     def say(self, text):
@@ -100,14 +100,14 @@ class UpdateDialog(tk.Toplevel):
                 return
             res, addons = r
             if res:
-                self.say(f"Updated {res['old']} -> {res['new']}: {len(res['updated'])} file(s) replaced, {len(res['added'])} added.")
+                self.say(f"Updated {gui_platform.shown_version(res['old'])} -> {gui_platform.shown_version(res['new'])}: {len(res['updated'])} file(s) replaced, {len(res['added'])} added.")
                 for rel in res["kept"]: self.say(f"Kept your edited {rel}; the new version is saved as {rel}.new (copy your changes into it, or rename it to adopt).")
             for name, old, new in addons:
                 if not res and name in mgr.loaded: mgr.reload(name)                 # addons only: they run the new version straight away
                 self.say(f"Addon '{name}' updated {old} -> {new} (its settings are unchanged).")
             if res and res["updated"]: self.say(f"Backup of replaced files: {res['backup']}")
             if res:
-                self.head.config(text=f"Updated to {res['new']} - restart to use it.")
+                self.head.config(text=f"Updated to {gui_platform.shown_version(res['new'])} - restart to use it.")
                 self.btn_restart.config(state="normal")
             else:
                 self.head.config(text="Addons updated - they are running the new version already.")

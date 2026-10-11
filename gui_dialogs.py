@@ -370,5 +370,5 @@ class ChannelListDialog(tk.Toplevel):
 def show_about(root):
     import gui_update
     ed = gui_platform.edition_label()
-    messagebox.showinfo("About", f"mcIRC {gui_update.local_version()}" + (f"\n{ed}" if ed else "") + "\n\nAn mIRC-style chat client for MeshCore nodes.\n"
+    messagebox.showinfo("About", f"mcIRC {gui_platform.shown_version(gui_update.local_version())}" + (f"\n{ed}" if ed else "") + "\n\nAn mIRC-style chat client for MeshCore nodes.\n"
                        "Alerts, broadcasting and anything else are addons (Tools > Addons).", parent=root)

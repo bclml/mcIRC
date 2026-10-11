@@ -115,7 +115,7 @@ engine_user_edit = open(os.path.join(d, "emergency_agent.py"), encoding="utf-8")
 open(os.path.join(d, "emergency_agent.py"), "w", encoding="utf-8").write(engine_user_edit)
 state_path = os.path.join(d, "update_state.json")
 
-check("version check: newer detected", gu.check(lambda u, timeout=20: b"9.0.0\n", RAW)["newer"])
+check("version check: newer detected", gu.check(lambda u, timeout=20: b"2099.1.1.1\n", RAW)["newer"])
 check("version check: same version is not an update", not gu.check(lambda u, timeout=20: b"1.1.0\n", RAW)["newer"])
 
 # 1) broken download -> nothing changes

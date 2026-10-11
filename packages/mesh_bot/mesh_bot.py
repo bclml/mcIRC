@@ -106,6 +106,8 @@ class Addon(AddonBase):
             try:
                 import gui_update
                 v = gui_update.local_version()
+                import gui_platform
+                v = gui_platform.shown_version(v) if hasattr(gui_platform, "shown_version") else v
             except Exception: v = "?"
             return f"mcIRC {v} - Mesh bot {self.version} (commands after meshcore-bot)"
         raise ValueError("unknown command")

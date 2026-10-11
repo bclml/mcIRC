@@ -2,7 +2,7 @@
 broadcast to the mesh, plus the weekly reminder.  Has a master mute and a switch per source.
 The chat GUI works fine with this addon disabled (Tools > Addons)."""
 import gui_platform
-import asyncio, logging, os, re, threading
+import asyncio, logging, os, re, threading, time
 import tkinter as tk
 from tkinter import ttk
 
@@ -12,6 +12,9 @@ from gui_addons import AddonBase
 
 
 CHANNEL_KINDS = ("DriveBC", "BC Ferries", "BC Transit", "TransLink", "Weather")
+ROUTE_WORDS = ("route", "directions", "gps")                 # 'route <address>' by private message
+ROUTE_EVERY = 120                                            # seconds between two route answers to the same person
+ADDRESSED = re.compile(r"^@\[[^\]]*\]\s*[:,]?\s*|^@\S+[:,]\s*")
 
 
 def split_channels(text):
@@ -27,12 +30,15 @@ class Addon(AddonBase):
     # (The "test" auto-reply is its own addon now: Auto reply.)
     SOURCES = [k for k in ea.TX_SOURCES if k != "Test reply"]   # alert types with a switch on the Alerts tab
     title = "Traffic, transit and weather"
-    version = "1.5.0"
+    replies = True                         # ('route' answers people: the settings window offers the answer wait)
+    version = "1.6.0"
     author = "built in"
     description = ("Traffic / ferry / transit / weather / earthquake / tsunami alerts. Keeps the map's DriveBC and earthquake layers up to date; "
                    "broadcasting them to the mesh is OFF until you switch it on.")
 
     def on_load(self):
+        self.route_last = {}
+        if hasattr(self.api, "add_bot_commands"): self.api.add_bot_commands(self.route_help)
         self.thread = self.loop = None
         self.tasks = []
         self.apply_settings()
@@ -45,6 +51,73 @@ class Addon(AddonBase):
         self.api.add_map_layer("DriveBC incidents", self._incidents, "#d32f2f")
         self.api.add_map_layer("Earthquakes", self._quakes, "#ef6c00")
         if ea.TX["muted"]: self._start_feeds()       # map-only mode needs no radio: read the feeds right away
+
+    # ---- 'route <address>': directions with DriveBC closures, incidents and roadwork on the way - by private message only ----
+    def route_help(self, channel, dm=False):
+        return ["route <address> (private message)"] if self.api.get("route_on", False) else []
+
+    def _route_words(self, text):
+        t = ADDRESSED.sub("", (text or "").strip(), count=1)
+        if t[:1] in "!/.": t = t[1:]
+        word, _, rest = t.partition(" ")
+        return (word.lower(), rest.strip()) if word.lower() in ROUTE_WORDS else (None, "")
+
+    def on_message(self, msg):
+        if not self.api.get("route_on", False): return
+        word, where = self._route_words(msg.get("text"))
+        if not word: return
+        who, now = msg.get("nick", "?"), time.time()
+        if not msg.get("dm"):                   # never answer a destination in a channel - nor repeat it: only how to ask privately
+            if where and now - self.route_last.get(("hint", who), 0) > ROUTE_EVERY:
+                self.route_last[("hint", who)] = now
+                self.api.reply(msg, f"Send it to me by private message instead: {word} <address> - so your destination stays private.", private=True)
+            return
+        if not where:
+            return self.api.reply(msg, f"Directions with DriveBC closures and roadwork on the way: {word} <address>  (or: {word} <from> to <to>)", private=True)
+        if now - self.route_last.get(who, 0) < ROUTE_EVERY:
+            return self.api.reply(msg, "One route every 2 minutes, please - try again shortly.", private=True)
+        self.route_last[who] = now
+        pos = self._position(msg)
+        origin, age = (pos[:2], pos[2]) if pos else (None, None)
+
+        def work():
+            import traffic_route
+            return traffic_route.answer(origin, where, known=self._known_events, origin_age=age)
+
+        def done(r):
+            if isinstance(r, Exception):           # (never the address in the log: only what kind of failure)
+                logging.warning(f"route: the lookup failed ({type(r).__name__})")
+                r = ["Couldn't work out the route just now - please try again in a minute."]
+            get = getattr(self.api, "reply_delays", None)
+            first, gap = get(node=msg.get("node")) if get else (5.0, 9.0)
+            for i, part in enumerate(r[:3]):
+                self.api.after(int((first + i * gap) * 1000), lambda p=part: self.api.reply(msg, p, private=True))
+        self.api.run_background(work, done)
+
+    def _known_events(self):
+        """The DriveBC events the traffic check is tracking (its areas), for a route when DriveBC doesn't answer the route's own request."""
+        out = []
+        for k, val in list(ea.active_traffic_alerts.items()):
+            loc = ea.ALERT_LOCATIONS.get(k)
+            src, title = val if isinstance(val, tuple) and len(val) == 2 else ("", str(val))
+            if not loc or src != "DriveBC": continue
+            text = str(title)
+            what = "CLOSED" if re.search(r"closed|closure", text, re.I) else "Roadwork" if re.search(r"construction|roadwork", text, re.I) else "Incident"
+            road = re.sub(r"^(?:INCIDENT|CONSTRUCTION|ROAD_CONDITION|SPECIAL_EVENT)\s*-\s*", "", text, flags=re.I)[:30]
+            out.append({"id": str(k), "what": what, "road": road, "place": "", "points": [(loc[0], loc[1])]})
+        return out
+
+    def _position(self, msg):
+        """(lat, lon, seconds since that advert or None) of the asker's node from its advert (mcIRC's node memory), or None.  The age
+        goes by lastmod - stamped by YOUR node's clock when it heard the advert (the advert's own time is often wrong)."""
+        raw = msg.get("raw") if isinstance(msg.get("raw"), dict) else {}
+        key = raw.get("pubkey_prefix") or ""
+        row = (self.api.nodes.find_by_prefix(key) if key else None) or self.api.nodes.find_by_name((msg.get("nick") or "").lstrip("@"))
+        if row and (row.get("lat") or row.get("lon")):
+            heard = row.get("lastmod") or row.get("last_seen") or 0
+            age = time.time() - heard if 0 < heard <= time.time() + 300 else None
+            return float(row["lat"]), float(row["lon"]), age
+        return None
 
     def on_unload(self):
         self._stop_feeds()
@@ -183,13 +256,26 @@ class Addon(AddonBase):
         tk.Label(f, text="Traffic, transit and weather", bg=bg, font=(gui_platform.DIALOG_FONT_NAME, 9, "bold")).pack(anchor="w")
         nb = ttk.Notebook(f)
         nb.pack(fill="both", expand=True, pady=4)
-        alerts, areas, chans, accounts = (tk.Frame(nb, bg=bg, padx=8, pady=6) for _ in range(4))
+        alerts, areas, chans, route, accounts = (tk.Frame(nb, bg=bg, padx=8, pady=6) for _ in range(5))
         nb.add(alerts, text="Alerts")
         nb.add(areas, text="Weather areas")
         nb.add(chans, text="Channels")
+        nb.add(route, text="Route")
         nb.add(accounts, text="Accounts & scopes")
         self._areas_page(areas, bg)
         self._channels_page(chans, bg)
+        self.route_var = tk.BooleanVar(value=bool(self.api.get("route_on", False)))
+        tk.Checkbutton(route, text="Answer 'route <address>' by private message", variable=self.route_var, bg=bg,
+                       font=(gui_platform.UI_FONT_NAME, gui_platform.UI_FONT_SIZE, "bold")).pack(anchor="w")
+        tk.Label(route, bg=bg, fg="#555", justify="left", wraplength=420, text=(
+            "Someone sends the bot a private message 'route 1234 Main St, Town' (also 'directions' / 'gps'). The bot finds the address, "
+            "drives the route from the position their node advertises (or 'route <from> to <to>'), checks DriveBC's closures, incidents and "
+            "roadwork on the way (British Columbia), and answers privately: distance, time, main roads and what is on the way.\n\n"
+            "The quickest route is taken; when routes take about as long, the one with fewer incidents and roadwork. A road closed on the "
+            "way is avoided while another route is open. Times are without live congestion.\n\n"
+            "Private only: asked in a channel, the bot never repeats the address - it only says to ask by private message. Addresses are "
+            "never written to the logs. One route per person every 2 minutes. Free services, no key: OpenStreetMap (addresses) and OSRM "
+            "(routes).")).pack(anchor="w", pady=(4, 0))
 
         tk.Checkbutton(alerts, text="Broadcast alerts to the mesh (this transmits on your radio)", variable=self.broadcast, bg=bg, wraplength=400, justify="left", anchor="w",
                        font=(gui_platform.UI_FONT_NAME, gui_platform.UI_FONT_SIZE, "bold")).pack(anchor="w")
@@ -269,6 +355,7 @@ class Addon(AddonBase):
             if self.broadcast.get() and not any(lists.values()) and hasattr(self.api, "notice"):
                 self.api.notice("Traffic, transit and weather: broadcasting is on, but no channel is chosen (Settings > Channels) - nothing "
                                 "will be sent until you choose one.", "warn")
+        if getattr(self, "route_var", None) is not None: self.api.set("route_on", bool(self.route_var.get()))
         self.api.set("muted", not self.broadcast.get())
         self.api.set("sources", {k: var.get() for k, var in self.src.items()})
         self.apply_settings()

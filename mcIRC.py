@@ -849,7 +849,7 @@ class App(PrivateMixin, MenusMixin, CommandsMixin, gui_multinode.MultiNodeMixin,
         was = self.connected
         self.stop_extra_nodes()
         self.worker.stop()
-        self.adverts.interrupt()                     # don't leave the advert listener holding the radio's port after the window is gone
+        self.adverts.interrupt(force=True)           # don't leave the advert listener holding the radio's port after the window is gone
         if was: self.reboot_node_after_disconnect(wait=8)
         for n in list(self.addons.loaded): self.addons.unload(n)
         self.root.destroy()

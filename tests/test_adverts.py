@@ -225,6 +225,20 @@ try: late = w.send_through(["chan", "3", "just in time"])
 except RuntimeError as e: late = e
 th4.join(30)
 ok("a send handed over just before the stretch ends is waited for - not marked as failed", getattr(late, "returncode", None) == 0, late)
+stop5 = threading.Event(); res5 = {}
+th5 = threading.Thread(target=lambda: w.listen(30, stop5), daemon=True); th5.start()
+t0 = time.time()
+while not w.ready and time.time() - t0 < 8: time.sleep(0.05)
+def send5():
+    try: res5["r"] = w.send_through(["chan", "3", "on its way"])
+    except RuntimeError as e: res5["r"] = e
+sender = threading.Thread(target=send5, daemon=True); sender.start()
+time.sleep(0.3)
+with io.MESH_LOCK:                                   # another part of mcIRC needs the radio while that send is on its way
+    got_lock_after = time.time() - t0
+sender.join(10); th5.join(15)
+ok("...and when another part of mcIRC needs the radio meanwhile, the send is still confirmed first (was: killed, NOT SENT)",
+   getattr(res5.get("r"), "returncode", None) == 0, res5)
 ga.HELPER = fake
 ga.HELPER = fake
 

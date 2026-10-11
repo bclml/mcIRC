@@ -55,10 +55,15 @@ class AdvertWatcher:
         self.yield_evt = threading.Event()                # "someone needs the radio": sticky, so a request that arrives while the listener is still starting isn't lost
         io.MESH_LOCK.on_contend = self.interrupt          # anyone who needs the radio makes the listener let go of it
 
-    def interrupt(self):
+    def interrupt(self, force=False):
+        """Someone needs the radio: let go of it.  With sends already handed to the listener (they may be on the air), the listening loop
+        lets them finish first (at most 5 s) and then stops it - unless force."""
         self.yield_evt.set()
         p = self.proc
         if p is not None and p.poll() is None:
+            if not force:
+                with self.send_lock:
+                    if self.pending: return
             try: p.kill()
             except OSError: pass
 
@@ -123,7 +128,7 @@ class AdvertWatcher:
                 with self.send_lock:
                     if not self.pending: break
                 time.sleep(0.1)
-            self.interrupt()
+            self.interrupt(force=True)
             try: proc.wait(timeout=5)
             except subprocess.TimeoutExpired: pass
             while True:                                    # what it printed before it stopped - above all messages the node has let go of

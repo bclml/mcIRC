@@ -12,6 +12,10 @@ import time
 
 UA = {"User-Agent": "mcIRC traffic route (github.com/bclml/mcIRC)"}
 NOMINATIM = "https://nominatim.openstreetmap.org/search"
+NOMINATIM_REVERSE = "https://nominatim.openstreetmap.org/reverse"
+MAX_LEGS = 6                    # main roads named in 'Via:' (each with the city it starts in when that changes)
+# road numbers as people say them: 'TCH 1' / 'BC 99' / 'AB 2' -> 'Hwy 1' / 'Hwy 99' / 'Hwy 2' (others - 'I-5', 'US 101', 'A1' - as they are)
+_HWY = re.compile(r"^(?:TCH|BC|AB|SK|MB|ON|QC|NB|NS|PE|PEI|NL|YT|NT|NU)\s*-?\s*(\d+[A-Z]?)$", re.I)
 OSRM = "https://router.project-osrm.org/route/v1/driving/{lon1},{lat1};{lon2},{lat2}"
 DRIVEBC = "https://api.open511.gov.bc.ca/events"
 NEAR_M = 150                    # an event this close to the route is on the way
@@ -69,21 +73,61 @@ def geocode(query, near=None, get=None):
     return float(r["lat"]), float(r["lon"]), name[:40]
 
 
+def road_name(step):
+    """The road of a route step as people say it: its number ('Hwy 1' for 'TCH 1;BC 1'), else its name."""
+    for ref in (step.get("ref") or "").split(";"):
+        ref = ref.strip()
+        if ref:
+            m = _HWY.match(ref)
+            return f"Hwy {m.group(1).upper()}" if m else ref
+    return (step.get("name") or "").strip()
+
+
 def routes(a, b, get=None):
-    """Driving routes a -> b (best first, with alternatives): [{'km', 'min', 'coords': [(lat, lon)], 'roads': [names]}]."""
+    """Driving routes a -> b (best first, with alternatives): [{'km', 'min', 'coords': [(lat, lon)], 'roads': [names], 'legs': [(road,
+    km, start (lat, lon))] in driving order}]."""
     data = (get or _get)(OSRM.format(lat1=a[0], lon1=a[1], lat2=b[0], lon2=b[1]),
                          {"alternatives": "true", "steps": "true", "overview": "full", "geometries": "geojson"})
     out = []
     for r in data.get("routes", []) if data.get("code") == "Ok" else []:
-        length = {}
+        length, legs = {}, []
         for leg in r.get("legs", []):
             for s in leg.get("steps", []):
-                n = s.get("ref") or s.get("name")
-                if n: length[n] = length.get(n, 0) + s.get("distance", 0)
+                n = road_name(s)
+                if not n: continue
+                length[n] = length.get(n, 0) + s.get("distance", 0)
+                loc = (s.get("maneuver") or {}).get("location")
+                if legs and legs[-1][0] == n: legs[-1][1] += s.get("distance", 0) / 1000
+                else: legs.append([n, s.get("distance", 0) / 1000, (loc[1], loc[0]) if loc else None])
         roads = [n for n, d in sorted(length.items(), key=lambda x: -x[1]) if d > 300][:3]
         out.append({"km": r["distance"] / 1000, "min": r["duration"] / 60, "roads": roads,
+                    "legs": [tuple(l) for l in legs if l[1] >= 0.8],       # (short connecting streets left out)
                     "coords": [(c[1], c[0]) for c in r["geometry"]["coordinates"]]})
     return out
+
+
+def town_at(p, get=None):
+    """The city / town at a point (OpenStreetMap), or ''."""
+    try:
+        r = (get or _get)(NOMINATIM_REVERSE, {"lat": f"{p[0]:.4f}", "lon": f"{p[1]:.4f}", "format": "jsonv2", "zoom": 10})
+    except Exception:
+        return ""
+    a = (r or {}).get("address") or {}
+    return next((a[k] for k in ("city", "town", "village", "municipality") if a.get(k)), "")
+
+
+def via_line(route, get=None):
+    """'Via: Kingsway (Vancouver) > Hwy 1 (Burnaby) > Hwy 15 (Surrey) > 80 Avenue' - the main roads in order, with the city each one starts
+    in whenever that changes."""
+    legs = list(route.get("legs") or [])
+    if len(legs) > MAX_LEGS: legs = sorted(sorted(legs, key=lambda l: -l[1])[:MAX_LEGS], key=legs.index)     # the longest, kept in order
+    out, last = [], None
+    for road, _km, start in legs:
+        town = town_at(start, get) if start else ""
+        out.append(f"{road} ({town})" if town and town != last else road)
+        last = town or last
+    while out and len("Via: " + " > ".join(out)) > MAX_CHARS: out.pop()
+    return "Via: " + " > ".join(out) if out else ""
 
 
 def _on_now(schedule, now):
@@ -157,7 +201,7 @@ def answer(origin, query, get=None, now=None, known=None, origin_age=None):
     traffic check, same form as drivebc_events) - used when DriveBC doesn't answer this request.  origin_age: seconds since the asker's
     node advertised the position used (None: not known); not given for 'route <from> to <to>'."""
     parts = _answer(origin, query, get, now, known)
-    if origin is not None and len(parts) >= 2 and parts[0].startswith("Route to") and not re.match(r"(?i)\s*.+?\s+to\s+.+$", query):
+    if origin is not None and len(parts) >= 3 and parts[0].startswith("Route to") and not re.match(r"(?i)\s*.+?\s+to\s+.+$", query):
         parts.append(start_note(origin_age))
     return [_fit(p) for p in parts]
 
@@ -196,18 +240,16 @@ def _answer(origin, query, get=None, now=None, known=None):
     why = ""
     if best is not fastest:
         why = f" (avoids {closed(fastest)} closure{'s' if closed(fastest) != 1 else ''})" if closed(fastest) else               f" (fewer incidents / roadwork, +{best['min'] - fastest['min']:.0f} min)"
-    roads = list(best["roads"])
-    while True:                                     # one mesh message: fewer road names before anything is cut
-        via = f" via {', '.join(roads)}" if roads else ""
-        first = f"Route to {dest[2]}: {best['km']:.0f} km, ~{best['min']:.0f} min{via}{why}"
-        if len(first) <= MAX_CHARS or not roads: break
-        roads.pop()
+    first = f"Route to {dest[2]}: {best['km']:.0f} km, ~{best['min']:.0f} min{why}"
+    via = via_line(best, get)                       # the roads in order, and when the route enters another city
+    if via: first = [first, via]
+    head = first if isinstance(first, list) else [first]
     if not bc:
-        return [first, "Traffic: no live closures here (DriveBC covers British Columbia). Times are without congestion."]
-    if busy: return [first, "Traffic: DriveBC didn't answer just now - closures not checked. Try again in a minute."]
+        return head + ["Traffic: no live closures here (DriveBC covers British Columbia). Times are without congestion."]
+    if busy: return head + ["Traffic: DriveBC didn't answer just now - closures not checked. Try again in a minute."]
     ev = best["events"]
     src = " (from the last DriveBC check)" if stale else ""
-    if not ev: return [first, f"On the way: no closures, incidents or roadwork reported{src or ' (DriveBC)'}. Times are without congestion."]
+    if not ev: return head + [f"On the way: no closures, incidents or roadwork reported{src or ' (DriveBC)'}. Times are without congestion."]
     items = [f"{e['what']} {e['road'] or e['place']}".strip() for e in sorted(ev, key=lambda e: ("CLOSED", "Incident", "Roadwork").index(e["what"]))]
     more = f" +{len(items) - 4} more" if len(items) > 4 else ""
-    return [first, "On the way: " + "; ".join(items[:4]) + more + src]
+    return head + ["On the way: " + "; ".join(items[:4]) + more + src]

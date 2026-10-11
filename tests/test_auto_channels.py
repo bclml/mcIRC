@@ -18,14 +18,17 @@ def ok(label, cond, detail=""):
 
 class Node:
     """Slots 0-5: Public, #test, drivebc (a private channel), then empty ones (or none free)."""
-    def __init__(self, full=False):
+    def __init__(self, full=False, lists_empty=True, max_channels=6):
         self.slots = {0: "Public", 1: "#test", 2: "drivebc"}
         for i in range(3, 6): self.slots[i] = "x%d" % i if full else ""
-        self.cmds = []
+        self.cmds, self.lists_empty, self.max = [], lists_empty, max_channels
     def run(self, args, **k):
         self.cmds.append(args[2:])
-        if args[2] == ".get_channels":
-            return type("R", (), {"stdout": json.dumps([{"channel_idx": i, "channel_name": n} for i, n in self.slots.items()]), "stderr": "", "returncode": 0})
+        if args[2] == ".get_channels":                  # real nodes list only the channels they have (lists_empty=False)
+            rows = [{"channel_idx": i, "channel_name": n} for i, n in self.slots.items() if n or self.lists_empty]
+            return type("R", (), {"stdout": json.dumps(rows), "stderr": "", "returncode": 0})
+        if args[2] == ".ver":
+            return type("R", (), {"stdout": json.dumps({"model": "Heltec V3", "max_channels": self.max}), "stderr": "", "returncode": 0})
         if args[2] == "set_channel": self.slots[int(args[3])] = args[4]
         return type("R", (), {"stdout": "", "stderr": "", "returncode": 0})
     def resolve(self, **k):
@@ -52,6 +55,13 @@ ok("Public is never added or touched", with_node(Node(), lambda: io.ensure_chann
 full = Node(full=True)
 ok("a full node: nothing is overwritten, the message is not sent", with_node(full, lambda: io.ensure_channel("#weather")) is None
    and not any(c[0] == "set_channel" for c in full.cmds), full.cmds)
+real = Node(lists_empty=False, max_channels=40)
+idx = with_node(real, lambda: io.ensure_channel("#drivebc2"))
+ok("a real node lists only its channels: the first number it doesn't use is taken (it said 'no free slot' before)", idx == 3
+   and ["set_channel", "3", "#drivebc2"] in real.cmds, real.cmds)
+realfull = Node(full=True, lists_empty=False, max_channels=6)
+ok("...and one with every channel in use is left alone", with_node(realfull, lambda: io.ensure_channel("#weather")) is None
+   and not any(c[0] == "set_channel" for c in realfull.cmds), realfull.cmds)
 ok("...and it is not asked again on every alert", with_node(full, lambda: (io._added_or_failed.add("weather"), io.ensure_channel("#weather"))[1]) is None)
 
 # the Traffic, transit and weather addon: only while broadcasting

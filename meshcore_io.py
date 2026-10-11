@@ -677,6 +677,11 @@ def ensure_channel(name):
         have = next((s for s, n in slots if n and _channel_norm(n) == base), None)
         if have is None:
             free = next((s for s, n in slots if s and not n), None)
+            if free is None:                                # the node lists only the channels it has: the first number it doesn't use
+                used = {int(s) for s, n in slots if n}
+                ver = execute_mesh_command(CONNECTION_ARGS + [".ver"], timeout=40)
+                v = next((d for d in json_docs(f"{ver.stdout}\n{ver.stderr}") if isinstance(d, dict) and "max_channels" in d), {})
+                free = next((i for i in range(1, int(v.get("max_channels") or 8)) if i not in used), None)
             if free is None:
                 logging.warning(f"Channel '#{base}' is needed but the node has no free channel slot - remove one (/part) to add it.")
                 return None

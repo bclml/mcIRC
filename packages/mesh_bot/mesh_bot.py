@@ -27,7 +27,7 @@ GREETING = cmds.DEFAULT_GREETINGS[0]                     # the single greeting o
 
 class Addon(AddonBase):
     title = "Mesh bot"
-    version = "1.2.6"
+    version = "1.2.7"
     author = "mcIRC (commands after agessaman/meshcore-bot, MIT)"
     description = ("ping, hello, path, prefix, multitest, stats, sports and version - the meshcore-bot commands mcIRC's other bots don't have - "
                    "plus its greeter for newcomers (a random greeting from your list), each switched on for the channels you choose. Off until you switch it on.")
@@ -67,7 +67,9 @@ class Addon(AddonBase):
         if not self.limiter.allow(msg.get("nick", "?")): return
         now = time.time()
         if cmd == "multitest":                                   # wait for the copies of the message to arrive first
-            return self.api.after(7000, lambda: self.send(msg, cmds.multitest_text(cmds.multitest_paths(self.api.packet_log, now))))
+            wait = max(7000, mc.reply_delays_ms(self.api, msg)[0])        # (at least 7 s: the repeats of the question are what it counts)
+            return self.api.after(wait, lambda: mc.send_parts(self.api, msg, cmds.multitest_text(cmds.multitest_paths(self.api.packet_log, now)),
+                                                               max_parts=2, first_delay=0))
         if cmd == "firmware":
             return self.api.run_background(self.firmware, lambda r: self.send(msg, r if not isinstance(r, Exception) else "Couldn't reach GitHub for the firmware versions"))
         if cmd == "sports":
@@ -128,8 +130,9 @@ class Addon(AddonBase):
         self._last_greeting = line
         text = cmds.greeting_for(nick, line, msg.get("channel", ""))
         private = bool(self.api.get("greet_private", False))     # only to the newcomer: nothing in the channel
+        first, gap = mc.reply_delays_ms(self.api, msg)
         for i, part in enumerate(mc.split_message(text, limit=mc.MAX_CHARS, max_parts=2)):
-            self.api.after(5000 + i * 9000, lambda p=part: self.api.reply(msg, p, private=private))
+            self.api.after(first + i * gap, lambda p=part: self.api.reply(msg, p, private=private))
 
     def greetings(self):
         """The greetings to pick from: the list from the settings, or 1.0.x's single line if it was changed, else the defaults."""

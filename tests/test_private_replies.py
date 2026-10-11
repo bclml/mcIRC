@@ -77,8 +77,26 @@ with mock.patch.object(app.addons, "info", lambda n: (n, "1.0", "", "")):
     win.private_var.set(True); win.apply()
     ok("...and it is saved", app.settings["addons"]["tbot"]["_reply_private"] is True)
     win.destroy()
+    win = gui_addonsettings.AddonSettingsWindow(app, "tbot")
+    ok("a bot's settings window has 'Wait 5 seconds before answering, then 9 seconds between parts'",
+       win.delay_vars is not None and [v.get() for v in win.delay_vars] == ["5", "9"])
+    win.delay_vars[0].set("2"); win.delay_vars[1].set("1"); win.apply()
+    ok("...saved (between parts at least 3 s)", app.settings["addons"]["tbot"]["_reply_delay"] == 2 and app.settings["addons"]["tbot"]["_part_gap"] == 3)
+    win.destroy()
+    tapi = app.addons.loaded["tbot"][1]
+    ok("...and the bot reads it", tapi.reply_delays() == (2.0, 3.0))
+    app.settings["addons"]["tbot"].update(_reply_delay=500, _part_gap="x")
+    ok("...within limits (0 to 120 s), a bad value giving the default", tapi.reply_delays() == (120.0, 9.0))
+    import importlib.util as _ilu
+    _spec = _ilu.spec_from_file_location("t_mc_delays", os.path.join(ROOT, "packages", "fun_bot", "meshbot_common.py"))
+    mc = _ilu.module_from_spec(_spec); _spec.loader.exec_module(mc)
+    app.settings["addons"]["tbot"].update(_reply_delay=0, _part_gap=4)
+    waits = []
+    tapi.after = lambda ms, fn: waits.append(ms)
+    mc.send_parts(tapi, {"channel": "#bots", "nick": "Ann", "dm": False}, "word " * 80, max_parts=3)
+    ok("the bots answer after the wait set (0 s: at once), long answers' parts the gap apart", waits == [0, 4000, 8000], waits)
     win = gui_addonsettings.AddonSettingsWindow(app, "tquiet")
-    ok("an addon that answers nobody doesn't show it", win.private_var is None)
+    ok("an addon that answers nobody doesn't show it", win.private_var is None and win.delay_vars is None)
     win.destroy()
 # ---- nothing from bots in Public
 from unittest import mock as _mock

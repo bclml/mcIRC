@@ -24,6 +24,9 @@ def make(rules=None, **settings):
     api.send = lambda ch, text: sent.append((ch, text))
     api.reply = lambda msg, text: sent.append((msg["channel"], text))      # the same channel (or privately - test_private_replies)
     api.channels = lambda: CHANNELS
+    api.reply_delays = lambda first=5.0, gap=9.0, node=None: (float(store.get("_reply_delay", first)), float(store.get("_part_gap", gap)))
+    api.waits = []
+    api.after = lambda ms, fn: (api.waits.append(ms), fn())         # (runs at once here; the wait is recorded)
     a = ar.Addon(api); a.on_load()
     return a, sent, store
 def msg(channel, text, nick="Bob", hops=2, dm=False, snr=7.5): return {"channel": channel, "nick": nick, "text": text, "hops": hops, "snr": snr, "dm": dm}
@@ -37,6 +40,10 @@ store.pop("enabled")
 check("off until switched on: nothing is answered", talk(a, sent, "Public", "test") == [])
 store["enabled"] = True
 check("default rule: 'test' answered in the same channel", talk(a, sent, "Public", "test") == [("Public", "@[Bob] Test received, 2 hops")])
+check("...at once by default (no wait)", a.api.waits == [])
+store["_reply_delay"] = 4; talk(a, sent, "Public", "test", nick="W")
+check("...after the wait set in its settings window ('Wait 4 seconds before answering')", a.api.waits == [4000], a.api.waits)
+store.pop("_reply_delay")
 check("'t' + case-insensitive; chat ignored", talk(a, sent, "#drivebc", "T", nick="Al") != [] and talk(a, sent, "Public", "testing 123") == [] and talk(a, sent, "Public", "hello") == [])
 check("direct messages ignored", talk(a, sent, "@Bob", "test", dm=True) == [])
 check("hops 255 means direct (0 hops)", talk(a, sent, "Public", "test", nick="Di", hops=255)[0][1] == "@[Di] Test received, 0 hops")

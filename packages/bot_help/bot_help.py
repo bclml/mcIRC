@@ -49,7 +49,8 @@ def _wrap(text, limit):
 
 class Addon(AddonBase):
     title = "Bot help"
-    version = "1.0.6"
+    replies = True                        # (its settings window offers private answers and the answer wait)
+    version = "1.0.7"
     author = "mcIRC"
     description = ("Answers 'bothelp' with the bot commands that work in that channel (Weather bot, Fun bot, Auto reply, ...), and can announce "
                    "'Type bothelp for a list of commands.' once a day at a set time. Off until you switch it on.")
@@ -78,8 +79,10 @@ class Addon(AddonBase):
         found = self.found(msg.get("channel", ""), bool(msg.get("dm")))
         if not found: return                                     # no bot answers here: stay quiet
         self.last_any = self.last_by[who] = now
+        get = getattr(self.api, "reply_delays", None)              # the settings window's 'Wait ... seconds' (5 and 9 by default)
+        first, gap = get(node=msg.get("node")) if get else (5.0, 9.0)
         for i, part in enumerate(help_lines(found)):
-            self.api.after(5000 + i * 9000, lambda p=part: self.api.reply(msg, p))      # wait for the repeats of the question to die down first
+            self.api.after(int((first + i * gap) * 1000), lambda p=part: self.api.reply(msg, p))      # after the repeats of the question
 
     # ---- the daily announcement ----
     def announce_channels(self):

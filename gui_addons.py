@@ -126,6 +126,15 @@ class AddonAPI:
         """Display name of the channel window in front ('#drivebc', 'Public'), or None for Status / private windows."""
         w = self._app.current
         return w.name if w is not None and w is not self._app.status and not w.name.startswith("@") else None
+    def reply_delays(self, first=5.0, gap=9.0, node=None):
+        """(seconds before the first part of an answer, seconds between parts) - the addon's settings window ('Wait ... seconds before
+        answering'), per node too; `first` / `gap` are the addon's own defaults.  Between parts at least 3 s (the mesh needs the room)."""
+        with self.for_node(node or "main"):
+            try: first = float(self.get("_reply_delay", first))
+            except (TypeError, ValueError): pass
+            try: gap = float(self.get("_part_gap", gap))
+            except (TypeError, ValueError): pass
+        return max(0.0, min(120.0, first)), max(3.0, min(120.0, gap))
     def reply(self, msg, text, private=None):
         """Answer a message where it came from: its channel, or the person for a direct message (msg as given to on_message).
         private=True (default: the addon's 'Send answers by private message' setting) answers a channel message privately instead."""

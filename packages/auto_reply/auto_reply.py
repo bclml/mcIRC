@@ -45,7 +45,8 @@ def match_rule(rule, text):
 
 class Addon(AddonBase):
     title = "Auto reply"
-    version = "1.1.7"
+    reply_delay, part_gap = 0, 9          # answers at once unless a wait is set in its settings window
+    version = "1.1.8"
     author = "bclml"
     description = "Keyword rules: answer chosen words on chosen channels with your own text, to the channels you pick."
 
@@ -90,8 +91,12 @@ class Addon(AddonBase):
             if not reply.strip(): return
             self.last_any = self.last_by_key[key] = now
             dests = split_list(r.get("reply_to", ""))[:MAX_DESTINATIONS]
-            if not dests: return self.api.reply(msg, reply)            # the same channel - or privately, if set in the settings window
-            for dest in dests: self.api.send(dest, reply)
+            get = getattr(self.api, "reply_delays", None)              # the settings window's 'Wait ... seconds' (0 by default: at once)
+            wait = int(get(self.reply_delay, self.part_gap, node=msg.get("node"))[0] * 1000) if get else 0
+            if not dests: send = lambda: self.api.reply(msg, reply)    # the same channel - or privately, if set in the settings window
+            else: send = lambda: [self.api.send(dest, reply) for dest in dests]
+            if wait: self.api.after(wait, send)
+            else: send()
             return
 
     # ---- on/off ----
@@ -99,7 +104,7 @@ class Addon(AddonBase):
 
     def _command(self, arg):
         if arg.strip().lower() in ("on", "off"): self._set(arg.strip().lower() == "on")
-        else: self.api.log(f"Auto reply is {'ON' if self.api.get('enabled', True) else 'OFF'} (use /autoreply on|off)")
+        else: self.api.log(f"Auto reply is {'ON' if self.api.get('enabled', False) else 'OFF'} (use /autoreply on|off)")
 
     def _set(self, on):
         self.api.set("enabled", on)

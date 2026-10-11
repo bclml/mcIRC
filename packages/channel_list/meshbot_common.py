@@ -162,13 +162,23 @@ def town_name(lat, lon, get=http_json):
     return f"{name[:22]} {region}".strip()
 
 
-def send_parts(api, msg, text, max_parts=3, first_delay=5000, gap=9000, label=False):      # (gap: mcIRC listens ~8 s after each message for its repeats)
-    """Answer `msg` with `text` in mesh-sized parts.  The first part waits a few seconds: answering at once collides with the repeaters
-    still repeating the question.  With label=True later parts start with the text before the first ': ' (the place: 'Hope BC: Mon 14/8C ...')
+def reply_delays_ms(api, msg=None):
+    """(ms before the first part, ms between parts): the bot's settings window ('Wait ... seconds before answering'); 5 s and 9 s by default
+    (and with an mcIRC older than 3.1)."""
+    get = getattr(api, "reply_delays", None)
+    first, gap = get(node=(msg or {}).get("node")) if get else (5.0, 9.0)
+    return int(first * 1000), int(gap * 1000)
+
+
+def send_parts(api, msg, text, max_parts=3, first_delay=None, gap=None, label=False):      # (gap: mcIRC listens ~8 s after each message for its repeats)
+    """Answer `msg` with `text` in mesh-sized parts.  The first part waits a few seconds (5 by default, the bot's settings): answering at
+    once collides with the repeaters still repeating the question.  With label=True later parts start with the text before the first ': ' (the place: 'Hope BC: Mon 14/8C ...')
     so each one makes sense on its own."""
     label = text.split(": ", 1)[0] if label and ": " in text[:34] else ""
     parts = split_message(text, limit=MAX_CHARS - (len(label) + 2 if label else 0), max_parts=max_parts)
     if label: parts = [p if not i or p.startswith(label) else f"{label}: {p}" for i, p in enumerate(parts)]
+    d_first, d_gap = reply_delays_ms(api, msg)
+    first_delay, gap = d_first if first_delay is None else first_delay, d_gap if gap is None else gap
     for i, part in enumerate(parts): api.after(first_delay + i * gap, lambda p=part: api.reply(msg, p))
     return parts
 

@@ -13,6 +13,13 @@ from gui_common import BG
 ALL = ""                     # the 'All nodes' tab: the defaults
 
 
+
+def _num(v):
+    """5.0 -> '5', 2.5 -> '2.5' (for the boxes)."""
+    try: v = float(v)
+    except (TypeError, ValueError): return str(v)
+    return str(int(v)) if v == int(v) else str(v)
+
 class AddonSettingsWindow(tk.Toplevel):
     def __init__(self, app, name, parent=None):
         super().__init__(parent or app.root, bg=BG)
@@ -88,7 +95,7 @@ class AddonSettingsWindow(tk.Toplevel):
             tk.Label(self.top, bg=BG, fg="#555", justify="left", wraplength=680, anchor="w",
                      text=f"These settings are for {who} only. What you don't change here comes from 'All nodes'.").pack(anchor="w")
             if self.api.own_settings(node): self.reset_btn.pack(side="left")
-        self.node_vars, self.private_var, self.toolbar_var = {}, None, None
+        self.node_vars, self.private_var, self.toolbar_var, self.delay_vars = {}, None, None, None
         if not node and self.extra:                             # which nodes this addon works on at all
             row = tk.Frame(self.top, bg=BG); row.pack(fill="x")
             tk.Label(row, text="Use on these nodes:", bg=BG).pack(side="left")
@@ -100,6 +107,15 @@ class AddonSettingsWindow(tk.Toplevel):
             with self._ctx(): self.private_var = tk.BooleanVar(value=bool(self.api.get("_reply_private", False)))
             tk.Checkbutton(self.top, text="Send answers by private message instead of in the channel (to whoever asked)", variable=self.private_var,
                            bg=BG, anchor="w").pack(fill="x")
+            first, gap = getattr(self.inst, "reply_delay", 5), getattr(self.inst, "part_gap", 9)
+            with self._ctx(): self.delay_vars = (tk.StringVar(value=_num(self.api.get("_reply_delay", first))), tk.StringVar(value=_num(self.api.get("_part_gap", gap))))
+            row = tk.Frame(self.top, bg=BG); row.pack(fill="x")
+            tk.Label(row, text="Wait", bg=BG).pack(side="left")
+            tk.Spinbox(row, from_=0, to=120, increment=1, width=4, textvariable=self.delay_vars[0]).pack(side="left", padx=3)
+            tk.Label(row, text="seconds before answering, then", bg=BG).pack(side="left")
+            tk.Spinbox(row, from_=3, to=120, increment=1, width=4, textvariable=self.delay_vars[1]).pack(side="left", padx=3)
+            tk.Label(row, text=f"seconds between parts of a long answer  (default {first} and {gap}: repeaters are still repeating the question "
+                               "for a few seconds)", bg=BG, fg="#555").pack(side="left")
         if not node and getattr(self.inst, "switch", None):     # its ON/OFF switch on the toolbar: shown or not
             self.toolbar_var = tk.BooleanVar(value=bool(self.api.get("_toolbar", True)))
             tk.Checkbutton(self.top, text="Show its ON/OFF switch on the toolbar", variable=self.toolbar_var, bg=BG, anchor="w").pack(fill="x")
@@ -135,6 +151,11 @@ class AddonSettingsWindow(tk.Toplevel):
         store = self.app.settings.setdefault("addons", {}).setdefault(self.name, {})
         if self.private_var is not None:
             with self._ctx(): self.api.set("_reply_private", bool(self.private_var.get()))
+        if self.delay_vars is not None:
+            for key, var, lo in (("_reply_delay", self.delay_vars[0], 0), ("_part_gap", self.delay_vars[1], 3)):
+                try: value = max(lo, min(120, float(var.get().replace(",", "."))))
+                except ValueError: continue
+                with self._ctx(): self.api.set(key, int(value) if value == int(value) else value)
         if self.node_vars: store["_nodes"] = [k for k, v in self.node_vars.items() if v.get()]
         if self.toolbar_var is not None and self.name in self.app.addons.loaded:
             store["_toolbar"] = bool(self.toolbar_var.get())

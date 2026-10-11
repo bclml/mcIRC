@@ -20,7 +20,7 @@ HOME, DEST = (49.20, -122.90), (49.25, -122.70)
 def parts(r):            # {'route': ..., 'via': ..., 'way': ..., 'start': ...} - which line is which
     out = {"all": r}
     for line in r:
-        k = "via" if line.startswith("Via:") else "start" if line.startswith("Start:") else "way" if line.startswith(("On the way", "Traffic:")) else "route"
+        k = "via" if line.startswith("Via:") else "way2" if line.startswith("More on the way") else "start" if line.startswith("Start:") else "way" if line.startswith(("On the way", "Traffic:")) else "route"
         out[k] = line
     return out
 def osrm(*routes):          # routes: (km, minutes, road, latitude of its middle point)
@@ -57,14 +57,14 @@ ok("about as quick (within 3 min): the one with fewer incidents / roadwork", r.g
 get, _ = fake(osrm((20, 25, "Hwy 1", 49.30), (30, 40, "Hwy 7", 49.10)), [ev(1, "INCIDENT", "Crash at Hwy 1.", 49.30)])
 r = parts(tr.answer(HOME, "Mall", get=get))
 ok("...but quickest first: a much slower route isn't taken for an incident - it is reported instead", r.get("via", "").startswith("Via: Hwy 1")
-   and r["way"] == "On the way: Incident Hwy 1", r)
+   and r["way"] == "On the way: Incident Hwy 1 near Surrey", r)
 get, _ = fake(osrm((20, 25, "Hwy 1", 49.30), (30, 40, "Hwy 7", 49.10)), [ev(1, "INCIDENT", "Washout at Hwy 1. Closed.", 49.30)])
 r = parts(tr.answer(HOME, "Mall", get=get))
 ok("a full closure on the quickest route: the open one, saying why", r.get("via", "").startswith("Via: Hwy 7") and "avoids 1 closure" in r["route"], r)
 get, _ = fake(osrm((20, 25, "Hwy 1", 49.30)), [ev(1, "CONSTRUCTION", "Paving at Hwy 1. Left lane closed.", 49.30, sev="MINOR"),
                                                 ev(2, "CONSTRUCTION", "Bridge work at Hwy 1.", 49.30), ev(3, "INCIDENT", "Crash far away.", 50.5)])
 r = parts(tr.answer(HOME, "Mall", get=get))
-ok("on the way: major roadwork; minor lane work and events off the route left out", r["way"] == "On the way: Roadwork Hwy 1", r)
+ok("on the way: major roadwork (where: DriveBC's cross streets, else the exit, else the town); minor lane work and events off the route left out", r["way"] == "On the way: Roadwork Hwy 1 near Surrey", r)
 get, _ = fake(osrm((20, 25, "Hwy 1", 49.30)), drivebc_error=RuntimeError("429 Too Many Requests"))
 r = parts(tr.answer(HOME, "Mall", get=get))
 ok("DriveBC busy: the route anyway, saying closures weren't checked", r.get("via", "").startswith("Via: Hwy 1") and "DriveBC didn't answer" in r["way"], r)
@@ -90,6 +90,29 @@ ok("towns without 'Township of' / 'City of' (one mesh message is short)", tr.tow
 legs = {"legs": [("Kingsway", 3.0, (49.21, -122.9)), ("Hwy 1", 9.0, (49.21, -122.85)), ("Hwy 15", 6.0, (49.24, -122.75)), ("80 Avenue", 2.0, (49.25, -122.71))]}
 via = tr.via_line(legs, get=lambda url, params=None: {"address": {"city": "Burnaby" if float(params["lat"]) < 49.22 else "Surrey"}})
 ok("'Via:' the roads in order, naming the city when the route enters another one", via == "Via: Kingsway (Burnaby) > Hwy 1 > Hwy 15 (Surrey) > 80 Avenue", via)
+many = ["CLOSED Hwy 1", "Slow Hwy 1 near Langley 8 km +7 min", "Slow Hwy 1 near Langley 3 km +2 min", "Roadwork Bridge Approach Hwy 1 (Abbotsford)",
+        "Roadwork Hwy 1 (Chilliwack)"]
+w = tr.way_lines(many)
+ok("a long 'On the way': whole items over two messages, none cut off", len(w) == 2 and w[1].startswith("More on the way: ") and all(len(x) <= 115 for x in w)
+   and sum(x.count("; ") + 1 for x in w) == 5 and not any(x.endswith("...") for x in w), w)
+w = tr.way_lines([f"Roadwork Hwy 1 Exit {n} to Exit {n + 2}" for n in range(12)], " (from the last DriveBC check)")
+ok("...all of it listed, over as many messages as it takes (none counted away), the note kept", sum(x.count("; ") + 1 for x in w) == 12
+   and "more" not in w[-1].replace("More on the way", "") and w[-1].endswith("(from the last DriveBC check)") and all(len(x) <= 115 for x in w), w)
+w = tr.way_lines([f"Roadwork Hwy 1 Exit {n} to Exit {n + 2}" for n in range(60)])
+ok("...past 8 messages, the rest is counted", len(w) == 8 and w[-1].endswith("more") and all(len(x) <= 115 for x in w), w[-1])
+ok("DriveBC's cross streets: 'from X to Y' / 'at X', the town and the road itself left out", [tr.cross_streets(d, r) for d, r in (
+   ("Utility work from Highway 11, In Abbotsford and At Hazelwood Avenue to In Abbotsford and At Valley Road. Starting Thu", "Highway 11"),
+   ("Utility work from Highway 7, In Maple Ridge and Jim Robson Way to In Maple Ridge and 240th Street. Starting", "Highway 7"),
+   ("Construction work at Highway 15, In Surrey and At Fraser Hwy. Starting Fri", "Highway 15"),
+   ("Washout at Silver Skagit Road, In Hope. Last update", "Silver Skagit Road"), ("Bridge maintenance. Starting Thu", "Highway 91A"))]
+   == ["Hazelwood Ave to Valley Rd", "Jim Robson Way to 240th St", "at Fraser Hwy", "", ""])
+e = tr.drivebc_events([HOME, DEST], get=lambda *a, **k: {"events": [
+    {"id": "b", "event_type": "CONSTRUCTION", "severity": "MAJOR", "description": "Bridge construction. Starting Mon Mar 9.", "roads": [{"name": "Other Roads", "from": "Mt Lehman Road"}],
+     "geography": {"type": "Point", "coordinates": [-122.8, 49.3]}},
+    {"id": "u", "event_type": "CONSTRUCTION", "severity": "MAJOR", "description": "Paving from Highway 1, In Langley and At 200 Street to In Langley and At 232 Street. Starting",
+     "roads": [{"name": "Highway 1"}], "geography": {"type": "Point", "coordinates": [-122.8, 49.3]}}]})
+ok("...'Other Roads': the street from its own field ('Mt Lehman Rd', not 'Bridge construction')", [short_ := tr.short_street(x["road"]) for x in e][0] == "Mt Lehman Rd"
+   and e[1]["at"] == "200 St to 232 St", e)
 ok("every message fits one mesh message (115 characters)", all(len(p) <= 115 for p in tr.answer(HOME, "Mall", get=fake(osrm(
    (20, 25, "A very long road name number one", 49.3)))[0], origin_age=None)))
 
@@ -116,6 +139,29 @@ g, _ = with_tomtom(fake(osrm((20, 25, "Hwy 1", 49.30), (22, 27, "Hwy 7", 49.10))
 r = parts(tr.answer(HOME, "Mall", get=g, tomtom_key="k3y"))
 ok("...a jam that makes the usual route slower: the quicker one now, saying why", r.get("via", "").startswith("Via: Hwy 7")
    and r["route"] == "Route to Mall, Burnaby: 22 km, ~27 min (avoids slow traffic)", r)
+# where on a long highway: the nearest freeway exit (OpenStreetMap), else the town
+EXITS = {"elements": [{"type": "node", "lat": 49.251, "lon": -122.851, "tags": {"ref": "58"}},
+                      {"type": "way", "tags": {"destination": "200 Street North;Langley", "destination:ref": "1 West"}},
+                      {"type": "way", "tags": {"destination": "Hwy 1 East;Hope"}},
+                      {"type": "node", "lat": 49.301, "lon": -122.801, "tags": {"ref": "66"}},
+                      {"type": "way", "tags": {"destination": "HOV 232 St;Fort Langley"}}]}
+def with_exits(get, answer=EXITS):
+    def g(url, params=None):
+        if "overpass" in url:
+            if isinstance(answer, Exception): raise answer
+            return answer
+        return get(url, params)
+    return g
+tr._exits.pop("_test", None)
+g, _ = with_tomtom(fake(osrm((20, 25, "Hwy 1", 49.30)), events=[ev(1, "CONSTRUCTION", "Highway 1. Bridge work.", 49.30)])[0], tomtom(300))
+r = parts(tr.answer(HOME, "Mall", get=with_exits(g), tomtom_key="k3y"))
+ok("on a freeway: slow traffic from the nearest exit, with the street it leads to", "Slow Hwy 1 from exit 58 (200 St) 11 km +5 min" in r["way"], r)
+ok("...DriveBC's roadwork too ('HOV' and directions left out)", "Roadwork Hwy 1 exit 66 (232 St)" in r["way"], r)
+ok("...never the highway itself as the cross street", tr.exit_label(("171", ["Hwy 1"]), "Hwy 1") == "exit 171" and tr.exit_label(("", ["Fraser Hwy"]), "Hwy 1") == "at Fraser Hwy")
+tr._exits.pop("_test", None)
+r = parts(tr.answer(HOME, "Mall", get=with_exits(g, OSError("504")), tomtom_key="k3y"))
+ok("...exits not available (servers busy): the town instead", "Slow Hwy 1 near Surrey" in r["way"] and "Roadwork Hwy 1" in r["way"], r)
+tr._exits.pop("_test", None)
 two = tomtom(300); two["routes"].append(dict(two["routes"][0], sections=[dict(two["routes"][0]["sections"][0], startPointIndex=2, delayInSeconds=240)]))
 g, _ = with_tomtom(fake(osrm((20, 25, "Hwy 1", 49.30)))[0], two)
 r = parts(tr.answer(HOME, "Mall", get=g, tomtom_key="k3y"))

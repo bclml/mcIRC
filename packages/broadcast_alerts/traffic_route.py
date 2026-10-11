@@ -22,6 +22,12 @@ _HWY = re.compile(r"^(?:(?:TCH|TC|BC|AB|SK|MB|ON|QC|NB|NS|PE|PEI|NL|YT|NT|NU|Hig
 _TOWN_PREFIX = re.compile(r"^(?:The )?(?:Corporation of the )?(?:Township|City|District|Village|Town|Municipality|Resort Municipality) of (?:the )?", re.I)
 OSRM = "https://router.project-osrm.org/route/v1/driving/{lon1},{lat1};{lon2},{lat2}"
 DRIVEBC = "https://api.open511.gov.bc.ca/events"
+OVERPASS = ("https://overpass-api.de/api/interpreter", "https://overpass.kumi.systems/api/interpreter")   # OpenStreetMap's freeway
+                                # exits (where on a long highway something is): the next server when one is busy
+EXIT_M = 2500                   # the nearest exit this close names the spot ('exit 66 (232 St)')
+_STREET = re.compile(r"\b(?:Street|St|Avenue|Ave|Road|Rd|Highway|Hwy|Way|Drive|Dr|Boulevard|Blvd|Parkway|Pkwy|Bridge)\b|^\d+[A-Z]? ", re.I)
+_SHORT = (("Street", "St"), ("Avenue", "Ave"), ("Road", "Rd"), ("Highway", "Hwy"), ("Boulevard", "Blvd"), ("Parkway", "Pkwy"), ("Drive", "Dr"))
+_exits = {}                     # (lat, lon) rounded -> (exit number, [streets its ramps lead to]) / None (the exits don't move)
 TOMTOM = "https://api.tomtom.com/routing/1/calculateRoute/{lat1:.5f},{lon1:.5f}:{lat2:.5f},{lon2:.5f}/json"
 JAM_MIN_S = 60                  # slow traffic that costs less than this isn't worth a mention
 MAX_JAMS = 3                    # jams named in an answer (each needs a town lookup)
@@ -34,14 +40,14 @@ _lock, _last = threading.Lock(), [0.0]
 _cache = {}                     # DriveBC's answer for a minute (it limits how often it is asked)
 
 
-def _get(url, params=None):
+def _get(url, params=None, timeout=20):
     import requests
     if "nominatim" in url:                       # Nominatim's rule: at most one request a second
         with _lock:
             wait = 1.1 - (time.time() - _last[0])
             if wait > 0: time.sleep(wait)
             _last[0] = time.time()
-    r = requests.get(url, params=params, headers=UA, timeout=20)
+    r = requests.get(url, params=params, headers=UA, timeout=timeout)
     r.raise_for_status()
     return r.json()
 
@@ -157,6 +163,31 @@ def _on_now(schedule, now):
     return any(i.partition("/")[0][:16] <= stamp and (not i.partition("/")[2] or stamp <= i.partition("/")[2][:16]) for i in iv)
 
 
+def short_street(name):
+    """'240th Street' -> '240th St', 'Fraser Highway' -> 'Fraser Hwy', 'Highway 1' -> 'Hwy 1'."""
+    n = hwy(re.sub(r"\s+", " ", name or "").strip(" .,"))
+    for long, short in _SHORT: n = re.sub(rf"\b{long}\b", short, n)
+    return n
+
+
+def cross_streets(desc, road=""):
+    """Where on the road, from DriveBC's description: 'Utility work from Highway 11, In Abbotsford and At Hazelwood Avenue to In Abbotsford
+    and At Valley Road.' -> 'Hazelwood Ave to Valley Rd'; '... at Highway 15, In Surrey and At Fraser Hwy.' -> 'at Fraser Hwy'; '' when it
+    doesn't say (or only names the town)."""
+    first = re.split(r"\.\s", (desc or "").strip() + " ", maxsplit=1)[0]
+    m = re.search(r"\b(?:from|at) [^,]+, (.+)$", first, re.I)
+    if not m: return ""
+    def spot(part):
+        part = re.sub(r"(?i)^In [^,]+? and ", "", part.strip()) if re.match(r"(?i)^In .+ and ", part.strip()) else \
+            "" if re.match(r"(?i)^In ", part.strip()) else part.strip()
+        part = re.sub(r"(?i),\s*In\s.*$", "", part)                # ('Hwy 13, In Langley - District': the town again)
+        part = short_street(re.sub(r"(?i)^At ", "", part)).replace(" and ", " & ")
+        return "" if not part or part.lower() == short_street(road).lower() else part[:28]
+    ends = [x for x in (spot(p) for p in re.split(r"(?i)\s+to\s+", m.group(1), maxsplit=1)) if x]
+    if len(ends) == 2 and ends[0] != ends[1]: return f"{ends[0]} to {ends[1]}"
+    return f"at {ends[0]}" if ends else ""
+
+
 def drivebc_events(coords, get=None, now=None):
     """DriveBC's events (on now) in the box around the route: [{'id', 'what', 'road', 'points'}]."""
     la = [c[0] for c in coords]; lo = [c[1] for c in coords]
@@ -177,9 +208,12 @@ def drivebc_events(coords, get=None, now=None):
         g = e.get("geography") or {}
         pts = [g["coordinates"]] if g.get("type") == "Point" else g.get("coordinates") or []
         if g.get("type") == "MultiLineString": pts = [p for line in pts for p in line]
-        road = next((r.get("name") for r in e.get("roads", []) if r.get("name") and r.get("name") != "Other Roads"), "")
+        roads = e.get("roads") or [{}]
+        road = next((r.get("name") for r in roads if r.get("name") and r.get("name") != "Other Roads"), "")
+        if not road: road = (roads[0].get("from") or "").strip()       # 'Other Roads': the street itself is in 'from' ('Mt Lehman Road')
         place = re.sub(r"^[^,]*? (?:at|from) ", "", desc.split(".")[0])[:40]
-        out.append({"id": e.get("id"), "what": what, "road": road, "place": place, "points": [(p[1], p[0]) for p in pts if len(p) >= 2]})
+        out.append({"id": e.get("id"), "what": what, "road": road, "place": place, "at": cross_streets(desc, road),
+                    "points": [(p[1], p[0]) for p in pts if len(p) >= 2]})
     return out
 
 
@@ -228,6 +262,7 @@ def on_route(route, events):
 
 
 MAX_CHARS = 115                 # one mesh message
+MAX_WAY = 8                     # messages for what is on the way (closures, incidents, slow traffic, roadwork): all of it, within reason
 
 
 def ago(seconds):
@@ -256,10 +291,59 @@ def answer(origin, query, get=None, now=None, known=None, origin_age=None, tomto
     return [_fit(p) for p in parts]
 
 
-def _jam_text(j, get=None):
-    """'Slow Hwy 1 near Burnaby 4 km +6 min'."""
-    town = town_at(j["points"][0], get) if j["points"] else ""
-    where = " ".join(x for x in (j["road"], f"near {town}" if town else "") if x)
+def _spot(p): return (round(p[0], 3), round(p[1], 3))
+
+
+def _exit_street(tags):
+    """The streets an exit ramp leads to ('232 St', 'Fraser Hwy'), from its signs (not the towns on them)."""
+    for d in (tags.get("destination:street", "") + ";" + tags.get("destination", "")).split(";"):
+        d = d.strip()
+        if d and _STREET.search(d):
+            d = re.sub(r"(?i)\s+(?:North|South|East|West|[NSEW])$", "", re.sub(r"(?i)^HOV\s+", "", d))
+            for long, short in _SHORT: d = re.sub(rf"\b{long}\b", short, d)
+            yield hwy(d)[:20]
+
+
+def exits_near(points, get=None):
+    """{spot: (exit number, [streets])} - the nearest freeway exit (OpenStreetMap) within EXIT_M of each point, in one lookup; points
+    with none (not a freeway) are left out.  Raises when no server answers."""
+    table = _exits if get is None else _exits.setdefault("_test", {})
+    want = [p for p in dict.fromkeys(_spot(p) for p in points) if p not in table][:10]
+    if want:
+        q = ("[out:json][timeout:20];(" + "".join(f"node(around:{EXIT_M},{a},{o})[highway=motorway_junction];" for a, o in want)
+             + ")->.j;foreach.j->.n(.n out;way(bn.n)[highway=motorway_link];out tags;);")
+        data, err = None, None
+        for url in OVERPASS * 2:                    # (public servers: often busy for a moment - each one twice)
+            try: data = get(url, {"data": q}) if get else _get(url, {"data": q}, timeout=12); break
+            except Exception as e: err = e
+        if data is None: raise err
+        cur, found = None, []
+        for e in data.get("elements", []):
+            if e.get("type") == "node":
+                cur = {"p": (e["lat"], e["lon"]), "ref": (e.get("tags", {}).get("ref") or "").split(";")[0].strip(), "streets": []}
+                found.append(cur)
+            elif cur is not None:
+                cur["streets"] += [st for st in _exit_street(e.get("tags", {})) if st not in cur["streets"]]
+        for p in want:
+            near = [j for j in found if _metres(p, j["p"]) <= EXIT_M and (j["ref"] or j["streets"])]
+            j = min(near, key=lambda j: _metres(p, j["p"])) if near else None
+            table[p] = (j["ref"], j["streets"]) if j else None
+    return {p: table[p] for p in (_spot(p) for p in points) if table.get(p)}
+
+
+def exit_label(info, road=""):
+    """'exit 66 (232 St)' / 'exit 66' / 'at 232 St' - never the highway itself as the cross street."""
+    if not info: return ""
+    ref, streets = info
+    st = next((x for x in streets if x.lower() != (road or "").lower()), "")
+    return f"exit {ref} ({st})" if ref and st else f"exit {ref}" if ref else f"at {st}" if st else ""
+
+
+def _jam_text(j, get=None, exits=None):
+    """'Slow Hwy 1 from exit 58 (200 St) 8 km +6 min' on a freeway, else 'Slow Hwy 1 near Burnaby 4 km +6 min'."""
+    at = exit_label((exits or {}).get(_spot(j["points"][0])), j["road"]) if j["points"] else ""
+    town = "" if at else town_at(j["points"][0], get) if j["points"] else ""
+    where = " ".join(x for x in (j["road"], f"from {at}" if at else f"near {town}" if town else "") if x)
     size = f" {j['km']:.0f} km" if j["km"] >= 1 else ""
     return f"{j['what']} {where}{size} +{max(1, round(j['delay'] / 60))} min".replace("  ", " ")
 
@@ -318,18 +402,44 @@ def _answer(origin, query, get=None, now=None, known=None, tomtom_key=""):
     if via: first = [first, via]
     head = first if isinstance(first, list) else [first]
     no_live = " TomTom didn't answer - times without congestion." if tt_down else "" if live is not None else " Times are without congestion."
-    jams = [_jam_text(j, get) for j in sorted(best["jams"], key=lambda j: -j["delay"])[:MAX_JAMS]]
+    top = sorted(best["jams"], key=lambda j: -j["delay"])[:MAX_JAMS]
+    spots = [e["points"][0] for e in best["events"] if e.get("points")] + [j["points"][0] for j in top if j["points"]]
+    try: exits = exits_near(spots, get) if spots else {}
+    except Exception: exits = {}                        # (OpenStreetMap busy: the towns / DriveBC's places instead)
+    jams = [_jam_text(j, get, exits) for j in top]
     if not bc and live is None:
         return head + ["Traffic: no live closures here (DriveBC covers British Columbia)." + no_live]
     if busy and not jams: return head + ["Traffic: DriveBC didn't answer just now - closures not checked. Try again in a minute."]
     ev = best["events"]
     src = " (from the last DriveBC check)" if stale else " (DriveBC not answering: closures not checked)" if busy else ""
     order = ("CLOSED", "Incident", "Roadwork")
-    items = [f"{e['what']} {hwy(e['road']) or e['place']}".strip() for e in sorted(ev, key=lambda e: order.index(e["what"]))]
+    def at(e):                                       # DriveBC's cross streets, else the nearest freeway exit, else the town
+        if e.get("at"): return e["at"]
+        if not e.get("points"): return ""
+        return exit_label(exits.get(_spot(e["points"][0])), short_street(e["road"])) or ("" if "(" in e["road"] else (lambda t: f"near {t}" if t else "")(town_at(e["points"][0], get)))
+    items = [" ".join(x for x in (e["what"], short_street(e["road"]) or e["place"], at(e)) if x)
+             for e in sorted(ev, key=lambda e: order.index(e["what"]))]
+    items = list(dict.fromkeys(items))               # (the same thing reported twice: once)
     items = [x for x in items if x.startswith(order[:2])] + jams + [x for x in items if x.startswith("Roadwork")]
     if not items:
         what = "no closures, incidents, roadwork or slow traffic" if live is not None else "no closures, incidents or roadwork"
         by = " (DriveBC, TomTom)" if bc and live is not None else " (TomTom)" if live is not None else " (DriveBC)"
         return head + [f"On the way: {what} reported{src or by}.{no_live}"]
-    more = f" +{len(items) - 4} more" if len(items) > 4 else ""
-    return head + ["On the way: " + "; ".join(items[:4]) + more + src + (no_live if tt_down else "")]
+    return head + way_lines(items, src + (no_live if tt_down else ""))
+
+
+def way_lines(items, tail=""):
+    """'On the way: a; b; c' then 'More on the way: d; e' - every item whole, in at most MAX_WAY messages; only what doesn't fit even
+    then is counted ('+2 more').  tail: a note for the end ('(from the last DriveBC check)')."""
+    label = lambda i: "On the way: " if i == 0 else "More on the way: "
+    groups = [[]]
+    for item in items:
+        if groups[-1] and len(label(len(groups) - 1) + "; ".join(groups[-1] + [item])) > MAX_CHARS:
+            if len(groups) == MAX_WAY: break
+            groups.append([])
+        groups[-1].append(item)
+    extra = lambda: (f" +{len(items) - sum(map(len, groups))} more" if sum(map(len, groups)) < len(items) else "") + tail
+    while len(label(len(groups) - 1) + "; ".join(groups[-1]) + extra()) > MAX_CHARS and len(groups[-1]) > 1:
+        if len(groups) < MAX_WAY: groups.append([groups[-1].pop()])      # room for the note: the last item to a new message
+        else: groups[-1].pop()                                          # no more messages: it is counted instead
+    return [label(i) + "; ".join(g) + (extra() if i == len(groups) - 1 else "") for i, g in enumerate(groups) if g]

@@ -119,3 +119,39 @@ def hacker(rng=random):
             while key in out: out = out.replace(key, pick(pool), 1)
         out = out[0].upper() + out[1:]
         if len(out) <= 110: return out
+
+
+# ---- more of each (1.1.0): the Magic 8-Ball's own sayings and more hacker jargon - so answers repeat far less often ----
+MAGIC8 += [
+    "Absolutely - I'd bet my last battery on it.", "Yes, and the repeaters agree.", "The signal is strong: yes.", "All signs say go for it.",
+    "Count on it.", "No doubt about it.", "Yes - loud and clear.", "Odds are in your favour.", "The mesh has spoken: yes.", "Yes, eventually.",
+    "Definitely, but not today.", "Looks promising.", "I'd say yes, but don't quote me.", "Probably - keep your antenna up.",
+    "Too much noise on the channel - ask again.", "The packet got lost. Try again.", "Static. Ask me later.", "My crystal ball needs a reboot.",
+    "Out of range - try again from higher ground.", "Hmm. Ask the repeater on the hill.", "The answer is still in flight - ask again.",
+    "Can't say. My battery is low.", "No.", "Nope.", "Not a chance.", "Very unlikely.", "The mesh says no.", "Signal says no.",
+    "Doubtful - the hops don't line up.", "No, and don't ask twice.", "I wouldn't count on it.", "Not in this lifetime.",
+    "Outlook: foggy, with a chance of no.", "My antenna says no.", "No - even the repeaters went quiet.", "Maybe. Maybe not.",
+    "Flip a coin; I'm off duty.", "50/50 - roll the dice instead.", "Ask yourself what the dice would say.", "The stars are on airplane mode.",
+]
+_ADJ += ["encrypted", "quantum", "multi-hop", "low-power", "high-gain", "off-grid", "dual-band", "self-healing", "zero-day", "legacy",
+         "experimental", "overclocked", "sub-GHz", "parallel", "binary", "holographic", "cloud-native", "air-gapped", "modular", "rogue"]
+_ABBR += ["GPS", "BLE", "MQTT", "API", "DNS", "VPN", "CPU", "GPU", "OTA", "UART", "SPI", "I2C", "JSON", "AES", "NFC", "RF", "LED", "DHCP"]
+_NOUN += ["node", "mainframe", "kernel", "packet", "router", "gateway", "beacon", "cache", "relay", "uplink", "socket", "bootloader",
+          "firmware", "payload", "handshake", "checksum", "frequency", "spectrum", "server", "buffer", "decoder", "satellite", "grid", "cluster"]
+_VERB += ["reroute", "encrypt", "decrypt", "ping", "patch", "spoof", "boost", "tune", "sync", "decode", "jailbreak", "recompile", "mirror", "jam"]
+_ING += ["rerouting", "encrypting", "decrypting", "pinging", "patching", "spoofing", "boosting", "tuning", "syncing", "decoding", "recompiling",
+         "mirroring"]
+_TEMPLATES += [
+    "Quick, {verb} the {abbr} {noun} before the {adj} {noun} goes offline!",
+    "The {adj} {noun} is overheating - {verb} the {abbr} {noun} now!",
+    "They're {ing} our {abbr} {noun}! {verb} the {adj} {noun}!",
+    "I'm in. Just need to {verb} the {adj} {abbr} {noun}.",
+    "Somebody is {ing} the {noun} from inside the {adj} {abbr} {noun}!",
+    "{verb} the {noun}? We'd have to {verb} the {adj} {abbr} {noun} first!",
+    "The {abbr} {noun} keeps {ing} - try the {adj} {noun} instead.",
+    "Enhance! Now {verb} the {adj} {abbr} {noun}.",
+    "We have 30 seconds to {verb} the {adj} {noun} or the {abbr} {noun} melts!",
+    "Forget the {noun}, {ing} the {adj} {abbr} {noun} is our only hope!",
+    "If the {abbr} {noun} won't {verb}, reroute it through the {adj} {noun}!",
+    "Run a {adj} {abbr} scan, then {verb} every {noun} on the {noun}!",
+]

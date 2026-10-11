@@ -32,7 +32,7 @@ class Addon(AddonBase):
     SOURCES = [k for k in ea.TX_SOURCES if k != "Test reply"]   # alert types with a switch on the Alerts tab
     title = "Traffic, transit and weather"
     replies = True                         # ('route' answers people: the settings window offers the answer wait)
-    version = "1.6.2"
+    version = "1.6.3"
     author = "built in"
     description = ("Traffic / ferry / transit / weather / earthquake / tsunami alerts. Keeps the map's DriveBC and earthquake layers up to date; "
                    "broadcasting them to the mesh is OFF until you switch it on.")
@@ -91,7 +91,7 @@ class Addon(AddonBase):
                 r = ["Couldn't work out the route just now - please try again in a minute."]
             get = getattr(self.api, "reply_delays", None)
             first, gap = get(node=msg.get("node")) if get else (5.0, 9.0)
-            for i, part in enumerate(r[:4]):
+            for i, part in enumerate(r[:12]):         # route, via, everything on the way, start
                 self.api.after(int((first + i * gap) * 1000), lambda p=part: self.api.reply(msg, p, private=True))
         self.api.run_background(work, done)
 

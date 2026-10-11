@@ -7,16 +7,17 @@ import tkinter as tk
 
 from gui_addons import AddonBase
 import funbot_data as data
+import funbot_online as online
 import meshbot_common as mc
 
 COMMANDS = {
     "dice": "roll dice: dice d20, dice 3d6",
     "roll": "a number: roll (1-100), roll 50, roll 2d8",
     "magic8": "ask the Magic 8-Ball a yes/no question",
-    "joke": "a random joke",
-    "dadjoke": "a clean, corny dad joke",
+    "joke": "a random joke (over 1,700)",
+    "dadjoke": "a clean, corny dad joke (over 700)",
     "hacker": "movie-style hacker jargon",
-    "catfact": "a fact about cats",
+    "catfact": "a fact about cats (over 400)",
     "wc": "World Cup: wc (latest scores), wc A (group A table)",
 }
 DICE = re.compile(r"^(\d{0,2})d(\d{1,4})$", re.IGNORECASE)
@@ -66,15 +67,17 @@ def world_cup(arg, get=mc.http_json):
 class Addon(AddonBase):
     title = "Fun bot"
     command_words = list(COMMANDS)          # (the settings window's 'Command names...': other names for each command)
-    version = "1.0.10"
+    version = "1.1.0"
     author = "mcIRC"
     description = ("dice, roll, magic8, joke, dadjoke, hacker, catfact and wc (World Cup scores and tables) - each switched on for the channels you "
-                   "choose. Off until you switch it on.")
+                   "choose. Thousands of jokes and cat facts from free online collections, not repeated for a long while. Off until you switch it on.")
     tick_seconds = 0
     switch = "enabled"           # its ON/OFF switch on the toolbar
 
     def on_load(self):
         self.limiter = mc.Limiter(per_user=int(self.api.get("cooldown", 20)), gap=5)
+        self.teller = online.Teller(self.api.get("told", {}))         # jokes / facts told lately: not again for a long while
+        self.recent = []                                              # (Magic 8-Ball: not the same answer twice in a while)
         if hasattr(self.api, "add_bot_commands"): self.api.add_bot_commands(self.help_for)      # (mcIRC 1.5.2 and later)
 
     USAGE = {"dice": "dice 3d6", "magic8": "magic8 <question>", "wc": "wc [group]"}
@@ -104,6 +107,7 @@ class Addon(AddonBase):
             return
         if not self.limiter.allow(msg.get("nick", "?")): return
         if cmd == "wc": self.api.run_background(lambda: world_cup(arg), lambda r: self.send(msg, cmd, r))
+        elif cmd in online.SOURCES: self.api.run_background(lambda: self.tell(cmd), lambda r: self.send(msg, cmd, r))
         else:
             try: self.send(msg, cmd, self.answer(cmd, arg))
             except ValueError as e: self.send(msg, cmd, e)
@@ -111,12 +115,19 @@ class Addon(AddonBase):
     def answer(self, cmd, arg):
         if cmd == "dice": return roll_dice(arg or "d6")
         if cmd == "roll": return roll(arg)
-        if cmd == "magic8": return "\U0001F3B1 " + random.choice(data.MAGIC8)
-        if cmd == "joke": return random.choice(data.JOKES)
-        if cmd == "dadjoke": return random.choice(data.DADJOKES)
+        if cmd == "magic8":
+            said = random.choice([a for a in data.MAGIC8 if a not in self.recent] or data.MAGIC8)
+            self.recent = (self.recent + [said])[-len(data.MAGIC8) // 2:]
+            return "\U0001F3B1 " + said
         if cmd == "hacker": return data.hacker()
-        if cmd == "catfact": return "\U0001F431 " + random.choice(data.CATFACTS)
+        if cmd in online.SOURCES: return self.tell(cmd)
         raise ValueError("unknown command")
+
+    def tell(self, cmd):
+        """A joke / dad joke / cat fact not told lately: from the online collections (switch in its settings), else the built-in ones."""
+        text = self.teller.next(cmd, online=self.api.get("online", True))
+        self.api.set("told", self.teller.told)
+        return ("\U0001F431 " if cmd == "catfact" else "") + text
 
     def send(self, msg, cmd, result):
         if isinstance(result, ValueError): text = f"{cmd}: {result}"
@@ -156,6 +167,11 @@ class Addon(AddonBase):
             tk.Label(r, text=label, bg=bg).pack(side="left")
             tk.Entry(r, textvariable=var, width=width).pack(side="left", padx=4)
         tk.Checkbutton(f, text="Also answer private messages (for the commands that are on somewhere)", variable=self.v_dm, bg=bg).pack(anchor="w")
+        self.v_online = tk.BooleanVar(value=self.api.get("online", True))
+        tk.Checkbutton(f, text="Jokes, dad jokes and cat facts from free online collections (thousands; off: the few dozen built in)",
+                       variable=self.v_online, bg=bg).pack(anchor="w")
+        tk.Label(f, text="Clean ones only (JokeAPI safe mode, icanhazdadjoke, catfact.ninja, meowfacts, Official Joke API), and the same one "
+                         "isn't told again for a long while.", bg=bg, fg="#555", wraplength=520, justify="left").pack(anchor="w", padx=20)
         return f
 
     def _same_for_all(self):
@@ -166,6 +182,7 @@ class Addon(AddonBase):
     def apply_options(self):
         self.api.set("enabled", self.v_on.get())
         self.api.set("answer_dm", self.v_dm.get())
+        self.api.set("online", self.v_online.get())
         self.api.set("prefix", self.v_prefix.get().strip())
         try: cool = max(5, int(self.v_cool.get()))
         except ValueError: cool = 20

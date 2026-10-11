@@ -1,12 +1,13 @@
 {
   "name": "fun_bot",
   "title": "Fun bot",
-  "version": "1.0.10",
-  "description": "dice, roll, magic8, joke, dadjoke, hacker, catfact and wc (World Cup scores and tables) - each switched on for the channels you choose. Off until you switch it on.",
+  "version": "1.1.0",
+  "description": "dice, roll, magic8 (60 answers), joke (1,700+), dadjoke (700+), hacker, catfact (400+) and wc (World Cup scores and tables) - each switched on for the channels you choose. Jokes and cat facts come from free online collections (clean ones only; the built-in ones offline) and aren't repeated for a long while. Off until you switch it on.",
   "requires": [],
   "files": {
     "fun_bot.py": "addons/fun_bot.py",
     "funbot_data.py": "funbot_data.py",
+    "funbot_online.py": "funbot_online.py",
     "meshbot_common.py": "meshbot_common.py"
   }
 }

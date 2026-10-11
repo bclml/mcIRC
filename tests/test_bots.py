@@ -177,8 +177,39 @@ sent.clear(); fun.on_message(msg("dice 3d6", ch="#bot-van"))
 ok("dice 3d6 in a channel where dice is on", sent and sent[0][0] == "#bot-van" and "3d6:" in sent[0][1], sent)
 sent.clear(); fun.on_message(msg("dice 3d6", ch="#weather"))
 ok("...and not where it is off", sent == [])
+fapi.set("online", False)                  # (tests never go online: the built-in jokes)
 sent.clear(); fun.on_message(msg("joke", ch="Public"))
 ok("'all' means every channel", sent and sent[0][1] in __import__("funbot_data").JOKES)
+# ---- jokes, dad jokes and cat facts from the online collections: clean ones, not repeated, the built-in ones when offline
+import funbot_online as fo, funbot_data as fdata
+JOKES_ON = {"jokeapi": {"jokes": [{"type": "twopart", "setup": "Why did the node blush?", "delivery": "It saw the repeater's config."},
+                                  {"type": "single", "joke": "I'd tell a UDP joke, but you might not get it."},
+                                  {"type": "single", "joke": "A joke about beer that should never go out."}]},
+            "official": [{"setup": "What do you call a fake noodle?", "punchline": "An impasta."}]}
+asked = []
+def fun_get(url, params=None, headers=None):
+    asked.append(url)
+    if "jokeapi" in url: return JOKES_ON["jokeapi"]
+    if "official-joke" in url: return JOKES_ON["official"]
+    if "icanhazdadjoke" in url: return {"results": [{"joke": f"Dad joke number {i}."} for i in range(30)]}
+    if "catfact.ninja" in url: return {"data": [{"fact": "Cats have whiskers."}, {"fact": "A form of AIDS exists in cats."}]}
+    if "meowfacts" in url: return {"data": ["Cats purr at 25 Hz."]}
+    raise OSError("offline")
+t = fo.Teller(get=fun_get)
+told = [t.next("joke") for _ in range(3)]
+ok("online jokes: setup - punchline in one line, every one different", len(set(told)) == 3 and "Why did the node blush? - It saw the repeater's config." in told
+   + [t.next("joke")], told)
+ok("...nothing with words that never go out (beer), nor grim cat facts", not any("beer" in x for x in told + [t.next("joke") for _ in range(3)])
+   and all("AIDS" not in t.next("catfact") for _ in range(6)))
+ok("...dad jokes in batches: one lookup for many answers", len({t.next("dadjoke") for _ in range(10)}) == 10 and sum("icanhazdadjoke" in u for u in asked) == 1)
+t2 = fo.Teller({"dadjoke": list(t.told["dadjoke"])}, get=fun_get)
+ok("...what was told lately isn't told again, also after a restart (kept in its settings)", all(fo.tag(t2.next("dadjoke")) not in t.told["dadjoke"] for _ in range(10)))
+t3 = fo.Teller(get=lambda *a, **k: (_ for _ in ()).throw(OSError("offline")))
+ok("...offline: the built-in ones", t3.next("catfact") in fdata.CATFACTS and t3.next("joke", online=False) in fdata.JOKES)
+ok("...too long for two mesh messages: left out", fo.clean("x" * 300) is None and fo.clean("Short one.") == "Short one.")
+fun.recent = []
+eights = [fun.answer("magic8", "") for _ in range(len(fdata.MAGIC8) // 2)]
+ok("Magic 8-Ball: 60 answers, none twice in a row of 30", len(fdata.MAGIC8) >= 60 and len(set(eights)) == len(eights))
 sent.clear(); fun.on_message(msg("catfact", ch="#bot-van"))
 ok("commands with no channels are off", sent == [])
 ok("dice d20 gives one roll", fmod.roll_dice("d20", random.Random(1)).startswith("\U0001F3B2 1d20: "))

@@ -97,8 +97,9 @@ Write your own: copy `addons/_example_addon.py`, edit, Reload - see **[docs/ADDO
 
 Ideas and bug reports are very welcome - you don't need to write code:
 
+- **Something broken or not working? Always a bug report:** Help > Report a bug... in the app, or a [Bug report](../../issues/new?template=bug_report.yml). Bugs are fixed from reports - please don't post them in Discussions, where they can be missed.
 - **Suggest an idea:** Help > Suggest an idea... in the app, or open an [Idea / suggestion](../../issues/new?template=idea.yml) issue.
-- **Report a bug:** Help > Report a bug..., or a [Bug report](../../issues/new?template=bug_report.yml).
+- **Questions, ideas to talk over, show your setup:** [Discussions](../../discussions) - Q&A, Ideas, Show and tell.
 - **Share an addon:** build it (see [docs/ADDONS.md](docs/ADDONS.md)), then open an [Addon submission](../../issues/new?template=addon_submission.yml) or a pull request. Submitted addons are tested; the ones that pass are added to the catalog everyone can browse and download in the app.
 - **Contribute code or docs:** see [CONTRIBUTING.md](CONTRIBUTING.md).
 

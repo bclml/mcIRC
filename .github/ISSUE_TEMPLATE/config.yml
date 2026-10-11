@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Question or how-to
+    url: https://github.com/bclml/mcIRC/discussions/categories/q-a
+    about: Ask how to do something (setup, radios, addons). Something broken? Report a bug instead - bugs are fixed from reports.
+  - name: Talk over an idea / show your setup
+    url: https://github.com/bclml/mcIRC/discussions
+    about: Discussions - ideas to discuss, show and tell. For a concrete suggestion use "Idea / suggestion" above.

@@ -27,6 +27,20 @@ ok("...not hex: refused", bad)
 ok("path names each hop from node memory (repeaters only; several: the newest + how many more)",
    cmds.path_text(NODES, ["A1", "B2", "C9"]) == "Path: A1: Hilltop (or 1 more) > B2: Ridge > C9: Unknown", cmds.path_text(NODES, ["A1", "B2", "C9"]))
 ok("...2-byte hops narrow it down", cmds.path_text(NODES, ["A1C3"]) == "Path: A1C3: Harbour")
+_spec = importlib.util.spec_from_file_location("t_mc_names", os.path.join("packages", "mesh_bot", "meshbot_common.py"))
+_mc = importlib.util.module_from_spec(_spec); _spec.loader.exec_module(_mc)
+# command names: other words for a command ('p' for 'path'), or only those
+class _Api:
+    def __init__(self, names): self.s = {"_names": names}
+    def get(self, k, d=None): return self.s.get(k, d)
+names = _mc.command_names(_Api({"path": {"also": ["P", "!route"], "only": False}}), ["path", "ping"], {"pg": "ping"})
+ok("command names: 'p' and 'route' also answer as path, 'path' still works; the bot's own other words too",
+   names == {"pg": "ping", "path": "path", "ping": "ping", "p": "path", "route": "path"}, names)
+names = _mc.command_names(_Api({"path": {"also": ["p", "ping"], "only": True}}), ["path", "ping"])
+ok("...'not to path itself': only the new names work; another command's word can't be taken", names == {"ping": "ping", "p": "path"}, names)
+ok("...bothelp shows the names people can type", _mc.shown_usage("path [a1,b2]", "path", names) == "p [a1,b2]"
+   and _mc.shown_usage("path [a1,b2]", "path", {"path": "path", "p": "path"}) == "path/p [a1,b2]")
+ok("...a command picked by its new name", _mc.parse_command("!P", set(names)) == ("p", "") and _mc.parse_command("path", set(names)) is None)
 ok("prefix lists the repeaters using it (not people's companions)", cmds.prefix_text(NODES, "a1", now).startswith("Prefix A1: 2 repeaters: Hilltop (") and "Bob" not in cmds.prefix_text(NODES, "a1", now))
 ok("prefix free lists prefixes no known repeater uses", "A1" not in cmds.prefix_text(NODES, "free", now).split(": ", 1)[1].split() and "01" in cmds.prefix_text(NODES, "free", now))
 log = [{"t": now - 2, "type": "GRP_TXT", "path": "a1b2", "size": 1, "length": 40}, {"t": now - 1, "type": "ADVERT", "path": "c3", "size": 1, "length": 100},

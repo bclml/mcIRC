@@ -98,6 +98,24 @@ with mock.patch.object(app.addons, "info", lambda n: (n, "1.0", "", "")):
     win = gui_addonsettings.AddonSettingsWindow(app, "tquiet")
     ok("an addon that answers nobody doesn't show it", win.private_var is None and win.delay_vars is None)
     win.destroy()
+    # 'Command names...': other words for a bot's commands
+    class Cmds(AddonBase):
+        title = "Test commands"
+        command_words = ["path", "ping"]
+        def on_load(self): self.api.add_bot_commands(lambda ch, dm=False: ["path", "ping"])
+    a = AddonAPI(app, "tcmds"); inst = Cmds(a); a.display = inst.title; inst.on_load(); app.addons.loaded["tcmds"] = (inst, a)
+    win = gui_addonsettings.AddonSettingsWindow(app, "tcmds")
+    names_win = win.edit_names(); root.update()
+    entries = [w for w in names_win.winfo_children()[1].winfo_children() if isinstance(w, tk.Entry)]
+    checks = [w for w in names_win.winfo_children()[1].winfo_children() if isinstance(w, tk.Checkbutton)]
+    ok("a bot's settings window has 'Command names...': a row per command", len(entries) == 2 and len(checks) == 2)
+    entries[0].insert(0, "P, !route, ping, two words")
+    checks[0].invoke()
+    ok_btn = [b for b in names_win.winfo_children()[2].winfo_children() if str(b.cget("text")) == "OK"][0]
+    ok_btn.invoke(); root.update()
+    ok("...saved: words cleaned up, another command's word and phrases left out, 'not to path itself' kept",
+       app.settings["addons"]["tcmds"]["_names"] == {"path": {"also": ["p", "route"], "only": True}}, app.settings["addons"]["tcmds"].get("_names"))
+    win.destroy()
 # ---- nothing from bots in Public
 from unittest import mock as _mock
 calls = []

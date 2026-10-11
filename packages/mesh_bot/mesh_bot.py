@@ -27,7 +27,8 @@ GREETING = cmds.DEFAULT_GREETINGS[0]                     # the single greeting o
 
 class Addon(AddonBase):
     title = "Mesh bot"
-    version = "1.2.7"
+    command_words = list(COMMANDS)          # (the settings window's 'Command names...': other names for each command)
+    version = "1.2.8"
     author = "mcIRC (commands after agessaman/meshcore-bot, MIT)"
     description = ("ping, hello, path, prefix, multitest, stats, sports and version - the meshcore-bot commands mcIRC's other bots don't have - "
                    "plus its greeter for newcomers (a random greeting from your list), each switched on for the channels you choose. Off until you switch it on.")
@@ -48,7 +49,8 @@ class Addon(AddonBase):
     def help_for(self, channel, dm=False):
         if not self.api.get("enabled", False) or (dm and not self.api.get("answer_dm", True)): return []
         p = self.api.get("prefix", "")
-        return [p + USAGE.get(c, c) for c in COMMANDS if self.where(c) and (dm or mc.channel_ok(channel, self.where(c)))]
+        names = mc.command_names(self.api, COMMANDS, ALIASES)
+        return [p + mc.shown_usage(USAGE.get(c, c), c, names, ALIASES) for c in COMMANDS if self.where(c) and (dm or mc.channel_ok(channel, self.where(c)))]
 
     def bot_name(self): return self.api.node_position()[2] or "a bot"
 
@@ -58,9 +60,10 @@ class Addon(AddonBase):
         if not self.api.get("enabled", False): return
         self.greet(msg)
         text = msg.get("text", "")
-        hit = ("hello", "") if cmds.is_greeting(text) else mc.parse_command(text, (set(COMMANDS) | set(ALIASES)) - {"hello"}, self.api.get("prefix", ""))
+        names = mc.command_names(self.api, COMMANDS, ALIASES)      # its words, and the names set in 'Command names...'
+        hit = ("hello", "") if cmds.is_greeting(text) else mc.parse_command(text, set(names) - {"hello"}, self.api.get("prefix", ""))
         if not hit: return
-        cmd, arg = ALIASES.get(hit[0], hit[0]), hit[1]
+        cmd, arg = names.get(hit[0], hit[0]), hit[1]
         if msg.get("dm"):
             if not (self.api.get("answer_dm", True) and self.where(cmd)): return
         elif not mc.channel_ok(ch, self.where(cmd)): return

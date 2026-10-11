@@ -65,7 +65,8 @@ def world_cup(arg, get=mc.http_json):
 
 class Addon(AddonBase):
     title = "Fun bot"
-    version = "1.0.9"
+    command_words = list(COMMANDS)          # (the settings window's 'Command names...': other names for each command)
+    version = "1.0.10"
     author = "mcIRC"
     description = ("dice, roll, magic8, joke, dadjoke, hacker, catfact and wc (World Cup scores and tables) - each switched on for the channels you "
                    "choose. Off until you switch it on.")
@@ -82,7 +83,8 @@ class Addon(AddonBase):
         """For 'bothelp': the commands answered in this channel right now."""
         if not self.api.get("enabled", False) or (dm and not self.api.get("answer_dm", True)): return []
         p = self.api.get("prefix", "")
-        return [p + self.USAGE.get(c, c) for c in COMMANDS if self.where(c) and (dm or mc.channel_ok(channel, self.where(c)))]
+        names = mc.command_names(self.api, COMMANDS)
+        return [p + mc.shown_usage(self.USAGE.get(c, c), c, names) for c in COMMANDS if self.where(c) and (dm or mc.channel_ok(channel, self.where(c)))]
 
     def on_unload(self): pass
 
@@ -92,9 +94,10 @@ class Addon(AddonBase):
 
     def on_message(self, msg):
         if not self.api.get("enabled", False): return
-        hit = mc.parse_command(msg.get("text", ""), set(COMMANDS), self.api.get("prefix", ""))
+        names = mc.command_names(self.api, COMMANDS)               # its words, and the names set in 'Command names...'
+        hit = mc.parse_command(msg.get("text", ""), set(names), self.api.get("prefix", ""))
         if not hit: return
-        cmd, arg = hit
+        cmd, arg = names[hit[0]], hit[1]
         if msg.get("dm"):
             if not (self.api.get("answer_dm", True) and self.where(cmd)): return
         elif not mc.channel_ok(msg.get("channel", ""), self.where(cmd)):

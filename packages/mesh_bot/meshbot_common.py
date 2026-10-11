@@ -40,6 +40,37 @@ def parse_command(text, commands, prefix=""):
     return (word, arg.strip()) if word in commands else None
 
 
+def clean_word(w):
+    """'!P ' -> 'p': a command word as people type it, without a call mark."""
+    return (w or "").strip().lower().lstrip("!/.@").rstrip("?.,!")
+
+
+def command_names(api, commands, aliases=None):
+    """{word people type: command}: the commands, the bot's own other words (aliases), and the names set in its settings window
+    ('Command names...': 'p' for 'path'; with 'not to path itself' only the new names work).  A name can't take another command's word."""
+    commands = list(commands)
+    names = {w: c for w, c in (aliases or {}).items() if c in commands}
+    names.update({c: c for c in commands})
+    own = api.get("_names", {}) if hasattr(api, "get") else {}
+    for cmd, cfg in (own if isinstance(own, dict) else {}).items():
+        if cmd not in commands or not isinstance(cfg, dict): continue
+        also = [w for w in (clean_word(x) for x in cfg.get("also", [])) if w and " " not in w and w not in commands]
+        if cfg.get("only") and also:
+            for w in [w for w, c in names.items() if c == cmd]: del names[w]
+        for w in also: names.setdefault(w, cmd)
+    return names
+
+
+def shown_usage(usage, cmd, names, aliases=None):
+    """The help line ('path <name>') with the names set in the settings window: 'path/p <name>', or 'p <name>' when only the new name
+    works.  (The bot's own other words - `aliases` - aren't listed.)"""
+    words = [w for w, c in names.items() if c == cmd]
+    extra = [w for w in words if w != cmd and w not in (aliases or {})]
+    if not words or (cmd in words and not extra): return usage
+    first = "/".join(([cmd] if cmd in words else []) + extra[:2])
+    return first + usage[len(cmd):] if usage.lower().startswith(cmd) else usage
+
+
 def norm_channel(name):
     n = re.sub(r"\s*\[[^\]]*\]$", "", (name or "").strip().lower())      # 'Public [915]' (a window of an extra node) is still 'public'
     if n in ("public", "#public", "0"): return "public"

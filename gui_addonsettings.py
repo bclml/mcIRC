@@ -116,6 +116,10 @@ class AddonSettingsWindow(tk.Toplevel):
             tk.Spinbox(row, from_=3, to=120, increment=1, width=4, textvariable=self.delay_vars[1]).pack(side="left", padx=3)
             tk.Label(row, text=f"seconds between parts of a long answer  (default {first} and {gap}: repeaters are still repeating the question "
                                "for a few seconds)", bg=BG, fg="#555").pack(side="left")
+            if getattr(self.inst, "command_words", None):
+                row = tk.Frame(self.top, bg=BG); row.pack(fill="x", pady=(2, 0))
+                ttk.Button(row, text="Command names...", command=self.edit_names).pack(side="left")
+                tk.Label(row, text="other words for its commands ('p' for 'path'), or only your own", bg=BG, fg="#555").pack(side="left", padx=6)
         if not node and getattr(self.inst, "switch", None):     # its ON/OFF switch on the toolbar: shown or not
             self.toolbar_var = tk.BooleanVar(value=bool(self.api.get("_toolbar", True)))
             tk.Checkbutton(self.top, text="Show its ON/OFF switch on the toolbar", variable=self.toolbar_var, bg=BG, anchor="w").pack(fill="x")
@@ -132,6 +136,45 @@ class AddonSettingsWindow(tk.Toplevel):
         elif not self.holder.winfo_children():
             tk.Label(self.holder, text="This addon has no settings.", bg=BG).pack(anchor="w")
         self.canvas.yview_moveto(0)
+
+    def edit_names(self):
+        """'Command names...': for each command, other words people can type, and whether its own word still works.  Saved at once
+        (for the node of the tab that is open)."""
+        words = list(self.inst.command_words)
+        with self._ctx(): saved = dict(self.api.get("_names", {}) or {})
+        win = tk.Toplevel(self.top); win.title(f"{self.api.display} - command names"); win.configure(bg=BG); win.transient(self.top.winfo_toplevel())
+        tk.Label(win, bg=BG, fg="#555", justify="left", wraplength=520, text=(
+            "Other words people can type for each command, separated by commas (e.g. 'p' for 'path'). Both work - or tick the box and only "
+            "your words work. A word that is already another command is ignored. The call marks (! / .) and the prefix still apply.")).pack(
+            anchor="w", padx=10, pady=(8, 4))
+        grid = tk.Frame(win, bg=BG); grid.pack(fill="both", expand=True, padx=10)
+        tk.Label(grid, text="Command", bg=BG, font=(gui_platform.UI_FONT_NAME, 9, "bold")).grid(row=0, column=0, sticky="w")
+        tk.Label(grid, text="Also answers to", bg=BG, font=(gui_platform.UI_FONT_NAME, 9, "bold")).grid(row=0, column=1, sticky="w")
+        rows = {}
+        for i, cmd in enumerate(words, start=1):
+            cfg = saved.get(cmd) if isinstance(saved.get(cmd), dict) else {}
+            also, only = tk.StringVar(value=", ".join(cfg.get("also", []))), tk.BooleanVar(value=bool(cfg.get("only")))
+            tk.Label(grid, text=cmd, bg=BG).grid(row=i, column=0, sticky="w", padx=(0, 8))
+            tk.Entry(grid, textvariable=also, width=24).grid(row=i, column=1, sticky="w", pady=1)
+            tk.Checkbutton(grid, text=f"not to '{cmd}' itself", variable=only, bg=BG).grid(row=i, column=2, sticky="w", padx=6)
+            rows[cmd] = (also, only)
+
+        def save():
+            out = {}
+            for cmd, (also, only) in rows.items():
+                ws = []
+                for w in also.get().replace(";", ",").split(","):
+                    w = w.strip().lower().lstrip("!/.@").rstrip("?.,!")
+                    if w and " " not in w and w not in words and w not in ws: ws.append(w)
+                if ws: out[cmd] = {"also": ws, "only": bool(only.get())}
+            with self._ctx(): self.api.set("_names", out)
+            if hasattr(self.app, "save"): self.app.save()
+            win.destroy()
+        bar = tk.Frame(win, bg=BG); bar.pack(fill="x", padx=10, pady=8)
+        ttk.Button(bar, text="OK", command=save).pack(side="right")
+        ttk.Button(bar, text="Cancel", command=win.destroy).pack(side="right", padx=6)
+        self.names_win = win
+        return win
 
     def _is_bot(self, inst):
         """Answers people: it lists bot commands for 'bothelp', or says so (replies = True)."""

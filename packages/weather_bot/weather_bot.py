@@ -27,11 +27,12 @@ COMMANDS = {        # command: (what it does, needs a place)
     "contact": "who runs this bot",
 }
 ALIASES = {"solarforecast": "sf", "overhead": "airplanes"}
-VERSION = "1.0.9"
+VERSION = "1.0.10"
 
 
 class Addon(AddonBase):
     title = "Weather bot"
+    command_words = list(COMMANDS)          # (the settings window's 'Command names...': other names for each command)
     version = VERSION
     author = "mcIRC"
     description = ("Answers weather commands in the channels you choose (default #weather): wx <place>, gwx, aqi, sun, moon, solar, sf, hfcond, "
@@ -51,7 +52,8 @@ class Addon(AddonBase):
         if not self.cfg("enabled", False): return []
         if (dm and not self.cfg("answer_dm", True)) or (not dm and not mc.channel_ok(channel, self.channels())): return []
         p, off = self.cfg("prefix", ""), self.cfg("off", [])
-        return [p + self.USAGE.get(c, c) for c in COMMANDS if c not in off]
+        names = mc.command_names(self.api, COMMANDS, ALIASES)
+        return [p + mc.shown_usage(self.USAGE.get(c, c), c, names, ALIASES) for c in COMMANDS if c not in off]
 
     def on_unload(self): pass
 
@@ -76,10 +78,10 @@ class Addon(AddonBase):
             if not self.cfg("answer_dm", True): return
         elif not mc.channel_ok(msg.get("channel", ""), self.channels()):
             return
-        cmds = set(COMMANDS) | set(ALIASES)
-        hit = mc.parse_command(msg.get("text", ""), cmds, self.cfg("prefix", ""))
+        names = mc.command_names(self.api, COMMANDS, ALIASES)      # its words, and the names set in 'Command names...'
+        hit = mc.parse_command(msg.get("text", ""), set(names), self.cfg("prefix", ""))
         if not hit: return
-        cmd, arg = ALIASES.get(hit[0], hit[0]), hit[1]
+        cmd, arg = names[hit[0]], hit[1]
         if cmd in self.cfg("off", []): return
         if not self.limiter.allow(msg.get("nick", "?")): return
         self.api.run_background(lambda: self.answer(cmd, arg), lambda r: self.send(msg, cmd, r))

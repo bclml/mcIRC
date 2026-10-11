@@ -9,6 +9,7 @@ passes through `scrub()` as a last line of defence.  The Report a bug window sho
 import atexit
 import datetime
 import glob
+import json
 import logging
 import os
 import platform
@@ -49,6 +50,41 @@ def scrub(text):
     text = _SECRET.sub(lambda m: f"{m.group(1)}{m.group(2)}***", text)
     text = _EMAIL.sub("<email>", text)
     return _LATLON.sub(lambda m: m.group(1) + "<hidden>", text)
+
+
+# ---- every setting, for a bug report ----
+_PRIVATE_KEY = re.compile(r"(?i)(keys?|tokens?|pass|pwd|secrets?|pins?|ssid|passwords?|psk)$|^(wifi_|wlan)")       # value never shown: '(set)' / '(empty)'
+_PLACE_KEY = re.compile(r"(?i)(^|_)(lat|lon|latitude|longitude|location|home|position|contact|email)$")    # where you are / how to reach you
+_PEOPLE_KEY = re.compile(r"(?i)^(greeted|favorites|favorites_node|nicks|known|seen|history|recent)$|^window_nicks$")  # names of people: counted
+
+
+def settings_snapshot(settings):
+    """Every setting of mcIRC and its addons as 'path = value' lines, for troubleshooting.  Never: passwords, keys, tokens, PINs, Wi-Fi
+    details, positions or contact details (only whether they are set), names of people (only how many), full addresses (masked)."""
+    lines = []
+
+    def val(v):
+        return scrub(json.dumps(v, ensure_ascii=False))
+
+    def walk(d, path, people=False):
+        for k in sorted(d, key=str):
+            v, p = d[k], f"{path}.{k}" if path else str(k)
+            if _PRIVATE_KEY.search(str(k)) or _PLACE_KEY.search(str(k)):
+                lines.append(f"{p} = {'(set)' if v not in ('', None, 0, [], {}) else '(empty)'}")
+            elif people or _PEOPLE_KEY.search(str(k)):
+                lines.append(f"{p} = ({len(v)} {'names' if isinstance(v, list) else 'entries'})" if isinstance(v, (list, dict)) else f"{p} = (hidden)")
+            elif isinstance(v, dict) and v and len(v) <= 60:
+                walk(v, p, people=_PEOPLE_KEY.search(str(k)) is not None)
+            elif isinstance(v, (dict, list)) and len(v) > 60:
+                lines.append(f"{p} = ({len(v)} entries)")
+            elif isinstance(v, list) and any(isinstance(x, dict) for x in v):
+                for i, x in enumerate(v):
+                    if isinstance(x, dict): walk(x, f"{p}[{i}]")
+                    else: lines.append(f"{p}[{i}] = {val(x)}")
+            else:
+                lines.append(f"{p} = {val(v)}")
+    walk(settings if isinstance(settings, dict) else {}, "")
+    return "\n".join(lines)
 
 
 # meshcli commands whose arguments are message text / credentials / channel secrets: how many args after the command word to hide

@@ -143,5 +143,20 @@ ok("log can be left out", "(log not attached)" in dlg.preview.get("1.0", "end"))
 ok("slash command registered", any(r[0] == "bug" for r in __import__("gui_commands").APP))
 root.destroy()
 tempfile.mkdtemp = orig_mk
+
+# ---- every setting in a bug report, private things left out
+snap = d.settings_snapshot({"mode": "bluetooth", "ble_target": "34:CD:B0:3D:42:AD", "tcp_host": "192.168.1.57", "node_lat": 49.2, "location": "49.2,-122.8",
+                            "favorites": ["Alice", "Bob"], "window_nicks": {"Public": ["Alice", "Carol"]},
+                            "addons": {"mesh_bot": {"enabled": False, "channels": {"ping": "#mcirc"}, "greeted": ["Dave"] * 5},
+                                       "broadcast_alerts": {"translink_key": "SECRETKEY123", "muted": False},
+                                       "area_alerts": {"keys": {"511:x": "K"}, "areas": [{"name": "Lyon", "lat": 45.7, "lon": 4.8}]},
+                                       "weather_bot": {"home": "Main St 12", "contact": "me@example.com"}},
+                            "extra_nodes": [{"label": "wifi 1", "host": "192.168.1.39", "pin": 123456}]})
+ok("bug report settings: every setting as 'path = value' (a bot switched off shows)", "addons.mesh_bot.enabled = false" in snap
+   and 'addons.mesh_bot.channels.ping = "#mcirc"' in snap and 'mode = "bluetooth"' in snap, snap)
+ok("...keys, PINs, positions and contact details only as set / empty", "SECRETKEY123" not in snap and "translink_key = (set)" in snap
+   and "keys = (set)" in snap and "pin = (set)" in snap and "49.2" not in snap and "45.7" not in snap and "Main St" not in snap and "example.com" not in snap, snap)
+ok("...people's names only counted", "Alice" not in snap and "Dave" not in snap and "favorites = (2 names)" in snap and "greeted = (5 names)" in snap, snap)
+ok("...addresses masked as in the log", "34:CD:B0:3D" not in snap and "192.168.1.57" not in snap and "192.168.1.39" not in snap, snap)
 print("\nALL PASSED" if not fails else f"\n{len(fails)} FAILED: {fails}")
 sys.exit(1 if fails else 0)

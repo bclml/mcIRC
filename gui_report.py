@@ -20,7 +20,7 @@ ISSUE_URL = f"https://github.com/{ga.REPO}/issues/new"
 MAX_URL = 7000          # browsers and GitHub reject much longer addresses
 MODES = {"usb": "USB", "bluetooth": "Bluetooth", "tcp": "WiFi / TCP"}
 PRIVACY = ("The report contains: mcIRC / Python / system versions, your USB serial ports, connection steps, which meshcli commands worked or failed, "
-           "your node's firmware and radio settings, and errors.\nIt never contains message text (public or private), passwords, your position, "
+           "your node's firmware and radio settings, errors and (if ticked) all mcIRC and addon settings.\nIt never contains message text (public or private), passwords, your position, "
            "full public keys or full Bluetooth / IP addresses. Check the preview, and edit anything you don't want to share.\n"
            "A screenshot is optional, off unless you tick it, and by default hides the chat text, names and the button bar.")
 
@@ -83,6 +83,11 @@ class BugReportDialog(tk.Toplevel):
         sp.bind("<KeyRelease>", lambda e: self.refresh())
         self.size = tk.Label(row, bg=BG, fg="#666")
         self.size.pack(side="right")
+        row2 = tk.Frame(self, bg=BG)
+        row2.pack(fill="x", padx=10)
+        self.with_settings = tk.BooleanVar(value=True)
+        tk.Checkbutton(row2, text="Attach my settings (mcIRC and every addon - passwords, keys, positions and people's names are left out)",
+                       variable=self.with_settings, bg=BG, command=self.refresh).pack(side="left")
 
         shot = tk.Frame(self, bg=BG)
         shot.pack(fill="x", padx=10, pady=(6, 0))
@@ -110,7 +115,10 @@ class BugReportDialog(tk.Toplevel):
 
     # ---- content ----
     def log_text(self):
-        return gui_diag.read_sessions(self._runs()) if self.include.get() else "(log not attached)"
+        text = gui_diag.read_sessions(self._runs()) if self.include.get() else "(log not attached)"
+        if getattr(self, "with_settings", None) is not None and self.with_settings.get():
+            text += "\n\n--- settings ---\n" + gui_diag.settings_snapshot(self.app.settings)
+        return text
 
     def _runs(self):
         try: return max(1, min(gui_diag.KEEP, int(self.runs.get())))

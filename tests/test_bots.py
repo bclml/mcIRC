@@ -3,7 +3,7 @@ import os, sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT); os.chdir(ROOT)
 """The weather bot and the fun bot: commands, places, channels, rate limits, message splitting.  Canned data only - no internet, no radio."""
-import datetime as dt, filecmp, importlib.util, random, tkinter as tk
+import datetime as dt, filecmp, time, importlib.util, random, tkinter as tk
 from unittest import mock
 
 sys.path[:0] = [os.path.join(ROOT, "packages", "weather_bot"), os.path.join(ROOT, "packages", "fun_bot")]
@@ -128,6 +128,35 @@ ok("a command switched off is ignored", sent == [])
 with mock.patch.object(ws, "aqi", mock.Mock(side_effect=OSError("timed out"))), mock.patch.object(mc, "resolve_place", lambda arg, **k: (1, 1, "X")):
     sent.clear(); wx_bot.on_message(msg("aqi hope", nick="Hal"))
 ok("a service that is down gives a short polite answer", sent and "not answering right now" in sent[0][1], sent)
+# ---- no place given: the asker's own node, else the repeater nearest them, else the bot's town (never just 'here')
+class AskNodes:
+    rows = [{"name": "Ann", "public_key": "aa11", "type": 1, "lat": 49.05, "lon": -122.30, "last_seen": 5},
+            {"name": "Bob", "public_key": "bb22", "type": 1, "lat": 0, "lon": 0, "last_seen": 5},
+            {"name": "Rpt Hill", "public_key": "c3ff", "type": 2, "lat": 49.36, "lon": -121.44, "last_seen": 9},
+            {"name": "Rpt Far", "public_key": "d4ee", "type": 2, "lat": 50.0, "lon": -120.0, "last_seen": 9}]
+    def all(self): return [dict(r) for r in self.rows]
+    def find_by_prefix(self, p): return next((dict(r) for r in self.rows if r["public_key"].startswith(p)), None)
+    def find_by_name(self, n): return next((dict(r) for r in self.rows if r["name"].lower() == n.lower()), None)
+TOWNS = {(49.05, -122.3): "Abbotsford BC", (49.36, -121.44): "Hope BC", (49.31, -122.61): "Maple Ridge BC"}
+looked, got = [], []
+fake_town = lambda lat, lon, *a: looked.append((lat, lon)) or TOWNS.get((round(lat, 2), round(lon, 2)))
+with mock.patch.object(app, "nodes", AskNodes()), mock.patch.object(wapi, "node_position", lambda: (49.31, -122.61, "Me")),         mock.patch.object(mc, "town_name", fake_town), mock.patch.object(ws, "wx", mock.Mock(side_effect=ValueError("US only"))),         mock.patch.object(ws, "gwx", lambda lat, lon, label, units="metric", get=None: got.append((lat, lon, label)) or f"{label}: canned"):
+    wx_bot.limiter = mc.Limiter(0, 0)
+    sent.clear(); wx_bot.on_message(msg("wx", nick="Ann", ch="#weather"))
+    ok("'wx' alone: the weather where the asker's node is, named by its town", got[-1] == (49.05, -122.30, "Abbotsford BC") and sent[-1][1] == "Abbotsford BC: canned", (got, sent))
+    app.packet_log = [{"t": time.time() - 2, "type": "GRP_TXT", "path": "C3D4", "size": 1}]
+    wx_bot.on_message({**msg("wx", nick="Bob"), "hops": 2})
+    ok("...an asker without a position: the first repeater their message reached (the one nearest them)", got[-1] == (49.36, -121.44, "Hope BC"), got)
+    app.packet_log = []
+    wx_bot.on_message({**msg("wx", nick="Bob"), "hops": 2})
+    ok("...nothing known about the asker: the bot's own location, by its town's name (not 'here')", got[-1] == (49.31, -122.61, "Maple Ridge BC"), got)
+    n = len(looked); wx_bot.on_message(msg("wx", nick="Ann")); wx_bot.on_message(msg("wx", nick="Ann"))
+    ok("...each town is looked up once", len(looked) == n, looked)
+    with mock.patch.object(mc, "resolve_place", lambda arg, **k: (1.0, 2.0, arg.title())):
+        wx_bot.on_message(msg("wx hope", nick="Ann"))
+    ok("...a place that is asked for still wins", got[-1] == (1.0, 2.0, "Hope"), got)
+with mock.patch.object(wapi, "node_position", lambda: (10.0, 10.0, "Me")), mock.patch.object(mc, "town_name", lambda *a: None):
+    ok("...'here' only when there is no town at the bot (or the lookup fails)", wx_bot.home()[2] == "here")
 
 # ---- every command that can use a place takes one: city, postal code, ZIP, node name or coordinates
 import wxbot_sky as sky

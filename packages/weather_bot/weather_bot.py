@@ -10,7 +10,7 @@ import wxbot_sky as sky
 import wxbot_sources as ws
 
 COMMANDS = {        # command: (what it does, needs a place)
-    "wx": "weather and forecast for a place (NOAA in the US, Open-Meteo elsewhere)",
+    "wx": "weather and forecast for a place, or where you are (NOAA in the US, Open-Meteo elsewhere)",
     "gwx": "weather for a place from Open-Meteo",
     "aqi": "air quality for a place",
     "sun": "sunrise / sunset here (or for a place)",
@@ -27,7 +27,18 @@ COMMANDS = {        # command: (what it does, needs a place)
     "contact": "who runs this bot",
 }
 ALIASES = {"solarforecast": "sf", "overhead": "airplanes"}
-VERSION = "1.0.11"
+VERSION = "1.0.12"
+
+
+def first_hop(packet_log, heard_at, hops):
+    """The first repeater (key prefix) of the channel packet that brought a message: the newest one heard just before it with that many
+    hops.  None if the packet wasn't heard (Bluetooth can't hear packets)."""
+    for p in reversed(packet_log):
+        if p.get("type") != "GRP_TXT" or not heard_at - 20 <= p.get("t", 0) <= heard_at: continue
+        n = 2 * max(1, int(p.get("size") or 1))
+        path = (p.get("path") or "").upper()
+        if path and len(path) // n == hops: return path[:n]
+    return None
 
 
 class Addon(AddonBase):
@@ -69,7 +80,33 @@ class Addon(AddonBase):
             if not self._home or self._home[0] != place: self._home = (place, mc.resolve_place(place))
             return self._home[1]
         lat, lon, _ = self.api.node_position()
-        return (lat, lon, "here") if (lat or lon) else None
+        if not (lat or lon): return None
+        return lat, lon, self.town(lat, lon) or "here"
+
+    def town(self, lat, lon):
+        """The town at a position ('Hope BC'), looked up once per spot (OpenStreetMap allows one lookup a second); None if there is none."""
+        key, towns = (round(lat, 2), round(lon, 2)), self.__dict__.setdefault("_towns", {})
+        if key not in towns: towns[key] = mc.town_name(lat, lon)
+        return towns[key]
+
+    def asker_place(self, msg, heard_at):
+        """Where the asker is, for a command without a place: their node's advertised position, else the repeater their message reached
+        first (the one nearest them), else None (then the bot's own location)."""
+        raw = msg.get("raw") if isinstance(msg.get("raw"), dict) else {}
+        nodes = self.api.nodes
+        row = (nodes.find_by_prefix(raw.get("pubkey_prefix") or "") if raw.get("pubkey_prefix") else None)             or nodes.find_by_name((msg.get("nick") or "").lstrip("@"))
+        if row and (row.get("lat") or row.get("lon")):
+            lat, lon = float(row["lat"]), float(row["lon"])
+            return lat, lon, self.town(lat, lon) or row["name"][:24]
+        hops = msg.get("hops")
+        if msg.get("dm") or hops in (None, 0, 255): return None
+        first = first_hop(self.api.packet_log, heard_at, hops)
+        if not first: return None
+        reps = sorted((n for n in nodes.all() if n.get("type") in (2, 3) and (n.get("lat") or n.get("lon"))
+                       and (n.get("public_key") or "").lower().startswith(first.lower())), key=lambda n: -(n.get("last_seen") or 0))
+        if not reps: return None
+        lat, lon = float(reps[0]["lat"]), float(reps[0]["lon"])
+        return lat, lon, self.town(lat, lon) or reps[0]["name"][:24]
 
     # ---- answering ----
     def on_message(self, msg):
@@ -84,7 +121,8 @@ class Addon(AddonBase):
         cmd, arg = names[hit[0]], hit[1]
         if cmd in self.cfg("off", []): return
         if not self.limiter.allow(msg.get("nick", "?")): return
-        self.api.run_background(lambda: self.answer(cmd, arg), lambda r: self.send(msg, cmd, r))
+        heard_at = time.time()
+        self.api.run_background(lambda: self.answer(cmd, arg, msg, heard_at), lambda r: self.send(msg, cmd, r))
 
     def send(self, msg, cmd, result):
         if isinstance(result, ValueError): text = f"{cmd}: {result}"
@@ -95,35 +133,40 @@ class Addon(AddonBase):
         self.answers += 1
         mc.send_parts(self.api, msg, text, max_parts=int(self.cfg("max_parts", 3)), label=True)
 
-    def place(self, arg):
+    def place(self, arg, msg=None, heard_at=0):
+        """A place for an answer: the one asked for, else where the asker is, else the bot's own location."""
         home = None
         try: home = self.home()
         except ValueError: pass
-        return mc.resolve_place(arg, nodes=self.api.nodes, default=home, near=home)
+        asker = None
+        if not (arg or "").strip() and msg:
+            try: asker = self.asker_place(msg, heard_at)
+            except Exception as e: self.api.log(f"where the asker is: {e}", "warn")
+        return mc.resolve_place(arg, nodes=self.api.nodes, default=asker or home, near=asker or home)
 
-    def answer(self, cmd, arg):
+    def answer(self, cmd, arg, msg=None, heard_at=0):
         units = self.cfg("units", "metric")
         if cmd == "wx":
-            lat, lon, label = self.place(arg)
+            lat, lon, label = self.place(arg, msg, heard_at)
             try: return ws.wx(lat, lon, label)
             except ValueError: return ws.gwx(lat, lon, label, units)       # outside the US NOAA has nothing: same answer from Open-Meteo
-        if cmd == "gwx": return ws.gwx(*self.place(arg), units)
-        if cmd == "aqi": return ws.aqi(*self.place(arg))
-        if cmd == "sun": return ws.sun(*self.place(arg))
+        if cmd == "gwx": return ws.gwx(*self.place(arg, msg, heard_at), units)
+        if cmd == "aqi": return ws.aqi(*self.place(arg, msg, heard_at))
+        if cmd == "sun": return ws.sun(*self.place(arg, msg, heard_at))
         if cmd == "moon": return ws.moon()
         if cmd == "solar": return ws.solar()
-        if cmd == "sf": return ws.solar_forecast(*self.place(arg))
+        if cmd == "sf": return ws.solar_forecast(*self.place(arg, msg, heard_at))
         if cmd == "hfcond": return ws.hfcond()
-        if cmd == "rain": return ws.rain(*self.place(arg), units)
-        if cmd == "aurora": return ws.aurora(*self.place(arg))
+        if cmd == "rain": return ws.rain(*self.place(arg, msg, heard_at), units)
+        if cmd == "aurora": return ws.aurora(*self.place(arg, msg, heard_at))
         if cmd == "satpass":                                       # satpass [satellite] [place]: 'satpass iss surrey', 'satpass 25544', 'satpass surrey'
             first, _, rest = arg.partition(" ")
-            if first.lower() in sky.SATS or first.isdigit(): return sky.satpass(first, *self.place(rest))
-            return sky.satpass("iss", *self.place(arg))
+            if first.lower() in sky.SATS or first.isdigit(): return sky.satpass(first, *self.place(rest, msg, heard_at))
+            return sky.satpass("iss", *self.place(arg, msg, heard_at))
         if cmd == "airplanes":                                     # airplanes [miles] [place], in either order
             words = arg.split()
             nums = [w for w in words if w.isdigit()]
-            return sky.airplanes(*self.place(" ".join(w for w in words if not w.isdigit())), nm=int(nums[0]) if nums else 25)
+            return sky.airplanes(*self.place(" ".join(w for w in words if not w.isdigit()), msg, heard_at), nm=int(nums[0]) if nums else 25)
         if cmd == "channels":
             where = ", ".join(sorted("all channels" if c == "*" else c for c in self.channels())) or "no channel"
             on = [c for c in COMMANDS if c not in self.cfg("off", []) and c not in ("channels", "status", "contact")]

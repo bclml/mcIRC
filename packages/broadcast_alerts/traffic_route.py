@@ -2,9 +2,11 @@
 incidents and roadwork along the way (British Columbia), as a few short mesh messages.
 
 Free services, no key: OpenStreetMap Nominatim (finding the address, at most one lookup a second) and OSRM (routes, with alternatives).
-Travel times are without live congestion; 'current conditions' are DriveBC's closures, incidents and roadwork.  The best route: the
-quickest, then (about as quick) the one with fewer incidents and roadwork; a route through a full closure is not taken while another
-is open.  Answered only by private message - a destination is never logged."""
+Travel times are without live congestion; 'current conditions' are DriveBC's closures, incidents and roadwork.  With a TomTom key (free,
+optional) the slow traffic on the way is added: TomTom's live traffic on its own routes between the same points, matched to ours, so each
+route's time includes the delays on it, and the jams are named.  The best route: the quickest, then (about as quick) the one with fewer
+incidents and roadwork; a route through a full closure is not taken while another is open.  Answered only by private message - a
+destination is never logged (nor the key: errors are only named by their kind)."""
 import math
 import re
 import threading
@@ -14,10 +16,16 @@ UA = {"User-Agent": "mcIRC traffic route (github.com/bclml/mcIRC)"}
 NOMINATIM = "https://nominatim.openstreetmap.org/search"
 NOMINATIM_REVERSE = "https://nominatim.openstreetmap.org/reverse"
 MAX_LEGS = 6                    # main roads named in 'Via:' (each with the city it starts in when that changes)
-# road numbers as people say them: 'TCH 1' / 'BC 99' / 'AB 2' -> 'Hwy 1' / 'Hwy 99' / 'Hwy 2' (others - 'I-5', 'US 101', 'A1' - as they are)
-_HWY = re.compile(r"^(?:TCH|BC|AB|SK|MB|ON|QC|NB|NS|PE|PEI|NL|YT|NT|NU)\s*-?\s*(\d+[A-Z]?)$", re.I)
+# road numbers as people say them: 'TCH 1' / 'TC-1 E' / 'BC 99' / 'BC-99A' / 'Highway 1' / '1' -> 'Hwy 1' / 'Hwy 1' / 'Hwy 99' / 'Hwy 99A' /
+# 'Hwy 1' / 'Hwy 1' (others - 'I-5', 'US 101', 'A1' - as they are)
+_HWY = re.compile(r"^(?:(?:TCH|TC|BC|AB|SK|MB|ON|QC|NB|NS|PE|PEI|NL|YT|NT|NU|Highway|Hwy)\s*-?\s*)?(\d+[A-Z]?)(?:\s+[NSEW])?$", re.I)
+_TOWN_PREFIX = re.compile(r"^(?:The )?(?:Corporation of the )?(?:Township|City|District|Village|Town|Municipality|Resort Municipality) of (?:the )?", re.I)
 OSRM = "https://router.project-osrm.org/route/v1/driving/{lon1},{lat1};{lon2},{lat2}"
 DRIVEBC = "https://api.open511.gov.bc.ca/events"
+TOMTOM = "https://api.tomtom.com/routing/1/calculateRoute/{lat1:.5f},{lon1:.5f}:{lat2:.5f},{lon2:.5f}/json"
+JAM_MIN_S = 60                  # slow traffic that costs less than this isn't worth a mention
+MAX_JAMS = 3                    # jams named in an answer (each needs a town lookup)
+TT_KIND = {"JAM": "Slow", "ROAD_CLOSURE": "CLOSED", "ROAD_WORK": "Roadwork"}       # TomTom's categories in our words (others: Incident)
 NEAR_M = 150                    # an event this close to the route is on the way
 BC = (48.2, 60.1, -139.1, -114.0)   # lat min / max, lon min / max: where DriveBC reports
 CLOSED = re.compile(r"(?:^|[.:]\s+)(?:road |bridge |highway |route )?closed\b(?! for (?:the )?season)", re.I)
@@ -73,6 +81,17 @@ def geocode(query, near=None, get=None):
     return float(r["lat"]), float(r["lon"]), name[:40]
 
 
+_HWY_LEAD = re.compile(r"^(?:TCH|TC|BC|Highway|Hwy)\s*-?\s*(\d+[A-Z]?)(?:\s+[NSEW])?(?=\s|$)", re.I)    # 'Highway 1 (Burnaby)'
+
+
+def hwy(road):
+    """'Highway 1' / 'TC-1 E' / '1' -> 'Hwy 1', 'Highway 1 (Burnaby)' -> 'Hwy 1 (Burnaby)'; any other road ('80 Avenue') as it is."""
+    r = (road or "").strip()
+    m = _HWY.match(r)
+    if m: return f"Hwy {m.group(1).upper()}"
+    return _HWY_LEAD.sub(lambda x: f"Hwy {x.group(1).upper()}", r)
+
+
 def road_name(step):
     """The road of a route step as people say it: its number ('Hwy 1' for 'TCH 1;BC 1'), else its name."""
     for ref in (step.get("ref") or "").split(";"):
@@ -80,7 +99,7 @@ def road_name(step):
         if ref:
             m = _HWY.match(ref)
             return f"Hwy {m.group(1).upper()}" if m else ref
-    return (step.get("name") or "").strip()
+    return hwy(step.get("name"))
 
 
 def routes(a, b, get=None):
@@ -113,7 +132,8 @@ def town_at(p, get=None):
     except Exception:
         return ""
     a = (r or {}).get("address") or {}
-    return next((a[k] for k in ("city", "town", "village", "municipality") if a.get(k)), "")
+    town = next((a[k] for k in ("city", "town", "village", "municipality") if a.get(k)), "")
+    return _TOWN_PREFIX.sub("", town)                # 'Township of Langley' -> 'Langley' (one mesh message is short)
 
 
 def via_line(route, get=None):
@@ -163,6 +183,36 @@ def drivebc_events(coords, get=None, now=None):
     return out
 
 
+def tomtom_traffic(a, b, key, get=None):
+    """The live traffic on TomTom's routes a -> b (best and up to 2 alternatives): [{'what', 'road', 'km', 'delay' (s), 'points'}],
+    slow traffic under JAM_MIN_S left out.  Raises when TomTom doesn't answer (a wrong key, too many requests, no connection)."""
+    data = (get or _get)(TOMTOM.format(lat1=a[0], lon1=a[1], lat2=b[0], lon2=b[1]),
+                         {"key": key, "traffic": "true", "travelMode": "car", "routeType": "fastest", "sectionType": "traffic",
+                          "instructionsType": "coded", "maxAlternatives": 2})
+    out, seen = [], set()
+    for r in data.get("routes") or []:
+        pts = [(p["latitude"], p["longitude"]) for leg in r.get("legs", []) for p in leg.get("points", [])]
+        steps = sorted((i for i in (r.get("guidance") or {}).get("instructions", []) if i.get("street") or i.get("roadNumbers")),
+                       key=lambda i: i.get("pointIndex", 0))
+        for sec in r.get("sections") or []:
+            if sec.get("sectionType") != "TRAFFIC": continue
+            what, delay = TT_KIND.get(sec.get("simpleCategory"), "Incident"), int(sec.get("delayInSeconds") or 0)
+            if what == "Slow" and delay < JAM_MIN_S: continue
+            i, j = int(sec.get("startPointIndex", 0)), int(sec.get("endPointIndex", 0))
+            if not 0 <= i < j < len(pts): continue
+            spot = (round(pts[i][0], 3), round(pts[i][1], 3), what)
+            if spot in seen: continue                       # the same jam on two of TomTom's routes
+            seen.add(spot)
+            on = [st for st in steps if st.get("pointIndex", 0) <= i][-1:] or steps[:1]
+            road = road_name({"ref": ";".join(on[0].get("roadNumbers") or []), "name": on[0].get("street")}) if on else ""
+            km = sum(_metres(pts[k], pts[k + 1]) for k in range(i, j)) / 1000
+            jam = {"what": what, "road": road, "km": km, "delay": delay, "points": pts[i:j + 1][::max(1, (j - i) // 19)][:20]}
+            same = next((o for o in out if o["what"] == what and on_route({"coords": o["points"]}, [jam])), None)
+            if same is None: out.append(jam)                # the same jam on two of TomTom's routes: once, the bigger delay
+            elif delay > same["delay"]: out[out.index(same)] = jam
+    return out
+
+
 def on_route(route, events):
     """The events within NEAR_M of the route."""
     c = route["coords"]
@@ -196,17 +246,25 @@ def _fit(text, n=MAX_CHARS):
     return text if len(text) <= n else text[:n - 3].rstrip(" ,;") + "..."
 
 
-def answer(origin, query, get=None, now=None, known=None, origin_age=None):
+def answer(origin, query, get=None, now=None, known=None, origin_age=None, tomtom_key=""):
     """The answer as short parts: [route line, what is on the way, where it starts].  known(): DriveBC events the bot already has (its
     traffic check, same form as drivebc_events) - used when DriveBC doesn't answer this request.  origin_age: seconds since the asker's
-    node advertised the position used (None: not known); not given for 'route <from> to <to>'."""
-    parts = _answer(origin, query, get, now, known)
+    node advertised the position used (None: not known); not given for 'route <from> to <to>'.  tomtom_key: adds the live traffic."""
+    parts = _answer(origin, query, get, now, known, (tomtom_key or "").strip())
     if origin is not None and len(parts) >= 3 and parts[0].startswith("Route to") and not re.match(r"(?i)\s*.+?\s+to\s+.+$", query):
         parts.append(start_note(origin_age))
     return [_fit(p) for p in parts]
 
 
-def _answer(origin, query, get=None, now=None, known=None):
+def _jam_text(j, get=None):
+    """'Slow Hwy 1 near Burnaby 4 km +6 min'."""
+    town = town_at(j["points"][0], get) if j["points"] else ""
+    where = " ".join(x for x in (j["road"], f"near {town}" if town else "") if x)
+    size = f" {j['km']:.0f} km" if j["km"] >= 1 else ""
+    return f"{j['what']} {where}{size} +{max(1, round(j['delay'] / 60))} min".replace("  ", " ")
+
+
+def _answer(origin, query, get=None, now=None, known=None, tomtom_key=""):
     to = query
     m = re.match(r"(?i)\s*(.+?)\s+to\s+(.+)$", query)
     if m:                                        # 'route <from> to <to>': from that address (the node's position isn't used)
@@ -231,6 +289,16 @@ def _answer(origin, query, get=None, now=None, known=None):
             except Exception: events = None
             busy, stale = events is None, events is not None
         for r in rs: r["events"] = on_route(r, events or [])
+    live, tt_down = None, False
+    if tomtom_key:
+        try: live = tomtom_traffic(origin, dest[:2], tomtom_key, get=get)
+        except Exception: tt_down = True                # (never the error text: the request carries the key)
+    for r in rs:
+        r["base"] = r["min"]
+        r["jams"] = on_route(r, [j for j in live or [] if j["what"] == "Slow" or not bc])   # in BC, DriveBC has the closures and roadwork
+        if live is not None: r["min"] += sum(j["delay"] for j in r["jams"] if j["what"] == "Slow") / 60    # each route's time with its traffic now
+        if not bc: r["events"] = [{"what": j["what"], "road": j["road"], "place": ""} for j in r["jams"] if j["what"] != "Slow"]
+        r["jams"] = [j for j in r["jams"] if j["what"] == "Slow"]
     closed = lambda r: sum(e["what"] == "CLOSED" for e in r["events"])
     trouble = lambda r: sum(e["what"] in ("Incident", "Roadwork") for e in r["events"])
     open_routes = [r for r in rs if not closed(r)] or rs          # a full closure: not while another route is open
@@ -238,18 +306,30 @@ def _answer(origin, query, get=None, now=None, known=None):
     best = min((r for r in open_routes if r["min"] - quickest["min"] <= SIMILAR_MIN), key=lambda r: (trouble(r), r["min"]))
     fastest = min(rs, key=lambda r: r["min"])
     why = ""
-    if best is not fastest:
+    usual = min(rs, key=lambda r: r["base"])
+    if live is not None and best is not usual and usual["jams"] and not closed(usual):
+        why = " (avoids slow traffic)"
+    elif best is not fastest:
         why = f" (avoids {closed(fastest)} closure{'s' if closed(fastest) != 1 else ''})" if closed(fastest) else               f" (fewer incidents / roadwork, +{best['min'] - fastest['min']:.0f} min)"
-    first = f"Route to {dest[2]}: {best['km']:.0f} km, ~{best['min']:.0f} min{why}"
+    slow = sum(j["delay"] for j in best["jams"]) / 60
+    traffic = (f" (+{slow:.0f} min traffic now)" if slow >= 1 else "" if why else " (traffic flowing now)") if live is not None else ""
+    first = f"Route to {dest[2]}: {best['km']:.0f} km, ~{best['min']:.0f} min{traffic}{why}"
     via = via_line(best, get)                       # the roads in order, and when the route enters another city
     if via: first = [first, via]
     head = first if isinstance(first, list) else [first]
-    if not bc:
-        return head + ["Traffic: no live closures here (DriveBC covers British Columbia). Times are without congestion."]
-    if busy: return head + ["Traffic: DriveBC didn't answer just now - closures not checked. Try again in a minute."]
+    no_live = " TomTom didn't answer - times without congestion." if tt_down else "" if live is not None else " Times are without congestion."
+    jams = [_jam_text(j, get) for j in sorted(best["jams"], key=lambda j: -j["delay"])[:MAX_JAMS]]
+    if not bc and live is None:
+        return head + ["Traffic: no live closures here (DriveBC covers British Columbia)." + no_live]
+    if busy and not jams: return head + ["Traffic: DriveBC didn't answer just now - closures not checked. Try again in a minute."]
     ev = best["events"]
-    src = " (from the last DriveBC check)" if stale else ""
-    if not ev: return head + [f"On the way: no closures, incidents or roadwork reported{src or ' (DriveBC)'}. Times are without congestion."]
-    items = [f"{e['what']} {e['road'] or e['place']}".strip() for e in sorted(ev, key=lambda e: ("CLOSED", "Incident", "Roadwork").index(e["what"]))]
+    src = " (from the last DriveBC check)" if stale else " (DriveBC not answering: closures not checked)" if busy else ""
+    order = ("CLOSED", "Incident", "Roadwork")
+    items = [f"{e['what']} {hwy(e['road']) or e['place']}".strip() for e in sorted(ev, key=lambda e: order.index(e["what"]))]
+    items = [x for x in items if x.startswith(order[:2])] + jams + [x for x in items if x.startswith("Roadwork")]
+    if not items:
+        what = "no closures, incidents, roadwork or slow traffic" if live is not None else "no closures, incidents or roadwork"
+        by = " (DriveBC, TomTom)" if bc and live is not None else " (TomTom)" if live is not None else " (DriveBC)"
+        return head + [f"On the way: {what} reported{src or by}.{no_live}"]
     more = f" +{len(items) - 4} more" if len(items) > 4 else ""
-    return head + ["On the way: " + "; ".join(items[:4]) + more + src]
+    return head + ["On the way: " + "; ".join(items[:4]) + more + src + (no_live if tt_down else "")]

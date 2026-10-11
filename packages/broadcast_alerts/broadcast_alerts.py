@@ -14,6 +14,7 @@ from gui_addons import AddonBase
 CHANNEL_KINDS = ("DriveBC", "BC Ferries", "BC Transit", "TransLink", "Weather")
 ROUTE_WORDS = ("route", "directions", "gps")                 # 'route <address>' by private message
 ROUTE_EVERY = 120                                            # seconds between two route answers to the same person
+TOMTOM_SIGNUP = "https://my.tomtom.com/"   # free key for live traffic on routes (optional)
 ADDRESSED = re.compile(r"^@\[[^\]]*\]\s*[:,]?\s*|^@\S+[:,]\s*")
 
 
@@ -31,7 +32,7 @@ class Addon(AddonBase):
     SOURCES = [k for k in ea.TX_SOURCES if k != "Test reply"]   # alert types with a switch on the Alerts tab
     title = "Traffic, transit and weather"
     replies = True                         # ('route' answers people: the settings window offers the answer wait)
-    version = "1.6.1"
+    version = "1.6.2"
     author = "built in"
     description = ("Traffic / ferry / transit / weather / earthquake / tsunami alerts. Keeps the map's DriveBC and earthquake layers up to date; "
                    "broadcasting them to the mesh is OFF until you switch it on.")
@@ -82,7 +83,7 @@ class Addon(AddonBase):
 
         def work():
             import traffic_route
-            return traffic_route.answer(origin, where, known=self._known_events, origin_age=age)
+            return traffic_route.answer(origin, where, known=self._known_events, origin_age=age, tomtom_key=self.api.get("tomtom_key", ""))
 
         def done(r):
             if isinstance(r, Exception):           # (never the address in the log: only what kind of failure)
@@ -272,10 +273,24 @@ class Addon(AddonBase):
             "drives the route from the position their node advertises (or 'route <from> to <to>'), checks DriveBC's closures, incidents and "
             "roadwork on the way (British Columbia), and answers privately: distance, time, main roads and what is on the way.\n\n"
             "The quickest route is taken; when routes take about as long, the one with fewer incidents and roadwork. A road closed on the "
-            "way is avoided while another route is open. Times are without live congestion.\n\n"
+            "way is avoided while another route is open. Times are without live congestion - unless you add a TomTom key below.\n\n"
             "Private only: asked in a channel, the bot never repeats the address - it only says to ask by private message. Addresses are "
             "never written to the logs. One route per person every 2 minutes. Free services, no key: OpenStreetMap (addresses) and OSRM "
             "(routes).")).pack(anchor="w", pady=(4, 0))
+        box = tk.LabelFrame(route, text="Live traffic (optional): a free TomTom key", bg=bg, padx=6, pady=4)
+        box.pack(fill="x", pady=(8, 0))
+        tk.Label(box, bg=bg, fg="#8a4b00", justify="left", wraplength=400, text=(
+            "With a key, each route's time includes the slow traffic on it now ('~30 min (+5 min traffic now)'), a jam can make another "
+            "route the quickest, and the jams on the way are named ('Slow Hwy 1 near Langley 4 km +6 min') - outside BC too. The free "
+            "plan allows 2,500 lookups a day; each route uses one.\n"
+            "1. Open the sign-up page and register a free account (no credit card).  2. Open your app and copy its API key (not the App ID with dashes).  3. Paste it here, OK.\n"
+            "The start and destination are then also sent to TomTom. Leave it empty to stay with the free services above.")).pack(anchor="w")
+        row = tk.Frame(box, bg=bg); row.pack(anchor="w", pady=(4, 0))
+        self.tomtom_var = tk.StringVar(value=self.api.get("tomtom_key", ""))
+        tk.Label(row, text="TomTom key:", bg=bg).pack(side="left")
+        tk.Entry(row, textvariable=self.tomtom_var, width=36, show="*").pack(side="left", padx=4)
+        import webbrowser
+        ttk.Button(row, text="Open the sign-up page", command=lambda: webbrowser.open(TOMTOM_SIGNUP)).pack(side="left")
 
         tk.Checkbutton(alerts, text="Broadcast alerts to the mesh (this transmits on your radio)", variable=self.broadcast, bg=bg, wraplength=400, justify="left", anchor="w",
                        font=(gui_platform.UI_FONT_NAME, gui_platform.UI_FONT_SIZE, "bold")).pack(anchor="w")
@@ -356,6 +371,12 @@ class Addon(AddonBase):
                 self.api.notice("Traffic, transit and weather: broadcasting is on, but no channel is chosen (Settings > Channels) - nothing "
                                 "will be sent until you choose one.", "warn")
         if getattr(self, "route_var", None) is not None: self.api.set("route_on", bool(self.route_var.get()))
+        if getattr(self, "tomtom_var", None) is not None:
+            key = self.tomtom_var.get().strip()
+            self.api.set("tomtom_key", key)
+            if re.fullmatch(r"[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}", key) and hasattr(self.api, "notice"):
+                self.api.notice("Traffic, transit and weather: that TomTom key looks like the App ID (with dashes). Paste the app's API key "
+                                "instead (letters and digits, no dashes) - TomTom refuses the App ID.", "warn")
         self.api.set("muted", not self.broadcast.get())
         self.api.set("sources", {k: var.get() for k, var in self.src.items()})
         self.apply_settings()

@@ -57,14 +57,14 @@ ok("about as quick (within 3 min): the one with fewer incidents / roadwork", r.g
 get, _ = fake(osrm((20, 25, "Hwy 1", 49.30), (30, 40, "Hwy 7", 49.10)), [ev(1, "INCIDENT", "Crash at Hwy 1.", 49.30)])
 r = parts(tr.answer(HOME, "Mall", get=get))
 ok("...but quickest first: a much slower route isn't taken for an incident - it is reported instead", r.get("via", "").startswith("Via: Hwy 1")
-   and r["way"] == "On the way: Incident Highway 1", r)
+   and r["way"] == "On the way: Incident Hwy 1", r)
 get, _ = fake(osrm((20, 25, "Hwy 1", 49.30), (30, 40, "Hwy 7", 49.10)), [ev(1, "INCIDENT", "Washout at Hwy 1. Closed.", 49.30)])
 r = parts(tr.answer(HOME, "Mall", get=get))
 ok("a full closure on the quickest route: the open one, saying why", r.get("via", "").startswith("Via: Hwy 7") and "avoids 1 closure" in r["route"], r)
 get, _ = fake(osrm((20, 25, "Hwy 1", 49.30)), [ev(1, "CONSTRUCTION", "Paving at Hwy 1. Left lane closed.", 49.30, sev="MINOR"),
                                                 ev(2, "CONSTRUCTION", "Bridge work at Hwy 1.", 49.30), ev(3, "INCIDENT", "Crash far away.", 50.5)])
 r = parts(tr.answer(HOME, "Mall", get=get))
-ok("on the way: major roadwork; minor lane work and events off the route left out", r["way"] == "On the way: Roadwork Highway 1", r)
+ok("on the way: major roadwork; minor lane work and events off the route left out", r["way"] == "On the way: Roadwork Hwy 1", r)
 get, _ = fake(osrm((20, 25, "Hwy 1", 49.30)), drivebc_error=RuntimeError("429 Too Many Requests"))
 r = parts(tr.answer(HOME, "Mall", get=get))
 ok("DriveBC busy: the route anyway, saying closures weren't checked", r.get("via", "").startswith("Via: Hwy 1") and "DriveBC didn't answer" in r["way"], r)
@@ -83,12 +83,53 @@ ok("...a fresh advert: just where it starts", tr.answer(HOME, "Mall", get=get, o
 ok("...'route <from> to <to>' starts at <from>: no advert note", not any(l.startswith("Start:") for l in tr.answer(HOME, "Home Rd to Mall", get=get)))
 # road numbers as people say them, and a city each time the route enters another one
 ok("road numbers: 'TCH 1;BC 1' / 'BC 99' / 'BC 17A' -> Hwy 1 / Hwy 99 / Hwy 17A; others as they are", [tr.road_name(x) for x in (
-   {"ref": "TCH 1;BC 1"}, {"ref": "BC 99"}, {"ref": "BC 17A"}, {"ref": "I-5"}, {"name": "Kingsway"})] == ["Hwy 1", "Hwy 99", "Hwy 17A", "I-5", "Kingsway"])
+   {"ref": "TCH 1;BC 1"}, {"ref": "BC 99"}, {"ref": "BC 17A"}, {"ref": "I-5"}, {"name": "Kingsway"}, {"ref": "TC-1 W"}, {"ref": "BC-99A;BC-1A"}, {"ref": "1"}, {"name": "Highway 1"})]
+   == ["Hwy 1", "Hwy 99", "Hwy 17A", "I-5", "Kingsway", "Hwy 1", "Hwy 99A", "Hwy 1", "Hwy 1"])
+ok("towns without 'Township of' / 'City of' (one mesh message is short)", tr.town_at((1, 1), get=lambda *a, **k: {"address": {"city": "Township of Langley"}}) == "Langley"
+   and tr.town_at((1, 1), get=lambda *a, **k: {"address": {"town": "District of North Vancouver"}}) == "North Vancouver")
 legs = {"legs": [("Kingsway", 3.0, (49.21, -122.9)), ("Hwy 1", 9.0, (49.21, -122.85)), ("Hwy 15", 6.0, (49.24, -122.75)), ("80 Avenue", 2.0, (49.25, -122.71))]}
 via = tr.via_line(legs, get=lambda url, params=None: {"address": {"city": "Burnaby" if float(params["lat"]) < 49.22 else "Surrey"}})
 ok("'Via:' the roads in order, naming the city when the route enters another one", via == "Via: Kingsway (Burnaby) > Hwy 1 > Hwy 15 (Surrey) > 80 Avenue", via)
 ok("every message fits one mesh message (115 characters)", all(len(p) <= 115 for p in tr.answer(HOME, "Mall", get=fake(osrm(
    (20, 25, "A very long road name number one", 49.3)))[0], origin_age=None)))
+
+# ---- live traffic with a TomTom key: each route's time includes its slow traffic now; the jams are named; no key, no TomTom
+TT_PTS = [HOME, (49.25, -122.85), (49.30, -122.80), (49.275, -122.75), DEST]        # along the Hwy 1 route (middle at 49.30)
+def tomtom(delay, kind="JAM"):
+    return {"routes": [{"legs": [{"points": [{"latitude": a, "longitude": o} for a, o in TT_PTS]}],
+                        "guidance": {"instructions": [{"pointIndex": 0, "roadNumbers": ["TCH 1", "BC 1"], "street": "Trans-Canada Hwy"}]},
+                        "sections": [{"sectionType": "TRAFFIC", "simpleCategory": kind, "startPointIndex": 1, "endPointIndex": 3, "delayInSeconds": delay}]}]}
+def with_tomtom(get, answer):
+    tt = []
+    def g(url, params=None):
+        if "tomtom" in url:
+            tt.append(params)
+            if isinstance(answer, Exception): raise answer
+            return answer
+        return get(url, params)
+    return g, tt
+g, tt = with_tomtom(fake(osrm((20, 25, "Hwy 1", 49.30), (22, 40, "Hwy 7", 49.10)))[0], tomtom(300))
+r = parts(tr.answer(HOME, "Mall", get=g, tomtom_key=" k3y "))
+ok("TomTom key: the route's time with the traffic on it now", r["route"] == "Route to Mall, Burnaby: 20 km, ~30 min (+5 min traffic now)" and tt[0]["key"] == "k3y", (r, tt))
+ok("...and the slow traffic on the way: road, town, length, delay", r["way"].startswith("On the way: Slow Hwy 1 near Surrey") and r["way"].endswith("km +5 min"), r)
+g, _ = with_tomtom(fake(osrm((20, 25, "Hwy 1", 49.30), (22, 27, "Hwy 7", 49.10)))[0], tomtom(600))
+r = parts(tr.answer(HOME, "Mall", get=g, tomtom_key="k3y"))
+ok("...a jam that makes the usual route slower: the quicker one now, saying why", r.get("via", "").startswith("Via: Hwy 7")
+   and r["route"] == "Route to Mall, Burnaby: 22 km, ~27 min (avoids slow traffic)", r)
+two = tomtom(300); two["routes"].append(dict(two["routes"][0], sections=[dict(two["routes"][0]["sections"][0], startPointIndex=2, delayInSeconds=240)]))
+g, _ = with_tomtom(fake(osrm((20, 25, "Hwy 1", 49.30)))[0], two)
+r = parts(tr.answer(HOME, "Mall", get=g, tomtom_key="k3y"))
+ok("...the same jam on two of TomTom's routes: named once, its delay counted once", r["way"].count("Slow") == 1 and "(+5 min traffic now)" in r["route"], r)
+g, _ = with_tomtom(fake(osrm((20, 25, "Hwy 1", 49.30)))[0], tomtom(30))
+r = parts(tr.answer(HOME, "Mall", get=g, tomtom_key="k3y"))
+ok("...under a minute of slow traffic isn't mentioned", "(traffic flowing now)" in r["route"] and "no closures, incidents, roadwork or slow traffic" in r["way"], r)
+g, _ = with_tomtom(fake(osrm((20, 25, "Hwy 1", 49.30)))[0], OSError("403 for url ...?key=k3y"))
+r = tr.answer(HOME, "Mall", get=g, tomtom_key="k3y")
+ok("...TomTom not answering: the route anyway, saying times are without congestion - the key never in an answer",
+   "TomTom didn't answer" in parts(r)["way"] and not any("k3y" in x for x in r), r)
+g, tt = with_tomtom(fake(osrm((20, 25, "Hwy 1", 49.30)))[0], tomtom(300))
+tr.answer(HOME, "Mall", get=g)
+ok("...no key: TomTom is never asked", tt == [])
 
 # ---- in the addon: private only, never repeated in a channel, one per person every 2 minutes, nothing in the log
 spec = importlib.util.spec_from_file_location("t_ba_route", os.path.join(PKG, "broadcast_alerts.py"))
@@ -120,6 +161,14 @@ b.api.replies.clear(); b.api.s["route_on"] = False; b.on_message(dict(dm, nick="
 ok("off until switched on in its settings", b.api.replies == [] and b.route_help("#x") == [])
 b.api.s["route_on"] = True
 ok("bothelp lists it as a private-message command", b.route_help("#buds") == ["route <address> (private message)"])
+for key in ("", "k3y"):
+    b.api.s["tomtom_key"] = key; b.api.bg.clear(); b.route_last.clear(); b.on_message(dm)
+    with mock.patch.object(tr, "answer", lambda *a, **k: k) as _: given = b.api.bg[0]()
+    ok(f"the TomTom key from its settings goes to the route ({key or 'none: as before'})", given.get("tomtom_key") == key, given)
+b.api.s.pop("tomtom_key")
+import gui_diag
+snap = gui_diag.settings_snapshot({"addons": {"broadcast_alerts": {"tomtom_key": "k3y"}}})
+ok("...and is never shown in a bug report's settings (only that it is set)", "k3y" not in snap and "tomtom_key = (set)" in snap, snap)
 with mock.patch.object(ba.logging, "warning") as w:
     b2 = ba.Addon.__new__(ba.Addon); b2.api = API(); b2.route_last = {}
     b2.api.run_background = lambda fn, done: done(RuntimeError("HTTP 500 for url ...q=5+Secret+Lane"))
@@ -132,7 +181,7 @@ with mock.patch.dict(ea.active_traffic_alerts, {"DriveBC|x1": ("DriveBC", "INCID
     get, _ = fake(osrm((20, 25, "Hwy 1", 49.30)), drivebc_error=RuntimeError("429"))
     r = parts(tr.answer(HOME, "Mall", get=get, known=b._known_events))
 ok("DriveBC busy: the incidents the traffic check already has are used - and it says so", known and known[0]["what"] == "Incident"
-   and r["way"] == "On the way: Incident Highway 1 (Burnaby) (from the last DriveBC check)", (known, r))
+   and r["way"] == "On the way: Incident Hwy 1 (Burnaby) (from the last DriveBC check)", (known, r))
 ok("a failed lookup is logged without the address", w.called and "Secret" not in str(w.call_args) and "try again" in b2.api.replies[-1][1], w.call_args)
 print("\nALL PASSED" if not fails else f"\n{len(fails)} FAILED: {fails}")
 sys.exit(1 if fails else 0)

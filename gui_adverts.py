@@ -118,6 +118,11 @@ class AdvertWatcher:
             interrupted = self.yield_evt.is_set()
             self.ready = False                             # no new sends through it from here on
             self.ready_evt.clear()
+            end = time.time() + (5 if interrupted else SEND_TIMEOUT)      # sends already handed to it may be on the air: let them finish
+            while time.time() < end and proc.poll() is None:
+                with self.send_lock:
+                    if not self.pending: break
+                time.sleep(0.1)
             self.interrupt()
             try: proc.wait(timeout=5)
             except subprocess.TimeoutExpired: pass

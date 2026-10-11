@@ -205,6 +205,27 @@ with mock.patch.object(io, "execute_mesh_command", return_value=mock.Mock(stdout
     except RuntimeError as e: empty = str(e)
 ok("a contact list that didn't come back is an error, not 'no contacts' (which made favorites disappear)", "did not come back" in empty, empty)
 ok("...after the listener has stopped, sends go through meshcli again", w.send_through(["chan", "3", "x"]) is None and not w.ready)
+# a stretch that ends while a send is on its way waits for the radio's answer (it was marked NOT SENT though it went out)
+slow = os.path.join(stub, "slow_helper.py")
+open(slow, "w").write(textwrap.dedent("""
+    import json, sys, threading, time
+    p = lambda **k: print(json.dumps(k), flush=True)
+    def rd():
+        for line in sys.stdin:
+            c = json.loads(line); time.sleep(1.5); p(event="sent", id=c["id"], ok=True, error="")
+    threading.Thread(target=rd, daemon=True).start()
+    time.sleep(0.2); p(event="ready"); time.sleep(60)
+"""))
+ga.HELPER = slow
+stop4 = threading.Event()
+th4 = threading.Thread(target=lambda: w.listen(1, stop4), daemon=True); th4.start()      # a 1-second stretch
+t0 = time.time()
+while not w.ready and time.time() - t0 < 8: time.sleep(0.05)
+try: late = w.send_through(["chan", "3", "just in time"])
+except RuntimeError as e: late = e
+th4.join(30)
+ok("a send handed over just before the stretch ends is waited for - not marked as failed", getattr(late, "returncode", None) == 0, late)
+ga.HELPER = fake
 ga.HELPER = fake
 
 # an ordinary (uncontended) hold must be fully released: another thread gets the lock straight away

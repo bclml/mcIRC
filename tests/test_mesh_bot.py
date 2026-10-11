@@ -27,6 +27,9 @@ ok("...not hex: refused", bad)
 ok("path names each hop from node memory (repeaters only; several: the newest + how many more)",
    cmds.path_text(NODES, ["A1", "B2", "C9"]) == "Path: A1: Hilltop (or 1 more) > B2: Ridge > C9: Unknown", cmds.path_text(NODES, ["A1", "B2", "C9"]))
 ok("...2-byte hops narrow it down", cmds.path_text(NODES, ["A1C3"]) == "Path: A1C3: Harbour")
+ok("path unknown: says how many hops, and why the repeaters aren't known (Bluetooth can't listen ...)",
+   cmds.no_path_text(3, "bluetooth").startswith("3 hops; which repeaters isn't known: this bot's mcIRC is on Bluetooth")
+   and "ask again" in cmds.no_path_text(1) and cmds.no_path_text(1).startswith("1 hop;") and all(len(cmds.no_path_text(9, w)) <= 115 for w in ("on", "off", "bluetooth", "failed")))
 _spec = importlib.util.spec_from_file_location("t_mc_names", os.path.join("packages", "mesh_bot", "meshbot_common.py"))
 _mc = importlib.util.module_from_spec(_spec); _spec.loader.exec_module(_mc)
 # command names: other words for a command ('p' for 'path'), or only those

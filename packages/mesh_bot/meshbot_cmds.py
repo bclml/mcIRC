@@ -63,6 +63,17 @@ def path_text(nodes, hops):
     return "Path: " + " > ".join(describe_hop(nodes, h) for h in hops)
 
 
+WHY_NO_PATH = {"bluetooth": "this bot's mcIRC is on Bluetooth, which can't hear packets - USB or Wi-Fi can",
+               "off": "this bot's mcIRC isn't listening to packets (Options)",
+               "failed": "this bot's packet listener isn't working right now"}
+
+
+def no_path_text(hops, listening="on"):
+    """When the repeaters a message came through aren't known: how many hops, and why."""
+    why = WHY_NO_PATH.get(listening, "the bot didn't hear that packet - ask again")
+    return f"{hops} hop{'s' if hops != 1 else ''}; which repeaters isn't known: {why}"
+
+
 def prefix_text(nodes, arg, now):
     """'prefix A1' -> the repeaters using it; 'prefix free' -> some 1-byte prefixes no known repeater uses."""
     a = (arg or "").strip().lower()

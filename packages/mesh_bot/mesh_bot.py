@@ -28,7 +28,7 @@ GREETING = cmds.DEFAULT_GREETINGS[0]                     # the single greeting o
 class Addon(AddonBase):
     title = "Mesh bot"
     command_words = list(COMMANDS)          # (the settings window's 'Command names...': other names for each command)
-    version = "1.2.8"
+    version = "1.2.9"
     author = "mcIRC (commands after agessaman/meshcore-bot, MIT)"
     description = ("ping, hello, path, prefix, multitest, stats, sports and version - the meshcore-bot commands mcIRC's other bots don't have - "
                    "plus its greeter for newcomers (a random greeting from your list), each switched on for the channels you choose. Off until you switch it on.")
@@ -92,7 +92,9 @@ class Addon(AddonBase):
             nodes = self.api.nodes.all()
             if arg.strip(): return cmds.path_text(nodes, cmds.split_hops(arg))
             hopsl = cmds.path_of_message(self.api.packet_log, now, hops)
-            if hopsl is None: return "No path information for your message (try: path a1,b2)" if hops else "Direct connection (0 hops)"
+            if hopsl is None:
+                listening = self.api.listening() if hasattr(self.api, "listening") else "on"
+                return cmds.no_path_text(hops, listening) if hops else "Direct connection (0 hops)"
             return cmds.path_text(nodes, hopsl)
         if cmd == "prefix": return cmds.prefix_text(self.api.nodes.all(), arg, now)
         if cmd == "stats":

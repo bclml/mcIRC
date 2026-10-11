@@ -345,6 +345,19 @@ class AddonAPI:
         io.CHANNEL_INDEX_BY_NAME.clear()
         io.resolve_channel_indices()
         self._app.q.put(("channels",))
+    def listening(self):
+        """Whether mcIRC hears the radio's packets (what 'path' needs): 'on', 'off' (Options: listening switched off), 'bluetooth' (a
+        Bluetooth connection can't listen), 'failed' (the listener kept failing this session)."""
+        w = getattr(self._app, "adverts", None)
+        if w is None: return "off"
+        if not self._app.settings.get("advert_listen", True): return "off"
+        if getattr(w, "disabled", False): return "failed"
+        try:
+            import gui_adverts, meshcore_io
+            if gui_adverts.helper_args(meshcore_io.CONNECTION_ARGS) is None: return "bluetooth"
+        except Exception:
+            pass
+        return "on"
     @property
     def packet_log(self):
         """Packets the radio heard recently: [{t, type, route, path, size, snr, rssi, length}] (no content)."""

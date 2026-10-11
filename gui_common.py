@@ -19,7 +19,7 @@ DEFAULT_SETTINGS = {
     "auto_reset_radio": True,    # if the radio stops answering for ~2 minutes, restart it by pulsing the USB reset line (CP210x / CH340 / FTDI boards only)
     "watch_repeats": True,        # after sending to a channel, listen a few seconds for repeaters passing it on ("heard 2 repeats"; USB and WiFi)
     "resend_unheard": True,       # ...and send it once more when no repeater was heard
-    "advert_listen": True,       # between polls, listen for adverts so new / changed nodes show up at once (USB and WiFi)
+    "advert_listen": True,       # between polls, listen for adverts so new / changed nodes show up at once (USB, Wi-Fi and Bluetooth; also messages - and sends go through it)
     "advert_notices": True,      # say in the Status window when a node is heard for the first time
     "show_time": True, "font_size": 10, "auto_connect": False,
     "bots_in_public": False,       # bots never post in Public (the channel everyone hears); their answers there go privately

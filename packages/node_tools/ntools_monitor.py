@@ -31,7 +31,7 @@ class MonitorWindow(ToolWindow):
         self.counts = tk.Label(self, bg=BG, anchor="w", justify="left")
         self.counts.pack(fill="x", padx=6)
         self.shown = 0
-        self.say("Packets appear while mcIRC listens between polls (Options > Connect: 'Listen for adverts between polls'). "
+        self.say("Packets appear while mcIRC listens between polls (Options > Connect: 'Listen between polls'). "
                  "Only kind, route and signal are shown - never content.")
         self.tick()
 

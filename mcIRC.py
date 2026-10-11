@@ -216,24 +216,30 @@ class CoreWorker:
             except Exception as e:
                 why = ea.explain_failure(str(e))
                 logging.warning(f"Could not read the node's own settings: {why}")
-            last_sync = last_resolve = last_battery = 0
-            while not self.stop_evt.is_set():
+            last = {"sync": 0, "resolve": 0, "battery": 0}
+
+            def jobs():                    # the connection's routine jobs (over Bluetooth also while listening, through the listener)
                 now = time.time()
-                if now - last_battery >= gui_nodestatus.BATTERY_EVERY:         # it can answer here and still not transmit: watch the battery
-                    last_battery = now
+                if now - last["battery"] >= gui_nodestatus.BATTERY_EVERY:      # it can answer here and still not transmit: watch the battery
+                    last["battery"] = now
                     try: q.put(("battery", "main", gui_nodestatus.battery_mv(ea.CONNECTION_ARGS)))
                     except ea.Cancelled: raise
                     except Exception: pass
-                if not ea.CHANNEL_INDEX_BY_NAME and now - last_resolve > 60:
-                    last_resolve = now
+                if not ea.CHANNEL_INDEX_BY_NAME and now - last["resolve"] > 60:
+                    last["resolve"] = now
                     ea.resolve_channel_indices()
                     q.put(("channels",))
-                ea.fetch_incoming_messages()  # each message reaches the GUI through ea.GUI_CALLBACK
                 self.app.recovery.maybe()      # only acts if the user switched "restart a silent radio" on
-                if now - last_sync >= self.app.settings["node_sync_minutes"] * 60:
-                    last_sync = now
+                if now - last["sync"] >= self.app.settings["node_sync_minutes"] * 60:
+                    last["sync"] = now
                     self.app.node_sync_worker()
-                self.app.adverts.listen(self.app.adverts.window(self.app.settings["poll_seconds"]), self.stop_evt)   # idle time = listening (packets, adverts, messages)
+            while not self.stop_evt.is_set():
+                ble_listen = self.app.adverts.bluetooth() and self.app.adverts.enabled()
+                if not ble_listen:             # over Bluetooth these run inside the listening stretch, through the listener's connection
+                    jobs()
+                    ea.fetch_incoming_messages()  # each message reaches the GUI through ea.GUI_CALLBACK (Bluetooth: the listener fetches them)
+                self.app.adverts.listen(self.app.adverts.window(self.app.settings["poll_seconds"]), self.stop_evt,
+                                        jobs if self.app.adverts.bluetooth() else None)   # idle time = listening (packets, adverts, messages)
         except ea.Cancelled:
             gui_diag.event("connect", "cancelled")
         except Exception as e:
@@ -276,6 +282,7 @@ class App(PrivateMixin, MenusMixin, CommandsMixin, gui_multinode.MultiNodeMixin,
         self.nodes = NodeStore(":memory:") if demo else NodeStore()
         self.addons = AddonManager(self)
         self.adverts = AdvertWatcher(self)
+        ea.FAST_SEND = self.adverts.run_through                # messages (and over Bluetooth every command) go through the listener's open connection
         self.recovery = gui_health.Recovery(self)
         ea.HEALTH.listeners.append(lambda ev, info: self.q.put(("health", ev, info)))      # called on the connection thread
         if first_start and not demo:

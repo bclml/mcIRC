@@ -147,7 +147,7 @@ def fetch_radio_contacts():
     res = ea.execute_mesh_command(ea.CONNECTION_ARGS + [".contacts"], timeout=90, retries=1)
     out = f"{res.stdout}\n{res.stderr}"
     i = out.find("{")
-    if i == -1: return {}
+    if i == -1: raise RuntimeError("the node's contact list did not come back")       # never 'no contacts': that would forget favorites
     data, _ = json.JSONDecoder().raw_decode(out[i:])
     return data
 

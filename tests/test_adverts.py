@@ -1,3 +1,4 @@
+from unittest import mock
 import os as _os; _os.environ["MCIRC_NO_LOG_FILE"] = "1"      # tests must never write to the bot's real log
 import os, sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -17,7 +18,8 @@ def ok(label, cond, detail=""):
 ok("USB -> --serial", ga.helper_args(["-s", "COM4"]) == ["--serial", "COM4"])
 ok("USB with baud", ga.helper_args(["-s", "COM4", "-b", "9600"]) == ["--serial", "COM4", "--baud", "9600"])
 ok("TCP -> --tcp/--port", ga.helper_args(["-t", "10.0.0.5", "-p", "5000"]) == ["--tcp", "10.0.0.5", "--port", "5000"])
-ok("Bluetooth is not supported (reconnects too slow)", ga.helper_args(["-a", "AA:BB:CC:DD:EE:FF"]) is None and ga.helper_args(None) is None)
+ok("Bluetooth -> --ble (it stays connected; sends go through it)", ga.helper_args(["-a", "AA:BB:CC:DD:EE:FF"]) == ["--ble", "AA:BB:CC:DD:EE:FF"]
+   and ga.helper_args(None) is None and ga.helper_args(["-a", ""]) is None)
 
 # ---------------------------------------------------------------- the real helper script against a stand-in meshcore library
 stub = tempfile.mkdtemp()
@@ -35,6 +37,10 @@ open(os.path.join(stub, "meshcore", "__init__.py"), "w").write(textwrap.dedent('
         async def get_msg(self):
             if INBOX: return Ev(INBOX.pop(0), EventType.CHANNEL_MSG_RECV)
             return Ev({}, EventType.NO_MORE_MSGS)
+        async def send_chan_msg(self, idx, text):
+            print("STUB chan %d %s" % (idx, text), file=sys.stderr, flush=True); return Ev({}, EventType.CHANNEL_MSG_RECV)
+        async def send_msg(self, contact, text):
+            print("STUB msg %s %s" % (contact["public_key"][:6], text), file=sys.stderr, flush=True); return Ev({}, EventType.CHANNEL_MSG_RECV)
         async def get_contacts(self, lastmod=0):
             print("STUB get_contacts lastmod=%d" % lastmod, file=sys.stderr, flush=True)
             await self.mc.fire(EventType.CONTACTS, {"k1": {"public_key": "aa" * 32, "adv_name": "Catchup Node", "type": 2, "adv_lat": 49.1, "adv_lon": -123.1, "lastmod": 5}})
@@ -47,6 +53,10 @@ open(os.path.join(stub, "meshcore", "__init__.py"), "w").write(textwrap.dedent('
             mc = cls(); asyncio.get_event_loop().call_later(0.4, lambda: asyncio.ensure_future(mc.later())); return mc
         @classmethod
         async def create_tcp(cls, host, port): return await cls.create_serial(host)
+        @classmethod
+        async def create_ble(cls, addr): return await cls.create_serial(addr)
+        def get_contact_by_key_prefix(self, prefix):
+            return {"public_key": "dd" * 32} if ("dd" * 32).startswith(prefix) else None
         def subscribe(self, et, cb): self.subs.setdefault(et, []).append(cb)
         async def fire(self, et, payload):
             for cb in self.subs.get(et, []): await cb(Ev(payload))
@@ -78,6 +88,17 @@ evm, _ = run_helper(100, "--messages")
 msgs = [e["payload"]["text"] for e in evm if e["event"] == "msg"]
 ok("--messages: what the node had waiting comes right after 'ready', and a new one as soon as the node says it arrived",
    msgs == ["Ann: hello mesh", "Bob: second one"] and [e["event"] for e in evm].index("msg") == [e["event"] for e in evm].index("ready") + 1, [e["event"] for e in evm])
+
+# --commands: sends through the listener's own connection
+cmds_in = "\n".join(json.dumps(c) for c in ({"id": 1, "cmd": "chan", "idx": 3, "text": "hello chan"}, {"id": 2, "cmd": "msg", "to": "dddddd", "text": "hi dd"},
+                                             {"id": 3, "cmd": "msg", "to": "eeeeee", "text": "nobody"})) + "\n"
+pc = subprocess.run([sys.executable, ga.HELPER, "--ble", "AA:BB", "--lastmod", "100", "--seconds", "4", "--commands"], input=cmds_in, capture_output=True,
+                    text=True, env=env, timeout=30)
+sent = {e["id"]: e for e in (json.loads(l) for l in pc.stdout.splitlines() if l.startswith("{")) if e["event"] == "sent"}
+ok("--ble --commands: channel and private messages go out over the listener's connection, each answered", sent.get(1, {}).get("ok") and sent.get(2, {}).get("ok")
+   and "STUB chan 3 hello chan" in pc.stderr and "STUB msg dddddd hi dd" in pc.stderr, (sent, pc.stderr[-300:]))
+ok("...an unknown contact is reported as such (mcIRC then puts the contact back on the radio)", sent.get(3, {}).get("ok") is False
+   and "err_code_not_found" in sent.get(3, {}).get("error", ""), sent.get(3))
 
 # ---------------------------------------------------------------- AdvertWatcher with a fake helper (timing / preemption / failure)
 import mcIRC
@@ -116,6 +137,76 @@ ok("another user of the radio gets the lock quickly (listener stepped aside)", w
 th.join(10)
 ok("listener thread ended and process is gone", not th.is_alive() and w.proc is None)
 ok("lock is free afterwards", io.MESH_LOCK.acquire(False) and (io.MESH_LOCK.release() or True))
+# sends go through the running listener - no new connection, the listener keeps listening
+echo = os.path.join(stub, "echo_helper.py")
+open(echo, "w").write(textwrap.dedent('''
+    import json, sys, threading, time
+    p = lambda **k: print(json.dumps(k), flush=True)
+    def rd():
+        for line in sys.stdin:
+            c = json.loads(line)
+            print("GOT " + c["cmd"] + " " + str(c.get("idx", c.get("to"))) + " " + c["text"], file=sys.stderr, flush=True)
+            p(event="sent", id=c["id"], ok=c["text"] != "refuse me", error="" if c["text"] != "refuse me" else "the node refused it")
+    threading.Thread(target=rd, daemon=True).start()
+    time.sleep(0.2); p(event="ready"); time.sleep(60)
+'''))
+ga.HELPER = echo
+stop2 = threading.Event()
+th2 = threading.Thread(target=lambda: w.listen(30, stop2), daemon=True); th2.start()
+t0 = time.time()
+while not w.ready and time.time() - t0 < 8: time.sleep(0.05)
+saved_ea = io.FAST_SEND
+calls = []
+with mock.patch.object(io, "_run_cli", side_effect=lambda *a, **k: calls.append(a) or (_ for _ in ()).throw(AssertionError("meshcli used"))):
+    t1 = time.time()
+    r1 = io.execute_mesh_command(io.CONNECTION_ARGS + ["chan", "3", "hi there"])
+    r2 = io.execute_mesh_command(io.CONNECTION_ARGS + ["public", "hello all"])
+    r3 = io.execute_mesh_command(io.CONNECTION_ARGS + ["msg", "ab" * 6, "psst"])
+    took = time.time() - t1
+    try: io.execute_mesh_command(io.CONNECTION_ARGS + ["chan", "3", "refuse me"]); refused = None
+    except RuntimeError as e: refused = str(e)
+ok("with the listener connected, channel / Public / private sends go through it - no meshcli, no new connection", w.ready and r1.returncode == 0
+   and r2.returncode == 0 and r3.returncode == 0 and not calls and took < 3 and th2.is_alive(), (w.ready, calls, took))
+ok("...a send the node refuses is reported as failed (not sent again by meshcli)", refused and "refused" in refused and not calls, refused)
+ok("...other commands still take the radio from the listener as before", io.FAST_SEND is not None and saved_ea(["infos"]) is None)
+# over Bluetooth every other command runs on the listener's connection too (meshcli's own code, its output passed back)
+open(echo, "w").write(textwrap.dedent('''
+    import json, sys, threading, time
+    p = lambda **k: print(json.dumps(k), flush=True)
+    def rd():
+        for line in sys.stdin:
+            c = json.loads(line)
+            if c["cmd"] == "cli": p(event="cli", id=c["id"], stdout=json.dumps({"tx_power": 22, "name": "Node"}) + " ran:" + " ".join(c["args"]), stderr="")
+            else: p(event="sent", id=c["id"], ok=True, error="")
+    threading.Thread(target=rd, daemon=True).start()
+    time.sleep(0.2); p(event="ready"); time.sleep(60)
+'''))
+stop2.set(); w.interrupt(); th2.join(10)
+io.CONNECTION_ARGS = ["-a", "AA:BB:CC:DD:EE:FF"]
+stop3 = threading.Event(); duty_calls = []
+th3 = threading.Thread(target=lambda: w.listen(30, stop3, lambda: duty_calls.append(io.execute_mesh_command(io.CONNECTION_ARGS + [".infos"]))), daemon=True)
+th3.start()
+t0 = time.time()
+while not w.ready and time.time() - t0 < 8: time.sleep(0.05)
+with mock.patch.object(io, "_run_cli", side_effect=AssertionError("meshcli used")):
+    r = io.execute_mesh_command(io.CONNECTION_ARGS + [".infos", ".ver"])
+    t1 = time.time()
+    while not duty_calls and time.time() - t1 < 6: time.sleep(0.1)
+ok("Bluetooth: any command runs on the listener's open connection and gives meshcli's output", r.returncode == 0 and "ran:.infos .ver" in r.stdout
+   and '"tx_power"' in r.stdout, r.stdout)
+ok("...the connection's routine jobs run through it while it listens (no new Bluetooth connection each time)", duty_calls and "ran:.infos" in duty_calls[0].stdout)
+ok("...'reboot' still goes the usual way", w.run_through(["reboot"]) is None)
+stop3.set(); w.interrupt(); th3.join(10)
+io.CONNECTION_ARGS = ["-s", "COM9"]
+ok("USB / Wi-Fi: other commands keep their own connection (cheap there); only messages go through the listener", w.run_through([".infos"]) is None)
+import gui_nodes
+with mock.patch.object(io, "execute_mesh_command", return_value=mock.Mock(stdout="Connected... timed out", stderr="")):
+    try: gui_nodes.fetch_radio_contacts(); empty = "returned"
+    except RuntimeError as e: empty = str(e)
+ok("a contact list that didn't come back is an error, not 'no contacts' (which made favorites disappear)", "did not come back" in empty, empty)
+ok("...after the listener has stopped, sends go through meshcli again", w.send_through(["chan", "3", "x"]) is None and not w.ready)
+ga.HELPER = fake
+
 # an ordinary (uncontended) hold must be fully released: another thread gets the lock straight away
 def hold_once():
     with io.MESH_LOCK: pass

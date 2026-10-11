@@ -101,7 +101,7 @@ class OptionsDialog(tk.Toplevel):
         self._row(f, "Radio capacity (contacts):", "radio_capacity", 6)
         tk.Checkbutton(f, text="After sending to a channel, listen for repeaters passing it on (shows 'heard 2 repeats'; USB and WiFi)", variable=self.vars["watch_repeats"], bg=BG).pack(anchor="w")
         tk.Checkbutton(f, text="...and send it once more when no repeater was heard", variable=self.vars["resend_unheard"], bg=BG).pack(anchor="w", padx=(20, 0))
-        tk.Checkbutton(f, text="Listen for adverts between polls (new nodes appear at once; USB and WiFi)", variable=self.vars["advert_listen"], bg=BG).pack(anchor="w", pady=(6, 0))
+        tk.Checkbutton(f, text="Listen between polls: messages and new nodes appear at once (USB, Wi-Fi and Bluetooth)", variable=self.vars["advert_listen"], bg=BG).pack(anchor="w", pady=(6, 0))
         tk.Checkbutton(f, text="Say in the Status window when a node is heard for the first time", variable=self.vars["advert_notices"], bg=BG).pack(anchor="w")
         tk.Checkbutton(f, text="Also delete forgotten nodes from the radio itself", variable=self.vars["prune_radio"], bg=BG).pack(anchor="w", pady=4)
         self.node_stats = tk.Label(f, bg=BG, justify="left", wraplength=400)

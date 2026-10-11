@@ -33,6 +33,7 @@ BLE_SCAN_TIMEOUT = 10  # seconds to wait while scanning for the node over Blueto
 TRACE = None  # set by gui_diag: TRACE(args, attempt, outcome, seconds, detail) after every meshcli attempt (no output text)
 
 CONNECTION_ARGS = None  # meshcli connection prefix, e.g. ["-s", "COM4"] or ["-a", "AA:BB:CC:DD:EE:FF"]
+FAST_SEND = None        # set by the GUI: (args, timeout) -> a command run on the open listener connection (gui_adverts.run_through), or None
 
 # --- OPTIONAL GUI HOOKS (see mcIRC.py; harmless when running headless) ---
 class _MeshLock:
@@ -432,6 +433,14 @@ def execute_mesh_command(args_list, timeout=30, retries=2, retry_delay=2, lock=N
         if args_list[:len(t[0])] == t[0]: lock, health = lock or t[1], health or t[2]
     lock = lock or MESH_LOCK
     health = health or HEALTH
+    rest = args_list[len(CONNECTION_ARGS):] if CONNECTION_ARGS and args_list[:len(CONNECTION_ARGS)] == CONNECTION_ARGS else None
+    if FAST_SEND is not None and lock is MESH_LOCK and rest:
+        started = time.time()
+        result = FAST_SEND(rest, timeout)                   # the listener is connected: through it, no new connection (Bluetooth: seconds)
+        if result is not None:
+            _trace(args_list, 0, "ok (listener)", started)
+            health.success()
+            return result
     launch = cli_cmd()
     last_err = None
     gen = _CANCEL_GEN[0]

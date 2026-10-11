@@ -15,7 +15,10 @@ from gui_adverts import helper_args
 HELPER = __file__.replace("gui_echo.py", "gui_echo_proc.py")
 
 
-def supported(conn_args): return helper_args(conn_args) is not None
+def supported(conn_args):
+    """USB and Wi-Fi.  Not Bluetooth: its own connection would make the always-open listener reconnect (seconds) - there a message goes
+    out through the listener's connection instead (gui_adverts.send_through)."""
+    return helper_args(conn_args) is not None and (conn_args or [""])[0] != "-a"
 
 
 def send_watched(conn_args, idx, text, seconds=6, resend=True, on_event=None):

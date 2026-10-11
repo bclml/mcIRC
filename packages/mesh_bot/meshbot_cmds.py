@@ -164,7 +164,10 @@ def channel_activity(log_dir, now, me="", seconds=86400, tail_bytes=512 * 1024, 
     return out
 
 
-def stats_text(packet_log, nodes, activity, now, since=None):
+NO_PACKETS = {"bluetooth": "packets: not heard over Bluetooth", "off": "packets: not listening", "failed": "packets: listener not working"}
+
+
+def stats_text(packet_log, nodes, activity, now, since=None, listening="on"):
     """Last 24 h: nodes your node heard, the busiest channels (from the chat logs); packets the listener heard since mcIRC started.
     'Heard' goes by lastmod - stamped by YOUR node's clock when it hears a node's advert or path - not by the advert's own time: many
     nodes' clocks are wrong (some by years)."""
@@ -173,8 +176,9 @@ def stats_text(packet_log, nodes, activity, now, since=None):
     chans = ", ".join(f"{c} {k}" for c, k in busy) if busy else "none"
     pk = [p for p in packet_log if now - p.get("t", 0) <= 86400]
     start = since if since and now - since < 86400 else None
-    pk_part = f"{len(pk)} packets heard" + (f" since {datetime.datetime.fromtimestamp(start).strftime('%H:%M')}" if start else "")
-    return f"Mesh 24h: {adv} nodes heard; busiest channels {chans} msgs; {pk_part}"
+    pk_part = NO_PACKETS.get(listening) or (f"{len(pk)} packet{'s' if len(pk) != 1 else ''} heard"
+                                             + (f" since {datetime.datetime.fromtimestamp(start).strftime('%H:%M')}" if start else ""))
+    return f"Mesh 24h: {adv} node{'s' if adv != 1 else ''} heard; busiest channels {chans} msgs; {pk_part}"
 
 
 # ---- sports (ESPN, like meshcore-bot) ----

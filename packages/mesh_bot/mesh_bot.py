@@ -28,7 +28,7 @@ GREETING = cmds.DEFAULT_GREETINGS[0]                     # the single greeting o
 class Addon(AddonBase):
     title = "Mesh bot"
     command_words = list(COMMANDS)          # (the settings window's 'Command names...': other names for each command)
-    version = "1.2.10"
+    version = "1.2.11"
     author = "mcIRC (commands after agessaman/meshcore-bot, MIT)"
     description = ("ping, hello, path, prefix, multitest, stats, sports and version - the meshcore-bot commands mcIRC's other bots don't have - "
                    "plus its greeter for newcomers (a random greeting from your list), each switched on for the channels you choose. Off until you switch it on.")
@@ -101,7 +101,8 @@ class Addon(AddonBase):
             log = self.api.packet_log
             since = min([self.loaded_at] + [p.get("t", now) for p in log[:1]])
             activity = cmds.channel_activity(getattr(self.api, "log_dir", None) or "logs", now, self.bot_name() if self.bot_name() != "a bot" else "")
-            return cmds.stats_text(log, self.api.nodes.all(), activity, now, since)
+            listening = self.api.listening() if hasattr(self.api, "listening") else "on"
+            return cmds.stats_text(log, self.api.nodes.all(), activity, now, since, listening)
         if cmd == "version":
             try:
                 import gui_update

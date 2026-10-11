@@ -56,6 +56,9 @@ st = cmds.stats_text(log, HEARD, {"#weather": 9, "Public": 3, "#joke": 1, "#test
 ok("stats: nodes YOUR node heard in 24 h (by its own clock, not the nodes' often-wrong ones)", st.startswith("Mesh 24h: 2 nodes heard;"), st)
 ok("...the busiest channels with their counts, and the packets since mcIRC started", "busiest channels #weather 9, Public 3, #joke 1 msgs" in st
    and "5 packets heard since " in st, st)
+bt = cmds.stats_text([], HEARD[:1], {}, now, now - 3600, "bluetooth")
+ok("stats over Bluetooth says packets aren't heard there (not '0 packets'), and '1 node' in the singular",
+   "packets: not heard over Bluetooth" in bt and "0 packets" not in bt and "1 node heard" in cmds.stats_text([], [{"lastmod": now}], {}, now), bt)
 import tempfile, datetime as _dt
 ld = tempfile.mkdtemp()
 day = _dt.datetime.fromtimestamp(now) - _dt.timedelta(hours=2)

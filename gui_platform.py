@@ -222,3 +222,21 @@ def create_shortcut(folder, extra_args="", name="mcIRC"):
     r = subprocess.run(["powershell", "-NoProfile", "-Command", ps], capture_output=True, text=True, timeout=60, env=env, creationflags=NO_WINDOW)
     if r.returncode != 0 or not os.path.isfile(path): raise RuntimeError((r.stderr or r.stdout or "Windows could not create the shortcut").strip()[:300])
     return path
+
+
+def pid_running(pid):
+    """True while process `pid` is still running (an mcIRC that is closing for a restart)."""
+    if IS_WIN:
+        import ctypes
+        k = ctypes.windll.kernel32
+        h = k.OpenProcess(0x1000, False, int(pid))              # PROCESS_QUERY_LIMITED_INFORMATION
+        if not h: return False
+        try:
+            code = ctypes.c_ulong()
+            return bool(k.GetExitCodeProcess(h, ctypes.byref(code))) and code.value == 259     # STILL_ACTIVE
+        finally: k.CloseHandle(h)
+    try: os.kill(int(pid), 0)
+    except ProcessLookupError: return False
+    except PermissionError: return True
+    except OSError: return False
+    return True

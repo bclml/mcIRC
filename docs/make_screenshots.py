@@ -135,13 +135,17 @@ def steps():
     yield from addon("auto_reply", "auto-reply-options.png")       # (its example rules were set above)
     yield from addon("broadcast_alerts", "addon-traffic.png", {"muted": False})
     yield from addon("broadcast_alerts", "addon-traffic-route.png", {"route_on": True}, tab=3)
-    yield from addon("area_alerts", "addon-area-alerts.png")
+    yield from addon("area_alerts", "addon-area-alerts.png", {"kinds": {"disasters": True, "weather": True, "emergency": True}})
     yield from addon("weather_bot", "addon-weather-bot.png", {"enabled": True, "channels": "#weather"})
     yield from addon("fun_bot", "addon-fun-bot.png", {"enabled": True, "channels": {c: "#fun" for c in ("dice", "roll", "magic8", "joke", "dadjoke", "hacker", "catfact")}})
     yield from addon("mesh_bot", "addon-mesh-bot.png", {"enabled": True})
     yield from addon("packet_upload", "addon-packet-upload.png")
     yield from addon("map_uploader", "addon-map-uploader.png")
     yield from how_to()
+    upd = gui_update_ui.UpdateDialog(app, auto_check=False); yield 400        # the box at the end of an update (never installs anything here)
+    box = upd.done_box("mcIRC was updated to 2026.10.12-4 (2 addon(s) too).\nIt runs the new version after a restart.", restart=True); yield 600
+    grab(box, "update-done.png")
+    box.destroy(); upd.destroy()
     root.destroy()
 
 

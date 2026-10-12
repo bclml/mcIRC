@@ -24,6 +24,7 @@ KINDS = {"disasters": ("Natural disasters (GDACS: earthquakes, cyclones, floods,
          "quakes": ("Earthquakes (USGS)", "#alerts"),
          "tsunami": ("Tsunami warnings (NOAA tsunami centres)", "#alerts"),
          "weather": ("Weather warnings (Environment Canada, US NWS, MeteoAlarm Europe)", "#weather"),
+         "emergency": ("Public emergency alerts (Canada: Alert Ready, US: FEMA IPAWS)", "#alerts"),
          "transit": ("Public transit: service stops and big delays (the agencies ticked on the Public transit tab)", "#transit"),
          "traffic": ("Roads: closures and incidents (DriveBC, 511 sites - see the Traffic tab)", "#traffic")}
 DEFAULT_ON = ("disasters", "weather")
@@ -37,9 +38,9 @@ WINDOW = "Area alerts"
 
 class Addon(AddonBase):
     title = "Area alerts"
-    version = "1.4.0"
+    version = "1.5.0"
     author = "mcIRC"
-    description = ("Natural disasters, earthquakes, tsunamis, weather warnings, public transit alerts and road closures for the areas you "
+    description = ("Natural disasters, earthquakes, tsunamis, weather warnings, public emergency alerts (Canada, US), public transit alerts and road closures for the areas you "
                    "choose anywhere in the world (country, region, area). Shown on this PC; broadcast to the mesh only if you tick it. "
                    "Off until you switch it on.")
     tick_seconds = 60

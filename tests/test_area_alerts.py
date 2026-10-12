@@ -91,6 +91,66 @@ ok("...information statements, and 'no tsunami danger for ...' notes, don't coun
 port_blair = places.make("IN", "Andaman and Nicobar", "Port Blair") or {"country": "IN", "country_name": "India", "region": "Andaman and Nicobar", "name": "Port Blair", "lat": 11.6, "lon": 92.7}
 ok("...names match whole words ('Indian Ocean' is not India)", src.tsunami(port_blair, get=lambda url, **k: atom) == [])
 
+# ---- US public emergency alerts (FEMA IPAWS): the area's county, never the NWS's own (they're 'weather'), never tests
+def cap(ident, event, same=None, polygon=None, sender="ops@county.example.gov", who="Los Angeles County Sheriff", code="CEM", status="Actual",
+        expires="2099-01-01T00:00:00-00:00", refs=""):
+    area = (f"<polygon>{polygon}</polygon>" if polygon else "") + (f"<geocode><valueName>SAME</valueName><value>{same}</value></geocode>" if same else "")
+    return (f"<alert xmlns='urn:oasis:names:tc:emergency:cap:1.2'><identifier>{ident}</identifier><sender>{sender}</sender><status>{status}</status>"
+            f"<msgType>{'Update' if refs else 'Alert'}</msgType><scope>Public</scope><references>{refs}</references><info><language>en-US</language>"
+            f"<event>{event}</event><eventCode><valueName>SAME</valueName><value>{code}</value></eventCode><expires>{expires}</expires>"
+            f"<senderName>{who}</senderName><area><areaDesc>x</areaDesc>{area}</area></info></alert>")
+CAPS = "<alerts>" + "".join((
+    cap("a1", "Evacuation Immediate", same="006037", code="EVI"),                                   # Los Angeles County
+    cap("a2", "Civil Emergency Message", polygon="33.9,-118.4 34.2,-118.4 34.2,-118.1 33.9,-118.1 33.9,-118.4"),   # a polygon around LA
+    cap("a3", "Shelter In Place Warning", same="006073", code="SPW"),                               # San Diego County: elsewhere
+    cap("a4", "Tornado Warning", same="006037", sender="w-nws.webmaster@noaa.gov", code="TOR"),     # the NWS: comes under 'weather'
+    cap("a5", "Required Weekly Test", same="006037", code="RWT"),
+    cap("a6", "Demo Warning", same="006000", code="DMO"),
+    cap("a7", "Law Enforcement Warning", same="006000", code="LEW", expires="2001-01-01T00:00:00-00:00"),   # over
+    cap("a8", "Evacuation Immediate", same="006037", code="EVI", refs="ops@county.example.gov,a1,2026-10-12T10:00:00-07:00"),  # an update of a1
+    cap("a9", "Child Abduction Emergency", same="006000", code="CAE"))) + "</alerts>"
+def ipaws_get(url, params=None, **k):
+    if "fcc.gov" in url: return {"results": [{"county_fips": "06037"}]}
+    return CAPS
+got = src.ipaws(la, get=ipaws_get)
+ok("IPAWS: the county's alerts (its SAME code, or a polygon around the area, or the whole state)", [a.id for a in got] == ["ipaws:a1", "ipaws:a2", "ipaws:a9"],
+   [a.id for a in got])
+ok("...not another county's, not the NWS's own (Weather warnings has those), no tests or demos, nothing over",
+   not any(x in a.id for a in got for x in ("a3", "a4", "a5", "a6", "a7")))
+ok("...an update keeps the first alert's id: not broadcast again as new", sum(a.id == "ipaws:a1" for a in got) == 1)
+ok("...short text: what, where, who", got[0].text == "Evacuation Immediate - Los Angeles (Los Angeles County Sheriff, IPAWS)" and got[0].kind == "emergency", got[0].text)
+ok("...outside the US: nothing asked", src.ipaws(lyon, get=lambda *a, **k: (_ for _ in ()).throw(AssertionError("asked"))) == [])
+ok("...a SAME code covers its county, or its whole state with county 000", src._same_hit("006037", "06037") and src._same_hit("006000", "06037")
+   and not src._same_hit("006073", "06037") and not src._same_hit("012000", "06037"))
+
+# ---- Canada's public emergency alerts (Alert Ready / NAAD): inside the alert's outline, English, real, not Environment Canada's weather
+SQUARE = "49.0 -123.5 49.5 -123.5 49.5 -122.5 49.0 -122.5 49.0 -123.5"          # around Vancouver
+def naad_entry(ident, title, who="BC Emergency Management", status="Actual", lang="en-CA", polygon=SQUARE, expires="2099-01-01T00:00:00-00:00"):
+    return (f"<entry><title>{title}</title><author><name>{who}</name></author><category term='status={status}'/><category term='msgType=Alert'/>"
+            f"<category term='scope=Public'/><category term='language={lang}'/><category term='event=civilEmerg'/>"
+            f"<summary>Description: x&lt;br&gt;Expires: {expires}&lt;br&gt;Originated from CAP Alert: {who}, 2026-10-12T10:00:00-07:00, {ident}&lt;br&gt;Area: x</summary>"
+            f"<georss:polygon>{polygon}</georss:polygon></entry>")
+NAAD = ("<feed xmlns='http://www.w3.org/2005/Atom' xmlns:georss='http://www.georss.org/georss'>" + "".join((
+    naad_entry("n1", "evacuation order"),
+    naad_entry("n1", "ordre d'évacuation", lang="fr-CA"),                                  # the French copy: once is enough
+    naad_entry("n2", "civil emergency", polygon="45.0 -75.0 45.5 -75.0 45.5 -74.5 45.0 -74.5 45.0 -75.0")),      # Ottawa: elsewhere
+    ) + naad_entry("n3", "special weather statement in effect", who="Environment Canada")
+    + naad_entry("n4", "This is a Test Message", status="Test") + naad_entry("n5", "amber alert", expires="2001-01-01T00:00:00-00:00")
+    + naad_entry("n6", "evacuation order - ended") + "</feed>")
+van = {"country": "CA", "name": "Vancouver", "lat": 49.28, "lon": -123.12}
+got = src.naad(van, get=lambda url, **k: NAAD)
+ok("Alert Ready: an alert whose outline holds the area, in English, its first letter capitalised", [a.text for a in got]
+   == ["Evacuation order - Vancouver (BC Emergency Management, Alert Ready)"] and got[0].id == "naad:n1" and got[0].kind == "emergency", [a.text for a in got])
+ok("...not elsewhere, not Environment Canada's weather (Weather warnings has it), no tests, nothing expired or ended", len(got) == 1)
+feeds = []
+def second_only(url, **k):
+    feeds.append(url)
+    if "rss1" in url: raise OSError("down")
+    return NAAD
+ok("...Oakville's feed down: Montreal's", len(src.naad(van, get=second_only)) == 1 and len(feeds) == 2)
+ok("'emergency': Alert Ready in Canada, IPAWS in the US, none elsewhere", src.emergency(van, get=lambda url, **k: NAAD)[0].id == "naad:n1"
+   and src.emergency(la, get=ipaws_get)[0].id == "ipaws:a1" and src.emergency(lyon, get=lambda *a, **k: 1 / 0) == [])
+
 # ---- public transit (GTFS-realtime service alerts)
 from google.transit import gtfs_realtime_pb2
 ok("the Mobility Database's transit alert feeds are there, worldwide", len(transit.feeds()) > 400 and len({f["cc"] for f in transit.feeds()}) > 20)
@@ -153,6 +213,9 @@ ok("...DriveBC: real closures on now ('Closed.'), not lane closures, not ones sc
 # ---- the addon
 spec = importlib.util.spec_from_file_location("t_area_alerts", os.path.join(PKG, "area_alerts.py"))
 mod = importlib.util.module_from_spec(spec); spec.loader.exec_module(mod)
+ok("'Public emergency alerts' (Canada, US) is a kind of its own: channel #alerts, off until ticked", mod.KINDS["emergency"][1] == "#alerts"
+   and "IPAWS" in mod.KINDS["emergency"][0] and "Alert Ready" in mod.KINDS["emergency"][0] and "emergency" not in mod.DEFAULT_ON
+   and mod.src.SOURCES["emergency"] is src.emergency)
 
 class API:
     def __init__(self):

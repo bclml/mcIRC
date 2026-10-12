@@ -5,6 +5,9 @@ id is stable (the same alert is not sent twice), text is ready for the mesh (sho
   quakes     USGS earthquakes - worldwide
   tsunami    NOAA tsunami warning centres (US NTWC, Pacific PTWC) - their bulletins that name the area's country or region
   weather    official weather warnings: Environment Canada, the US National Weather Service, MeteoAlarm (38 European countries)
+  emergency  public emergency alerts - US: FEMA IPAWS (matched on the area's county), Canada: Alert Ready / NAAD (matched on the alert's
+             outline): evacuations, civil emergencies, shelter in place, Amber alerts, earthquake early warnings ... from the authorities;
+             the weather services' own alerts are left to 'weather' (NWS, Environment Canada), tests left out
 
 All are free and need no key."""
 import datetime
@@ -23,6 +26,12 @@ GDACS_URL = "https://www.gdacs.org/gdacsapi/api/events/geteventlist/SEARCH"
 USGS_URL = "https://earthquake.usgs.gov/fdsnws/event/1/query"
 NWS_URL = "https://api.weather.gov/alerts/active"
 METEOALARM_URL = "https://feeds.meteoalarm.org/api/v1/warnings/feeds-{country}"
+IPAWS_URL = "https://apps.fema.gov/IPAWSOPEN_EAS_SERVICE/rest/public/recent/{since}"
+FCC_AREA_URL = "https://geo.fcc.gov/api/census/area"           # US county of a point (its FIPS code - what IPAWS alerts name)
+IPAWS_TESTS = {"RWT", "RMT", "DMO", "NPT", "NMN", "ADR"}       # weekly / monthly tests, demos, national tests, network and admin messages
+CAP = "{urn:oasis:names:tc:emergency:cap:1.2}"
+NAAD_FEEDS = ("http://rss1.naad-adna.pelmorex.com/", "http://rss2.naad-adna.pelmorex.com/")   # Alert Ready (Pelmorex): every alert of the last 48 h
+ATOM, GEORSS = "{http://www.w3.org/2005/Atom}", "{http://www.georss.org/georss}"
 TSUNAMI_FEEDS = ("https://www.tsunami.gov/events/xml/PAAQAtom.xml", "https://www.tsunami.gov/events/xml/PHEBAtom.xml")
 # MeteoAlarm's feed names for the countries it covers (ISO code -> feed)
 METEOALARM = {"AT": "austria", "BE": "belgium", "BA": "bosnia-herzegovina", "BG": "bulgaria", "HR": "croatia", "CY": "cyprus", "CZ": "czechia",
@@ -194,4 +203,120 @@ def _meteoalarm(area, get=None):
     return out
 
 
-SOURCES = {"disasters": gdacs, "quakes": usgs, "tsunami": tsunami, "weather": weather}
+# ---- US public emergency alerts (FEMA IPAWS) ----
+_fips, _ipaws_feed = {}, [0.0, None]      # county of each area (it doesn't move); the feed, shared by all areas for a few minutes
+
+
+def county_fips(area, get=None):
+    """'53033' - the US county the area is in (FCC census lookup), '' outside the US."""
+    key = (round(area["lat"], 3), round(area["lon"], 3))
+    if key not in _fips or get is not None:
+        res = ((get or _get)(FCC_AREA_URL, {"lat": area["lat"], "lon": area["lon"], "format": "json"}).get("results") or [{}])[0]
+        _fips[key] = res.get("county_fips") or ""
+    return _fips[key]
+
+
+def _inside(lat, lon, polygon):
+    """Is the point inside a CAP polygon ('lat,lon lat,lon ...')?"""
+    pts = [tuple(map(float, p.split(","))) for p in polygon.split() if "," in p]
+    inside, j = False, len(pts) - 1
+    for i in range(len(pts)):
+        (ya, xa), (yb, xb) = pts[i], pts[j]
+        if (ya > lat) != (yb > lat) and lon < (xb - xa) * (lat - ya) / (yb - ya) + xa: inside = not inside
+        j = i
+    return inside
+
+
+def _same_hit(code, fips):
+    """A SAME area code ('053033': part, state, county; county 000 = the whole state) that covers the county."""
+    code = (code or "").strip()
+    return len(code) == 6 and len(fips) == 5 and (code[1:] == fips or (code[3:] == "000" and code[1:3] == fips[:2]))
+
+
+def ipaws(area, get=None, now=None):
+    """IPAWS alerts in force for the area (US only): not the National Weather Service's (those come under 'weather'), never tests."""
+    if area.get("country") != "US": return []
+    import xml.etree.ElementTree as ET
+    now = now or time.time()
+    fips = county_fips(area, get)
+    if get is not None or now - _ipaws_feed[0] > 240 or _ipaws_feed[1] is None:
+        since = datetime.datetime.fromtimestamp(now - 48 * 3600, datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        text = (get or _get)(IPAWS_URL.format(since=since), timeout=40, json=False)
+        _ipaws_feed[:] = [now, text]
+    out, seen = [], set()
+    for a in ET.fromstring(_ipaws_feed[1]).iter(CAP + "alert"):
+        t = lambda node, tag: (node.findtext(CAP + tag) or "").strip()
+        sender = t(a, "sender").lower()
+        if t(a, "status") != "Actual" or t(a, "scope") not in ("Public", "") or t(a, "msgType") == "Cancel" or "nws" in sender or "noaa.gov" in sender:
+            continue
+        infos = a.findall(CAP + "info")
+        info = next((i for i in infos if t(i, "language").lower().startswith("en")), infos[0] if infos else None)
+        if info is None: continue
+        codes = {(c.findtext(CAP + "value") or "").strip().upper() for c in info.findall(CAP + "eventCode")}
+        if codes & IPAWS_TESTS or re.search(r"\b(test|demo|exercise)\b", t(info, "event"), re.I) or _past(t(info, "expires"), now): continue
+        hit = False
+        for ar in info.findall(CAP + "area"):
+            if any(_inside(area["lat"], area["lon"], p.text or "") for p in ar.findall(CAP + "polygon")): hit = True
+            if any(_same_hit(g.findtext(CAP + "value"), fips) for g in ar.findall(CAP + "geocode") if (g.findtext(CAP + "valueName") or "") == "SAME"): hit = True
+        if not hit: continue
+        refs = t(a, "references").split()                   # an update keeps the first alert's id: not broadcast again as new
+        first = refs[0].split(",")[1] if refs and refs[0].count(",") >= 2 else t(a, "identifier")
+        if first in seen: continue
+        seen.add(first)
+        who = t(info, "senderName")
+        who = "" if who.lower() in ("", "public alert system", "ipaws") else who
+        out.append(Alert(f"ipaws:{first}", "emergency", short(f"{t(info, 'event') or 'Emergency alert'} - {area['name']} ({who + ', ' if who else ''}IPAWS)"), "IPAWS"))
+    return out
+
+
+# ---- Canada's public emergency alerts (Alert Ready, through Pelmorex's NAAD system) ----
+_naad_feed = [0.0, None]
+
+
+def _inside_pairs(lat, lon, polygon):
+    """Is the point inside a GeoRSS polygon ('lat lon lat lon ...')?"""
+    n = [float(x) for x in polygon.split()]
+    return _inside(lat, lon, " ".join(f"{n[i]},{n[i + 1]}" for i in range(0, len(n) - 1, 2)))
+
+
+def naad(area, get=None, now=None):
+    """Alert Ready alerts in force for the area (Canada only): English, real (not tests), not Environment Canada's (those come under
+    'weather'), the area inside the alert's outline."""
+    if area.get("country") != "CA": return []
+    import xml.etree.ElementTree as ET
+    now = now or time.time()
+    if get is not None or now - _naad_feed[0] > 240 or _naad_feed[1] is None:
+        text, err = None, None
+        for url in NAAD_FEEDS:                               # Oakville, then Montreal
+            try: text = (get or _get)(url, timeout=40, json=False); break
+            except Exception as e: err = e
+        if text is None: raise err
+        _naad_feed[:] = [now, text]
+    out, seen = [], set()
+    for e in ET.fromstring(_naad_feed[1]).iter(ATOM + "entry"):
+        cats = dict(c.get("term", "").split("=", 1) for c in e.findall(ATOM + "category") if "=" in c.get("term", ""))
+        who = (e.findtext(f"{ATOM}author/{ATOM}name") or "").strip()
+        if cats.get("status") != "Actual" or cats.get("scope", "Public") != "Public" or cats.get("msgType") == "Cancel": continue
+        if not cats.get("language", "en").lower().startswith("en") or who.lower().startswith(("environment canada", "environnement canada")): continue
+        summary = e.findtext(ATOM + "summary") or ""
+        m = re.search(r"Expires:\s*([0-9T:+-]+)", summary)
+        if m and _past(m.group(1), now): continue
+        if not any(_inside_pairs(area["lat"], area["lon"], p.text or "") for p in e.findall(GEORSS + "polygon")): continue
+        m = re.search(r"Originated from CAP Alert:[^,]*,[^,]*,\s*([^<\s]+)", summary)
+        ident = m.group(1) if m else (e.findtext(ATOM + "id") or "")
+        if ident in seen: continue
+        seen.add(ident)
+        title = (e.findtext(ATOM + "title") or cats.get("event") or "Emergency alert").strip()
+        if re.search(r"\b(?:ended|terminée?)\s*$", title, re.I): continue          # '... - ended': it's over, not a new alert
+        out.append(Alert(f"naad:{ident}", "emergency", short(f"{title[:1].upper() + title[1:]} - {area['name']} ({who}, Alert Ready)"), "Alert Ready"))
+    return out
+
+
+def emergency(area, get=None):
+    """Public emergency alerts for the area: Alert Ready in Canada, IPAWS in the US; none elsewhere (yet)."""
+    if area.get("country") == "CA": return naad(area, get)
+    if area.get("country") == "US": return ipaws(area, get)
+    return []
+
+
+SOURCES = {"disasters": gdacs, "quakes": usgs, "tsunami": tsunami, "weather": weather, "emergency": emergency}

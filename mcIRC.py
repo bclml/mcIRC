@@ -1026,7 +1026,10 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--demo", action="store_true", help="fill the UI with fake data; never touches the radio")
     ap.add_argument("--make-shortcut", action="store_true", help="(Windows) put an mcIRC shortcut with the logo on the Desktop and in this folder, then exit")
+    ap.add_argument("--wait-pid", type=int, help="(restart after an update) wait until that mcIRC has closed before starting")
+    ap.add_argument("--connect", action="store_true", help="connect to the node right after starting")
     args = ap.parse_args()
+    if args.wait_pid: wait_for_exit(args.wait_pid)
     if args.make_shortcut: return make_shortcuts(print)
     if args.demo: os.environ["MCIRC_NO_LOG_FILE"] = "1"      # demo mode must never write to the bot's real log
     holder, lock = {}, None
@@ -1042,7 +1045,15 @@ def main():
     gui_platform.set_app_icon(root)
     root.report_callback_exception = gui_diag.tk_exception
     holder["app"] = App(root, demo=args.demo)
+    if args.connect and not args.demo and not holder["app"].settings["auto_connect"]: root.after(1500, holder["app"].connect)
     root.mainloop()
+
+
+def wait_for_exit(pid, timeout=60):
+    """Waits (at most `timeout` s) until process `pid` has ended: a restart must not start while the old mcIRC still holds the radio
+    and the one-copy lock."""
+    end = time.time() + timeout
+    while time.time() < end and gui_platform.pid_running(pid): time.sleep(0.3)
 
 
 if __name__ == "__main__":

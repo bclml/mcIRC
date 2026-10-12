@@ -43,6 +43,12 @@ with mock.patch.object(gui.gu, "apply_update", lambda **k: (_ for _ in ()).throw
     d.install()
 ok("only the addon is installed (from the catalog), not the app", installed_from_catalog == ["dolphins"], installed_from_catalog)
 ok("...and it runs the new version at once, no restart", reloaded == ["dolphins"] and "running the new version" in d.head["text"] and str(d.btn_restart["state"]) == "disabled", (reloaded, d.head["text"]))
+box = d.last_done_box
+ok("...'Update done' says so, with 'Restart mcIRC' NOT ticked (addons don't need it)", "running the new version" in box.winfo_children()[0]["text"]
+   and box.restart.get() is False, box.winfo_children()[0]["text"])
+restarted = []
+with mock.patch.object(d, "restart", lambda: restarted.append(1)): box.ok()
+ok("...OK without the tick: no restart, the box closes", restarted == [] and not box.winfo_exists())
 mgr.loaded.pop("dolphins", None)
 d.destroy()
 
@@ -59,6 +65,20 @@ with mock.patch.object(gui.gu, "check", lambda: {"newer": True, "local": "2.0.2"
     d.install()
 ok("the app update brings the addon along (not downloaded twice)", installed_from_catalog == [] and "Addon 'dolphins' updated 1.1.1 -> 1.2.0" in log(), (installed_from_catalog, log()))
 ok("...then Restart is offered", str(d.btn_restart["state"]) == "normal" and "restart" in d.head["text"])
+box = d.last_done_box
+ok("'Update done' after an mcIRC update: 'Restart mcIRC' ticked", box.restart.get() is True and "2.0.3" in box.winfo_children()[0]["text"], box.winfo_children()[0]["text"])
+started, quit_ = [], []
+app.connected = True
+with mock.patch.object(gui.subprocess, "Popen", lambda args, **k: started.append(args)), mock.patch.object(app, "quit", lambda: quit_.append(1)),      mock.patch.object(gui.sys, "argv", ["C:/mcIRC/mcIRC.py"]):
+    box.ok()
+ok("...OK with the tick: a new mcIRC that waits for this one to close and connects again, then this one closes",
+   started and started[0][1:] == ["C:/mcIRC/mcIRC.py", "--wait-pid", str(os.getpid()), "--connect"] and quit_ == [1], started)
+app.connected = False
+import mcIRC as _m
+alive = [True, True, False]
+with mock.patch.object(_m.gui_platform, "pid_running", lambda pid: alive.pop(0) if alive else False), mock.patch.object(_m.time, "sleep", lambda s: None):
+    _m.wait_for_exit(1234)
+ok("the restarted mcIRC waits until the old one is gone", alive == [])
 d.destroy()
 
 # ---- the catalog can't be read: the app check still works

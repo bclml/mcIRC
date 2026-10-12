@@ -1,6 +1,6 @@
 """Dialogs for updating the app and browsing/installing tested addons, plus the feedback links in the Help menu."""
 import gui_platform
-import subprocess, sys, tkinter as tk, webbrowser
+import os, subprocess, sys, tkinter as tk, webbrowser
 from tkinter import ttk, messagebox
 
 import gui_addons as ga
@@ -109,14 +109,51 @@ class UpdateDialog(tk.Toplevel):
             if res:
                 self.head.config(text=f"Updated to {gui_platform.shown_version(res['new'])} - restart to use it.")
                 self.btn_restart.config(state="normal")
+                self.done_box(f"mcIRC was updated to {gui_platform.shown_version(res['new'])}" + (f" ({len(addons)} addon(s) too)" if addons else "")
+                              + ".\nIt runs the new version after a restart.", restart=True)
             else:
                 self.head.config(text="Addons updated - they are running the new version already.")
+                self.done_box(f"{len(addons)} addon(s) updated - they are running the new version already.", restart=False)
             self.addon_updates = []
         self.app.bg(work, done)
 
+    def done_box(self, text, restart):
+        """'Update done' with a 'Restart mcIRC' tick box (ticked when mcIRC itself was updated): OK restarts it when ticked."""
+        box = tk.Toplevel(self, bg=BG)
+        box.title("Update done")
+        box.transient(self)
+        box.resizable(False, False)
+        tk.Label(box, text=text, bg=BG, justify="left", wraplength=360).pack(anchor="w", padx=14, pady=(14, 8))
+        box.restart = tk.BooleanVar(value=restart)
+        tk.Checkbutton(box, text="Restart mcIRC", variable=box.restart, bg=BG).pack(anchor="w", padx=10)
+        def ok():
+            again = box.restart.get()
+            box.destroy()
+            if again: self.restart()
+        box.ok = ok
+        ttk.Button(box, text="OK", command=ok).pack(pady=(8, 12))
+        box.protocol("WM_DELETE_WINDOW", box.destroy)              # closing it with X: no restart
+        box.bind("<Return>", lambda e: ok())
+        self.last_done_box = box
+        return box
+
     def restart(self):
+        """Starts a new mcIRC that waits for this one to close (the radio and the one-copy lock are free by then) and connects again if this
+        one was connected, then closes this one."""
+        args = restart_args(sys.argv, os.getpid(), getattr(self.app, "connected", False))
+        subprocess.Popen([sys.executable] + args, cwd=ga.BASE_DIR)
         self.app.quit()
-        subprocess.Popen([sys.executable] + sys.argv, cwd=ga.BASE_DIR)
+
+
+def restart_args(argv, pid, connected):
+    """The command line of the restarted mcIRC: the same, plus --wait-pid <this process> (and --connect when it was connected)."""
+    out, skip = [], False
+    for a in argv:
+        if skip: skip = False; continue
+        if a == "--wait-pid": skip = True; continue
+        if a == "--connect": continue
+        out.append(a)
+    return out + ["--wait-pid", str(pid)] + (["--connect"] if connected else [])
 
 
 class CatalogDialog(tk.Toplevel):

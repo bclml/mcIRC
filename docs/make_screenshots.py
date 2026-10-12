@@ -12,7 +12,8 @@ sys.path.insert(0, BASE)
 os.chdir(BASE)
 os.makedirs(OUT, exist_ok=True)
 
-import mcIRC, meshcore_io as io, gui_addons as ga, gui_devices, gui_dialogs, gui_update_ui   # noqa: E402
+import mcIRC, meshcore_io as io, gui_addons as ga, gui_addonsettings, gui_devices, gui_dialogs, gui_update_ui   # noqa: E402
+from tkinter import ttk   # noqa: E402
 from PIL import ImageGrab   # noqa: E402
 
 
@@ -47,6 +48,8 @@ SAMPLE_NODE = {"info": {"tx_power": 22, "max_tx_power": 22, "public_key": "a1b2c
                "core": {"battery_mv": 3947, "uptime_secs": 248451, "errors": 0, "queue_len": 0},
                "radio": {"noise_floor": -115, "last_rssi": -59, "last_snr": 13.25, "tx_air_secs": 111, "rx_air_secs": 2294}}
 
+import gui_common   # noqa: E402
+mcIRC.load_settings = lambda: dict(gui_common.DEFAULT_SETTINGS)   # a fresh setup: none of YOUR nodes, nick lists or names in public pictures
 root = tk.Tk()
 app = mcIRC.App(root, demo=True)
 ga.fetch_catalog.__defaults__ = (ga.RAW, lambda url, timeout=20: open(os.path.join(BASE, url.rsplit("/", 1)[1]), "rb").read())   # catalog from the local file
@@ -101,9 +104,7 @@ def steps():
         {"name": "Test here", "enabled": True, "triggers": "test, t", "match": "exact", "listen": "#bot-van", "reply": "@{sender} Test received, {hops} hops", "reply_to": "", "cooldown": 20},
         {"name": "Test elsewhere", "enabled": True, "triggers": "test, t", "match": "exact", "listen": "", "reply": "@{sender} Please test in #bot-van", "reply_to": "", "cooldown": 20},
         {"name": "Ferry question", "enabled": True, "triggers": "!ferry", "match": "starts with", "listen": "Public", "reply": "@{sender} sailing news is on #bcferries", "reply_to": "", "cooldown": 30}])
-    dlg.destroy(); app.open_options("Connect"); yield 600; dlg = child(gui_dialogs.OptionsDialog); dlg.node_pages.fill(SAMPLE_NODE)   # reopen so the page shows them
-    dlg.tree.selection_set("addon:auto_reply"); yield 500
-    grab(dlg, "auto-reply-options.png")
+    dlg.destroy(); app.open_options("Connect"); yield 600; dlg = child(gui_dialogs.OptionsDialog); dlg.node_pages.fill(SAMPLE_NODE)
     dlg.tree.selection_set("Connect"); yield 400
     dlg.scan_devices(); yield 2500
     grab(child(gui_devices.DeviceScanDialog), "device-scan.png")
@@ -114,12 +115,42 @@ def steps():
     gui_update_ui.CatalogDialog(app); yield 1800
     grab(child(gui_update_ui.CatalogDialog), "addons-catalog.png")
     child(gui_update_ui.CatalogDialog).destroy()
+
+    # each addon's own settings window, with example settings (demo mode never saves them)
+    def addon(name, picture, values=None, tab=None):
+        if name not in app.addons.loaded: print("not loaded:", name); return
+        api = app.addons.loaded[name][0].api
+        for k, v in (values or {}).items(): api.set(k, v)
+        win = gui_addonsettings.open_settings(app, name); yield 900
+        if tab is not None:
+            nb = next((w for w in _descendants(win) if isinstance(w, ttk.Notebook)), None)
+            if nb is not None: nb.select(tab); yield 500
+        grab(win, picture)
+        win.destroy(); yield 300
+
+    yield from addon("auto_reply", "auto-reply-options.png")       # (its example rules were set above)
+    yield from addon("broadcast_alerts", "addon-traffic.png", {"muted": False})
+    yield from addon("broadcast_alerts", "addon-traffic-route.png", {"route_on": True}, tab=3)
+    yield from addon("area_alerts", "addon-area-alerts.png")
+    yield from addon("weather_bot", "addon-weather-bot.png", {"enabled": True, "channels": "#weather"})
+    yield from addon("fun_bot", "addon-fun-bot.png", {"enabled": True, "channels": {c: "#fun" for c in ("dice", "roll", "magic8", "joke", "dadjoke", "hacker", "catfact")}})
+    yield from addon("mesh_bot", "addon-mesh-bot.png", {"enabled": True})
+    yield from addon("packet_upload", "addon-packet-upload.png")
+    yield from addon("map_uploader", "addon-map-uploader.png")
     root.destroy()
+
+
+def _descendants(w):
+    for c in w.winfo_children():
+        yield c
+        yield from _descendants(c)
 
 
 def run(gen):
     try: delay = next(gen)
     except StopIteration: return
+    except Exception:                       # a step failed: say which, and close instead of leaving the window hanging
+        import traceback; traceback.print_exc(); root.destroy(); return
     root.after(delay, lambda: run(gen))
 
 

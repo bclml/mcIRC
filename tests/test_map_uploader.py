@@ -10,6 +10,7 @@ from types import SimpleNamespace
 
 sys.path.insert(0, os.path.join(ROOT, "packages", "map_uploader"))
 import mapup_core as core
+import meshcore_io as io
 from Crypto.PublicKey import ECC
 from Crypto.Signature import eddsa
 
@@ -97,6 +98,25 @@ with mock.patch.object(mod, "node_info", lambda: ("cc" * 32, {"freq": 910.525, "
     r4, *_ = make_advert(kind=4, name="Sensor")
     inst.on_packet({"packet": r4})
 ok("a node that can't sign: uploads pause with a clear note", inst.paused and any(l == "warn" and "paused" in t for l, t in logged), logged[-1:])
+# 'bad state' (the node lost track of a signature halfway): tried again, then that advert skipped - never a pause for the session
+inst.paused = ""
+tries = []
+with mock.patch.object(io, "CONNECTION_ARGS", ["-t", "192.168.1.57"]), mock.patch.object(mod, "helper_path", lambda: "helper.py"),      mock.patch.object(mod, "SIGN_WAIT", 0):
+    bad = {"error": "{'error_code': 4, 'code_string': 'ERR_CODE_BAD_STATE'}"}
+    sig = mod.sign_with_node(b"x" * 32, run=lambda *a: tries.append(1) or (bad if len(tries) < 2 else {"signature": "ab"}))
+    ok("'bad state': signed on the next try", sig == "ab" and len(tries) == 2, tries)
+    tries.clear()
+    try: mod.sign_with_node(b"x" * 32, run=lambda *a: tries.append(1) or bad); err = None
+    except Exception as e: err = e
+    ok("...still busy after 3 tries: NodeBusy (not 'can't sign')", isinstance(err, mod.NodeBusy) and len(tries) == 3, err)
+    try: mod.sign_with_node(b"x" * 32, run=lambda *a: {"error": "unsupported command"}); err = None
+    except Exception as e: err = e
+    ok("...a node that really can't sign: one try, 'did not sign'", not isinstance(err, mod.NodeBusy) and "did not sign" in str(err), err)
+with mock.patch.object(mod, "node_info", lambda: ("cc" * 32, {"freq": 910.525, "cr": 5, "sf": 7, "bw": 62.5})),      mock.patch.object(mod, "sign_with_node", lambda d: (_ for _ in ()).throw(mod.NodeBusy("the node was busy and didn't sign (3 tries)"))):
+    r5, *_ = make_advert(kind=2, name="Busy Rptr")
+    inst.on_packet({"packet": r5})
+ok("...the addon: that advert skipped with a note, uploads NOT paused, no 'older firmware'", not inst.paused
+   and "skipped" in logged[-1][1] and "Older firmware" not in logged[-1][1], logged[-1:])
 ok("helper arguments for USB and Wi-Fi; Bluetooth refused", mod.helper_args(["-s", "COM4"]) == ["--serial", "COM4"]
    and mod.helper_args(["-t", "192.168.1.57", "-p", "5000"]) == ["--tcp", "192.168.1.57", "--port", "5000"] and mod.helper_args(["-a", "x"]) is None)
 root.destroy()

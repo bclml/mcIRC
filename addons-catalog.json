@@ -5,7 +5,7 @@
     {
       "name": "broadcast_alerts",
       "title": "Traffic, transit and weather",
-      "version": "1.6.3",
+      "version": "1.6.4",
       "author": "bclml",
       "description": "DriveBC, BC Ferries, BC Transit, TransLink, weather (Environment Canada warnings for the areas you pick in any province or territory), earthquake and tsunami alerts. Keeps the map layers up to date; broadcasting them to the mesh is off until you switch it on (per-alert switches).",
       "path": "packages/broadcast_alerts",
@@ -95,7 +95,7 @@
     {
       "name": "map_uploader",
       "title": "Map uploader",
-      "version": "1.0.2",
+      "version": "1.0.3",
       "author": "bclml (Python port of recrof/map.meshcore.io-uploader, MIT)",
       "description": "Puts the repeaters, room servers and sensors your node hears on the official MeshCore map (map.meshcore.io). Only adverts really signed by their node; each upload is signed by your node itself - its private key never leaves the radio. People's companions are never uploaded. Off until you switch it on.",
       "path": "packages/map_uploader",

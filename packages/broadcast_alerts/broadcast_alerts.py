@@ -32,7 +32,7 @@ class Addon(AddonBase):
     SOURCES = [k for k in ea.TX_SOURCES if k != "Test reply"]   # alert types with a switch on the Alerts tab
     title = "Traffic, transit and weather"
     replies = True                         # ('route' answers people: the settings window offers the answer wait)
-    version = "1.6.3"
+    version = "1.6.4"
     author = "built in"
     description = ("Traffic / ferry / transit / weather / earthquake / tsunami alerts. Keeps the map's DriveBC and earthquake layers up to date; "
                    "broadcasting them to the mesh is OFF until you switch it on.")

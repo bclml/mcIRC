@@ -33,17 +33,33 @@ def helper_args(conn):
     return None                                               # Bluetooth: not supported by the helper
 
 
-def sign_with_node(digest):
+class NodeBusy(RuntimeError):
+    """The node lost track of a signature halfway (ERR_CODE_BAD_STATE: short of memory for a moment, or a reconnect in between) - not
+    a node that can't sign.  That advert is skipped; the next ones are tried as usual."""
+
+
+SIGN_TRIES, SIGN_WAIT = 3, 3.0          # a passing 'bad state': try again a moment later
+
+
+def _run_helper(helper, args, digest):
+    with io.MESH_LOCK:
+        r = subprocess.run([sys.executable, helper] + args + ["--hex", digest.hex()], capture_output=True, text=True, timeout=60,
+                           creationflags=io.NO_WINDOW, cwd=BASE_DIR)
+    return next((json.loads(l) for l in reversed(r.stdout.splitlines()) if l.startswith("{")), {"error": r.stderr.strip()[-200:] or "no answer"})
+
+
+def sign_with_node(digest, run=_run_helper):
     """The node signs the 32 bytes (its key stays on it).  Holds the radio for the few seconds it takes."""
     args, helper = helper_args(io.CONNECTION_ARGS), helper_path()
     if args is None: raise RuntimeError("signing needs a USB or Wi-Fi connection to the node (not Bluetooth)")
     if helper is None: raise RuntimeError("mapup_sign_proc.py is missing - Tools > Addons > Update fixes it")
-    with io.MESH_LOCK:
-        r = subprocess.run([sys.executable, helper] + args + ["--hex", digest.hex()], capture_output=True, text=True, timeout=60,
-                           creationflags=io.NO_WINDOW, cwd=BASE_DIR)
-    res = next((json.loads(l) for l in reversed(r.stdout.splitlines()) if l.startswith("{")), {"error": r.stderr.strip()[-200:] or "no answer"})
-    if "signature" not in res: raise RuntimeError(f"the node did not sign: {res.get('error')}")
-    return res["signature"]
+    for attempt in range(SIGN_TRIES):
+        res = run(helper, args, digest)
+        if "signature" in res: return res["signature"]
+        if "BAD_STATE" not in str(res.get("error")): break
+        if attempt < SIGN_TRIES - 1: time.sleep(SIGN_WAIT)                # (the radio is free in between)
+    if "BAD_STATE" in str(res.get("error")): raise NodeBusy(f"the node was busy and didn't sign ({SIGN_TRIES} tries)")
+    raise RuntimeError(f"the node did not sign: {res.get('error')}")
 
 
 def node_info():
@@ -62,7 +78,7 @@ def post(body):
 
 class Addon(AddonBase):
     title = "Map uploader"
-    version = "1.0.2"
+    version = "1.0.3"
     author = "mcIRC (after recrof/map.meshcore.io-uploader)"
     description = ("Puts the repeaters, room servers and sensors your node hears on the official MeshCore map (map.meshcore.io). "
                    "Each upload is signed by your node; its private key never leaves the radio. Off until you switch it on.")
@@ -141,7 +157,9 @@ class Addon(AddonBase):
         self.busy = False
         if isinstance(r, Exception):
             msg = str(r)
-            if "did not sign" in msg or "signing needs" in msg:
+            if isinstance(r, NodeBusy):                         # passing: skip this advert, keep uploading
+                self.api.log(f"Map upload skipped: {msg} - the next adverts are tried as usual.", "info")
+            elif "did not sign" in msg or "signing needs" in msg:
                 self.paused = msg                               # this node can't sign: stop trying this session
                 self.api.log(f"Map uploader paused: {msg}. (Older firmware can't sign; update it with MeshCore tools > Firmware.)", "warn")
             else:

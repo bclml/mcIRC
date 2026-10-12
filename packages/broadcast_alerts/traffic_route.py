@@ -198,7 +198,9 @@ def drivebc_events(coords, get=None, now=None):
         data = (get or _get)(DRIVEBC, {"status": "ACTIVE", "format": "json", "bbox": bbox, "limit": 500})
         if get is None: _cache.clear(); _cache[key] = data
     out, now = [], now or time.time()
-    for e in data.get("events", []):
+    try: from emergency_agent import fix_drivebc_text           # (DriveBC's broken letters: 'stal¿¿¿¿w¿¿as¿¿m Bridge')
+    except ImportError: fix_drivebc_text = lambda e: e
+    for e in map(fix_drivebc_text, data.get("events", [])):
         if not _on_now(e.get("schedule"), now): continue
         desc = re.sub(r"\s+", " ", e.get("description", "")).strip()
         kind = e.get("event_type", "")

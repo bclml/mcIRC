@@ -100,6 +100,10 @@ ok("...all of it listed, over as many messages as it takes (none counted away), 
    and "more" not in w[-1].replace("More on the way", "") and w[-1].endswith("(from the last DriveBC check)") and all(len(x) <= 115 for x in w), w)
 w = tr.way_lines([f"Roadwork Hwy 1 Exit {n} to Exit {n + 2}" for n in range(60)])
 ok("...past 8 messages, the rest is counted", len(w) == 8 and w[-1].endswith("more") and all(len(x) <= 115 for x in w), w[-1])
+import emergency_agent as _ea
+fixed = _ea.fix_drivebc_text({"description": "Paving at stal¿¿¿¿w¿¿as¿¿m Bridge", "roads": [{"from": "Odd¿¿ Rd"}], "n": 3})
+ok("DriveBC's broken letters: the bridge's real name back, other '¿' runs dropped", fixed == {"description": "Paving at stal̓əw̓asəm Bridge",
+   "roads": [{"from": "Odd Rd"}], "n": 3}, ascii(fixed))
 ok("DriveBC's cross streets: 'from X to Y' / 'at X', the town and the road itself left out", [tr.cross_streets(d, r) for d, r in (
    ("Utility work from Highway 11, In Abbotsford and At Hazelwood Avenue to In Abbotsford and At Valley Road. Starting Thu", "Highway 11"),
    ("Utility work from Highway 7, In Maple Ridge and Jim Robson Way to In Maple Ridge and 240th Street. Starting", "Highway 7"),

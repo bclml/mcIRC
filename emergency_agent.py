@@ -283,6 +283,21 @@ def _drivebc_mapinfo(ev, headline, city, named_roads):
     return where, "\n".join(l for l in lines if l.strip(" -"))
 
 
+# DriveBC's feed sends some names with their special letters already broken into '¿' (e.g. 'stal¿¿¿¿w¿¿as¿¿m Bridge', the bridge that
+# replaced the Pattullo): the known ones get their real name back, any other '¿' run is dropped.
+_DRIVEBC_GARBLED = ((re.compile(r"stal[¿�]+w[¿�]+as[¿�]+m", re.I), "stal̓əw̓asəm"),)
+
+
+def fix_drivebc_text(obj):
+    """The same event with DriveBC's broken letters mended (strings anywhere in it)."""
+    if isinstance(obj, str):
+        for pat, name in _DRIVEBC_GARBLED: obj = pat.sub(name, obj)
+        return re.sub(r"[¿�]+", "", obj)
+    if isinstance(obj, dict): return {k: fix_drivebc_text(v) for k, v in obj.items()}
+    if isinstance(obj, list): return [fix_drivebc_text(v) for v in obj]
+    return obj
+
+
 def clean_html_tags(raw_html):
     if not raw_html: return ""
     clean = re.sub(r'<[^>]*>', '', raw_html)
@@ -1014,6 +1029,7 @@ async def scrape_traffic_feeds():
             res = requests.get(f"{d_part1}{d_part2}&bbox={bbox}", headers=hdrs, timeout=15)
             if res.status_code == 200:
                 for ev in res.json().get("events", []):
+                    ev = fix_drivebc_text(ev)
                     # Construction events excluded by request — checked against the real event_type
                     # field (not the headline text) since that's the actual Open511 classification and
                     # won't misfire on, say, an INCIDENT whose headline happens to mention "construction".

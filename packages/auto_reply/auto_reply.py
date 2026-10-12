@@ -46,7 +46,7 @@ def match_rule(rule, text):
 class Addon(AddonBase):
     title = "Auto reply"
     reply_delay, part_gap = 0, 9          # answers at once unless a wait is set in its settings window
-    version = "1.1.8"
+    version = "1.1.9"
     author = "bclml"
     description = "Keyword rules: answer chosen words on chosen channels with your own text, to the channels you pick."
 
@@ -60,6 +60,14 @@ class Addon(AddonBase):
         self.api.add_menu_item("Answering on / off", self.toggle)
 
     # ---- the responder ----
+    def channels_used(self):
+        """The channels its switched-on rules listen in or reply to (mcIRC adds these to the node when it lacks them)."""
+        if not self.api.get("enabled", False): return []
+        out = []
+        for r in self.api.get("rules", DEFAULT_RULES):
+            if r.get("enabled", True): out += split_list(r.get("listen", "")) + [d for d in split_list(r.get("reply_to", "")) if not d.startswith("@")]
+        return out
+
     def help_for(self, channel, dm=False):
         """For 'bothelp': the words that get an answer in this channel."""
         if dm or not self.api.get("enabled", False): return []

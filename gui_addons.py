@@ -4,7 +4,7 @@ An addon is one Python file in the `addons/` folder (files starting with `_` are
 subclass of AddonBase.  See addons/_example_addon.py for a commented template.  Hooks run on the GUI thread,
 so do slow work (anything that talks to the radio or the network) through `self.api.run_background(...)`.
 A crashing addon is isolated: the error is printed in the status window and the GUI keeps running."""
-import contextlib, copy, importlib.util, os, threading, traceback
+import contextlib, copy, importlib.util, os, re, threading, traceback
 
 ADDON_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "addons")
 
@@ -27,10 +27,18 @@ class AddonBase:
     def on_packet(self, pkt): """The main radio heard a packet: dict(t, type, route, path, snr, rssi, length) - for an advert also 'packet' (hex)."""
     def on_demo(self): """Only in `--demo` mode: fill your windows / map layers with fake data."""
     def on_theme(self, theme): """The colours changed (Options: colour theme or skin).  theme: dict of colours, see gui_themes.py."""
+    def channels_used(self):
+        """The channels this addon listens or posts in right now (['#weather', '#bot-van']) - mcIRC adds the ones the node doesn't have
+        (as hashtag channels) after its settings are saved, when it is switched on and after connecting.  Only while it is on (and, for
+        an alert broadcaster, while broadcasting); 'all' / Public / private names are skipped."""
+        return []
     def build_options(self, parent):
         """Return a tk.Frame (child of `parent`) to show as this addon's page in Options, or None."""
         return None
     def apply_options(self): """Options OK/Apply was pressed - read your widgets and store them via self.api.set()."""
+
+
+_UNSET = object()          # no node chosen (a tick, a background job, ...): the addon acts for the main node, so its settings are read
 
 
 def _node_ctx(api, node):
@@ -51,11 +59,16 @@ class AddonAPI:
 
     # -- settings (persisted in gui_settings.json under "addons") --
     # Each node can have its own settings ('_per_node': {'wifi 1': {key: value}}); what a node doesn't set comes from the defaults.  get/set
-    # work on the node in context: the one a message came in on (on_message, reply), or the tab open in the settings window.
+    # work on the node in context: the one a message came in on (on_message, reply), or the tab open in the settings window ('All nodes' =
+    # the defaults).  With no node chosen at all (a tick, a background job, mcIRC asking for its channels) it is the main node: an addon
+    # acts through it, so the main node's own settings count there too.
     def _store(self): return self._app.settings.setdefault("addons", {}).setdefault(self.name, {})
+    def _reading_node(self):
+        node = getattr(self._ctx, "node", _UNSET)
+        return "main" if node is _UNSET else node
     def get(self, key, default=None):
         base = self._app.settings.setdefault("addons", {}).get(self.name, {})
-        own = base.get("_per_node", {}).get(self.node_context() or "", {})
+        own = base.get("_per_node", {}).get(self._reading_node() or "", {})
         if key in own: return own[key]
         value = base.get(key, default)
         seen = getattr(self._ctx, "seen", None)              # the settings window notes what a node inherits (to keep only real changes)
@@ -64,19 +77,20 @@ class AddonAPI:
     def set(self, key, value):
         """Saved for the node in context when it is being set up on its own (its tab in the settings window) or already has this setting of
         its own; otherwise to the defaults (e.g. a list a bot keeps up to date while answering)."""
-        node, store = self.node_context(), self._store()
+        node, store = self._reading_node(), self._store()
         own = store.get("_per_node", {}).get(node or "", {})
         mine = node and (getattr(self._ctx, "own", False) or key in own)
         (store.setdefault("_per_node", {}).setdefault(node, {}) if mine else store)[key] = value
         self._app.save()
     def node_context(self):
         """The node whose settings get/set use right now ('main', an extra node's label), or None: the defaults for all nodes."""
-        return getattr(self._ctx, "node", None)
+        node = getattr(self._ctx, "node", _UNSET)
+        return None if node is _UNSET else node
     @contextlib.contextmanager
     def for_node(self, node, own=False):
         """with api.for_node('wifi 1'): ... - get uses that node's own settings (falling back to the defaults); with own=True (the node's
         tab in the settings window) set saves them as that node's own."""
-        prev = (self.node_context(), getattr(self._ctx, "own", False))
+        prev = (getattr(self._ctx, "node", _UNSET), getattr(self._ctx, "own", False))
         self._ctx.node, self._ctx.own = node, own
         try: yield self
         finally: self._ctx.node, self._ctx.own = prev
@@ -461,6 +475,36 @@ class AddonManager:
         self.app.settings.setdefault("addons_enabled", {})[name] = on
         self.app.save()
         (self.load if on else self.unload)(name)
+        if on: self.ensure_channels()
+
+    def channels_needed(self):
+        """Every channel the loaded addons use (their channels_used()), '#name' once each; not 'all', Public, private or other nodes'."""
+        out = {}
+        for name, (inst, _api) in list(self.loaded.items()):
+            try: names = list(inst.channels_used() or [])
+            except Exception: continue
+            for n in names:
+                n = str(n).strip()
+                base = n.lstrip("#").strip().lower()
+                if not base or base in ("*", "all", "public") or n.startswith("@") or " [" in n or not re.fullmatch(r"[\w-]{1,31}", base): continue
+                out.setdefault(base, "#" + n.lstrip("#").strip())
+        return list(out.values())
+
+    def ensure_channels(self):
+        """Adds the channels the addons use that the node doesn't have yet (a bot can't hear a channel its node isn't on).  Background."""
+        if getattr(self.app, "demo", False) or not getattr(self.app, "connected", False) or getattr(self, "_ensuring", False): return
+        from gui_common import channel_index
+        missing = [c for c in self.channels_needed() if channel_index(c) is None]
+        if not missing: return
+        import meshcore_io as io
+        self._ensuring = True
+        def done(r):
+            self._ensuring = False
+            if isinstance(r, Exception): return self.app.status_line(f"*** Couldn't add the addons' channels to the node: {r}", "warn")
+            failed = [c for c, idx in r if not isinstance(idx, int)]
+            if failed: self.app.status_line(f"*** An addon uses {', '.join(failed)} but it couldn't be added to the node (no free channel slot? "
+                                            "Tools > Addons > MeshCore tools > Channels, or /part a channel) - nothing is heard or sent there.", "warn")
+        self.app.bg(lambda: [(c, io.ensure_channel(c)) for c in missing], done)
 
     def _call(self, name, hook, *args):
         inst = self.loaded[name][0]

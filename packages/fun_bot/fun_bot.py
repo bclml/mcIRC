@@ -67,7 +67,7 @@ def world_cup(arg, get=mc.http_json):
 class Addon(AddonBase):
     title = "Fun bot"
     command_words = list(COMMANDS)          # (the settings window's 'Command names...': other names for each command)
-    version = "1.1.0"
+    version = "1.1.1"
     author = "mcIRC"
     description = ("dice, roll, magic8, joke, dadjoke, hacker, catfact and wc (World Cup scores and tables) - each switched on for the channels you "
                    "choose. Thousands of jokes and cat facts from free online collections, not repeated for a long while. Off until you switch it on.")
@@ -81,6 +81,10 @@ class Addon(AddonBase):
         if hasattr(self.api, "add_bot_commands"): self.api.add_bot_commands(self.help_for)      # (mcIRC 1.5.2 and later)
 
     USAGE = {"dice": "dice 3d6", "magic8": "magic8 <question>", "wc": "wc [group]"}
+
+    def channels_used(self):
+        """Every channel one of its commands answers in (mcIRC adds these to the node when it lacks them)."""
+        return sorted({c for cmd in COMMANDS for c in self.where(cmd)}) if self.api.get("enabled", False) else []
 
     def help_for(self, channel, dm=False):
         """For 'bothelp': the commands answered in this channel right now."""

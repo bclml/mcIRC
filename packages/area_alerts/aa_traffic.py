@@ -89,6 +89,9 @@ def _get(url, params, key=""):
     import requests
     try:
         r = requests.get(url, params=params, headers=UA, timeout=25)
+        if r.status_code == 429:                            # 'too many requests' (DriveBC limits how often a PC asks): once more, a moment later
+            time.sleep(4)
+            r = requests.get(url, params=params, headers=UA, timeout=25)
         if r.status_code == 400 and "Invalid Key" in r.text: raise RuntimeError("the key was refused (Invalid Key) - check it in the settings")
         r.raise_for_status()
         return r.json()
@@ -137,14 +140,46 @@ def _now_in(schedule, now):
     return False
 
 
-def drivebc(area, radius_km=DEFAULT_KM, roadwork=False, get=None, now=None):
-    """DriveBC's events near a BC area (Open511, no key): incidents and road closures on now; other roadwork only if asked."""
-    if (area.get("country"), area.get("region")) != ("CA", "British Columbia"): return []
+def _box(area, radius_km):
+    """(west, south, east, north) around the area."""
     d_lat, d_lon = radius_km / 111.0, radius_km / 70.0
-    bbox = f"{area['lon'] - d_lon:.3f},{area['lat'] - d_lat:.3f},{area['lon'] + d_lon:.3f},{area['lat'] + d_lat:.3f}"
-    data = (get or _get)(DRIVEBC_URL, {"status": "ACTIVE", "format": "json", "bbox": bbox, "limit": 500})
-    out, now = [], now or time.time()
-    for e in data.get("events", []):
+    return (area["lon"] - d_lon, area["lat"] - d_lat, area["lon"] + d_lon, area["lat"] + d_lat)
+
+
+def _in_box(e, box):
+    """Does a DriveBC event (any point of it) lie in the box?"""
+    g = e.get("geography") or {}
+    pts = [g.get("coordinates")] if g.get("type") == "Point" else g.get("coordinates") or []
+    if g.get("type") == "MultiLineString": pts = [p for line in pts for p in line]
+    return any(isinstance(p, (list, tuple)) and len(p) >= 2 and box[0] <= p[0] <= box[2] and box[1] <= p[1] <= box[3] for p in pts) if pts else True
+
+
+_drivebc_batch = {"box": None, "t": 0.0, "events": None}       # one DriveBC answer for all the areas of a check (DriveBC limits requests)
+
+
+def prefetch_drivebc(areas, radius_km=DEFAULT_KM, get=None, now=None):
+    """Asks DriveBC ONCE for the box around all the BC areas of this check; drivebc() then sorts the events into each area.  Was one
+    request per area at once - DriveBC answered '429 Too Many Requests'."""
+    bc = [a for a in areas if (a.get("country"), a.get("region")) == ("CA", "British Columbia")]
+    if not bc: return
+    boxes = [_box(a, radius_km) for a in bc]
+    box = (min(b[0] for b in boxes), min(b[1] for b in boxes), max(b[2] for b in boxes), max(b[3] for b in boxes))
+    data = (get or _get)(DRIVEBC_URL, {"status": "ACTIVE", "format": "json", "bbox": ",".join(f"{v:.3f}" for v in box), "limit": 500})
+    _drivebc_batch.update(box=box, t=now or time.time(), events=data.get("events", []))
+
+
+def drivebc(area, radius_km=DEFAULT_KM, roadwork=False, get=None, now=None):
+    """DriveBC's events near a BC area (Open511, no key): incidents and road closures on now; other roadwork only if asked.  From this
+    check's one DriveBC answer (prefetch_drivebc) when it covers the area, else asked for the area alone."""
+    if (area.get("country"), area.get("region")) != ("CA", "British Columbia"): return []
+    box, now = _box(area, radius_km), now or time.time()
+    b = _drivebc_batch
+    if b["events"] is not None and now - b["t"] < 240 and b["box"][0] <= box[0] and b["box"][1] <= box[1] and b["box"][2] >= box[2] and b["box"][3] >= box[3]:
+        events = [e for e in b["events"] if _in_box(e, box)]
+    else:
+        events = (get or _get)(DRIVEBC_URL, {"status": "ACTIVE", "format": "json", "bbox": ",".join(f"{v:.3f}" for v in box), "limit": 500}).get("events", [])
+    out = []
+    for e in events:
         kind, sev = e.get("event_type", ""), e.get("severity", "")
         desc = re.sub(r"\s+", " ", e.get("description", "")).strip()
         closed = bool(CLOSED.search(desc))

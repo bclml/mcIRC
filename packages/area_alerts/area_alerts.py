@@ -38,7 +38,7 @@ WINDOW = "Area alerts"
 
 class Addon(AddonBase):
     title = "Area alerts"
-    version = "1.5.0"
+    version = "1.5.2"
     author = "mcIRC"
     description = ("Natural disasters, earthquakes, tsunamis, weather warnings, public emergency alerts (Canada, US), public transit alerts and road closures for the areas you "
                    "choose anywhere in the world (country, region, area). Shown on this PC; broadcast to the mesh only if you tick it. "
@@ -92,6 +92,9 @@ class Addon(AddonBase):
 
         def work():
             found, errors = [], []
+            if "traffic" in on:
+                try: traffic.prefetch_drivebc(areas, opts["road_km"])          # DriveBC once for all the areas (it limits requests)
+                except Exception as e: errors.append(f"traffic (DriveBC): {e}")
             for a in areas:
                 for kind in on:
                     if kind == "transit": continue
@@ -176,6 +179,15 @@ class Addon(AddonBase):
             n = n if n.startswith("#") else "#" + n
             if n.lower() not in (o.lower() for o in out): out.append(n)
         return out[:MAX_CHANNELS] or [KINDS[al.kind][1]]
+
+    def channels_used(self):
+        """Where its alerts go while it broadcasts: each ticked kind's channels, the transit agencies' and road sources' own (mcIRC adds
+        these to the node when it lacks them)."""
+        if not (self.api.get("enabled", False) and self.api.get("broadcast", False)): return []
+        boxes = [self.channel(k) for k in self.kinds_on()]
+        if "transit" in self.kinds_on(): boxes += list(self.api.get("transit_channels", {}).values())
+        if "traffic" in self.kinds_on(): boxes += list(self.api.get("traffic_channels", {}).values())
+        return [n for b in boxes for n in re.split(r"[,;\s]+", b or "") if n.strip()]
 
     def channel(self, kind):
         return (self.api.get("channels", {}).get(kind) or KINDS[kind][1]).strip()

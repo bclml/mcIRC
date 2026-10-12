@@ -585,6 +585,7 @@ class App(PrivateMixin, MenusMixin, CommandsMixin, gui_multinode.MultiNodeMixin,
         if self.connected and not was:
             self.addons.dispatch("on_connect")
             self.resolve_key_windows(ask_radio=True)
+            if ea.CHANNEL_INDEX_BY_NAME: self.addons.ensure_channels()     # (the channel list came in just before 'connected': its turn was skipped)
         if was and not self.connected: self.addons.dispatch("on_disconnect")
 
     def _h_channels(self):
@@ -592,6 +593,7 @@ class App(PrivateMixin, MenusMixin, CommandsMixin, gui_multinode.MultiNodeMixin,
         for name, idx in ea.CHANNEL_INDEX_BY_NAME.items():
             if name != "Public" and "#" + name.lstrip("#") not in closed: self.add_window("#" + name.lstrip("#"), CHANNELS.get("#" + name.lstrip("#"), f"Channel {idx}"))
         self.status_line(f"*** Resolved channels: {', '.join(f'{n}={i}' for n, i in ea.CHANNEL_INDEX_BY_NAME.items())}", "info")
+        if ea.CHANNEL_INDEX_BY_NAME: self.addons.ensure_channels()         # the addons' channels the node doesn't have yet: added
 
     def _h_nodes(self, r):
         cap = self.settings["radio_capacity"]

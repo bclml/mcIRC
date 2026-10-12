@@ -32,7 +32,7 @@ class Addon(AddonBase):
     SOURCES = [k for k in ea.TX_SOURCES if k != "Test reply"]   # alert types with a switch on the Alerts tab
     title = "Traffic, transit and weather"
     replies = True                         # ('route' answers people: the settings window offers the answer wait)
-    version = "1.6.4"
+    version = "1.6.5"
     author = "built in"
     description = ("Traffic / ferry / transit / weather / earthquake / tsunami alerts. Keeps the map's DriveBC and earthquake layers up to date; "
                    "broadcasting them to the mesh is OFF until you switch it on.")
@@ -54,6 +54,12 @@ class Addon(AddonBase):
         if ea.TX["muted"]: self._start_feeds()       # map-only mode needs no radio: read the feeds right away
 
     # ---- 'route <address>': directions with DriveBC closures, incidents and roadwork on the way - by private message only ----
+    def channels_used(self):
+        """Where its alerts go while it broadcasts: the channels of the alert types that are switched on (mcIRC adds these to the node when
+        it lacks them)."""
+        if ea.TX["muted"]: return []
+        return [n for kind, names in ea.CHANNEL_LISTS.items() if ea.TX["sources"].get(kind, True) for n in names]
+
     def route_help(self, channel, dm=False):
         return ["route <address> (private message)"] if self.api.get("route_on", False) else []
 

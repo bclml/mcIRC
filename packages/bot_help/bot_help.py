@@ -50,7 +50,7 @@ def _wrap(text, limit):
 class Addon(AddonBase):
     title = "Bot help"
     replies = True                        # (its settings window offers private answers and the answer wait)
-    version = "1.0.7"
+    version = "1.0.8"
     author = "mcIRC"
     description = ("Answers 'bothelp' with the bot commands that work in that channel (Weather bot, Fun bot, Auto reply, ...), and can announce "
                    "'Type bothelp for a list of commands.' once a day at a set time. Off until you switch it on.")
@@ -85,6 +85,11 @@ class Addon(AddonBase):
             self.api.after(int((first + i * gap) * 1000), lambda p=part: self.api.reply(msg, p))      # after the repeats of the question
 
     # ---- the daily announcement ----
+    def channels_used(self):
+        """The channels it announces in, when chosen (it answers wherever the other bots do - their channels are theirs)."""
+        on = self.api.get("enabled", False) and self.api.get("announce", False)
+        return sorted(channel_set(self.api.get("announce_channels", ""))) if on else []
+
     def announce_channels(self):
         chosen = channel_set(self.api.get("announce_channels", ""))
         if chosen: return sorted(chosen)

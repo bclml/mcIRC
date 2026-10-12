@@ -28,7 +28,7 @@ GREETING = cmds.DEFAULT_GREETINGS[0]                     # the single greeting o
 class Addon(AddonBase):
     title = "Mesh bot"
     command_words = list(COMMANDS)          # (the settings window's 'Command names...': other names for each command)
-    version = "1.2.11"
+    version = "1.2.12"
     author = "mcIRC (commands after agessaman/meshcore-bot, MIT)"
     description = ("ping, hello, path, prefix, multitest, stats, sports and version - the meshcore-bot commands mcIRC's other bots don't have - "
                    "plus its greeter for newcomers (a random greeting from your list), each switched on for the channels you choose. Off until you switch it on.")
@@ -45,6 +45,12 @@ class Addon(AddonBase):
     def on_unload(self): pass
 
     def where(self, cmd): return mc.channel_list(self.api.get("channels", {}).get(cmd, ""))
+
+    def channels_used(self):
+        """Its commands' channels, and the greeter's (mcIRC adds these to the node when it lacks them)."""
+        out = {c for cmd in COMMANDS for c in self.where(cmd)} if self.api.get("enabled", False) else set()
+        if self.api.get("greet_on", True): out |= mc.channel_list(self.api.get("greet_channels", ""))
+        return sorted(out)
 
     def help_for(self, channel, dm=False):
         if not self.api.get("enabled", False) or (dm and not self.api.get("answer_dm", True)): return []

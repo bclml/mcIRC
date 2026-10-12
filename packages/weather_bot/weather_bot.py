@@ -27,7 +27,7 @@ COMMANDS = {        # command: (what it does, needs a place)
     "contact": "who runs this bot",
 }
 ALIASES = {"solarforecast": "sf", "overhead": "airplanes"}
-VERSION = "1.0.12"
+VERSION = "1.0.13"
 
 
 def first_hop(packet_log, heard_at, hops):
@@ -57,6 +57,10 @@ class Addon(AddonBase):
         if hasattr(self.api, "add_bot_commands"): self.api.add_bot_commands(self.help_for)      # (mcIRC 1.5.2 and later)
 
     USAGE = {"wx": "wx <place>", "gwx": "gwx <place>", "aqi": "aqi <place>", "sf": "sf <place>", "rain": "rain <place>", "satpass": "satpass iss"}
+
+    def channels_used(self):
+        """Where it answers (mcIRC adds these to the node when it lacks them)."""
+        return list(self.channels()) if self.cfg("enabled", False) else []
 
     def help_for(self, channel, dm=False):
         """For 'bothelp': the commands answered in this channel right now."""

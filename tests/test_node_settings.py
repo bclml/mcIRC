@@ -108,6 +108,24 @@ ok("with an older core still running: no node tabs, but the page itself is there
 win.inst.v_greeting.set("Yo"); win.apply()
 ok("...and saving works", OldAPI.store.get("greeting") == "Yo", OldAPI.store)
 win.destroy()
+# ---- set up on the 'main node' tab only: a tick / background job / mcIRC's channel step reads the MAIN node's settings (Area alerts
+# found no areas: its check read the defaults, where they weren't)
+api2 = AddonAPI(app, "areas_test")
+app.settings.setdefault("addons", {})["areas_test"] = {"channel": "#default", "_per_node": {"main": {"areas": ["Somewhere"], "channel": "#mine"}}}
+import threading
+seen = {}
+def worker(): seen["thread"] = (api2.get("areas", []), api2.get("channel"))
+t = threading.Thread(target=worker); t.start(); t.join()
+ok("no node chosen (a tick, a background thread): the main node's own settings", api2.get("areas", []) == ["Somewhere"] and api2.get("channel") == "#mine"
+   and seen["thread"] == (["Somewhere"], "#mine"), seen)
+with api2.for_node(None): ok("...the 'All nodes' tab still shows the defaults", api2.get("areas", []) == [] and api2.get("channel") == "#default")
+with api2.for_node("wifi 1"): ok("...another node: its own, else the defaults (not main's)", api2.get("areas", []) == [] and api2.get("channel") == "#default")
+ok("...node_context() is still None when nothing was chosen", api2.node_context() is None)
+api2.set("channel", "#changed")
+ok("...a value the main node has of its own is saved there", app.settings["addons"]["areas_test"]["_per_node"]["main"]["channel"] == "#changed")
+api2.set("counter", 3)
+ok("...a new value (nothing of the main node's own) goes to the defaults", app.settings["addons"]["areas_test"].get("counter") == 3
+   and "counter" not in app.settings["addons"]["areas_test"]["_per_node"]["main"])
 root.destroy()
 print("\nALL PASSED" if not fails else f"\n{len(fails)} FAILED: {fails}")
 sys.exit(1 if fails else 0)

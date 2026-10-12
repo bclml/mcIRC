@@ -212,6 +212,7 @@ class AddonSettingsWindow(tk.Toplevel):
         if self.tab: self._prune(self.tab)
         self.app.save()
         self._refresh_tabs()
+        self.app.addons.ensure_channels()                    # a channel typed in that the node doesn't have yet: added to it
         return True
 
     def _prune(self, node):

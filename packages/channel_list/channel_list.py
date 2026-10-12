@@ -26,7 +26,7 @@ def answer_text(channels, intro="Channels:"):
 
 class Addon(AddonBase):
     title = "Channel list"
-    version = "1.2.3"
+    version = "1.2.4"
     author = "mcIRC"
     description = ("Answers 'channel list' with the channels you keep in its list (add / remove / rename / reorder them in Options); "
                    "'channel list add #name' adds one from the mesh. Off until you switch it on.")
@@ -41,6 +41,10 @@ class Addon(AddonBase):
 
     def channels(self): return list(self.api.get("list", DEFAULT_CHANNELS))
     def triggers(self): return {norm_text(t) for t in self.api.get("triggers", DEFAULT_TRIGGERS).split(",") if t.strip()}
+
+    def channels_used(self):
+        """Where it answers (mcIRC adds these to the node when it lacks them) - not the channels on its list: those are for others to join."""
+        return sorted(mc.channel_list(self.api.get("where", "all"))) if self.api.get("enabled", False) else []
 
     def help_for(self, channel, dm=False):
         if not self.api.get("enabled", False): return []

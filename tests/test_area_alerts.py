@@ -91,6 +91,27 @@ ok("...information statements, and 'no tsunami danger for ...' notes, don't coun
 port_blair = places.make("IN", "Andaman and Nicobar", "Port Blair") or {"country": "IN", "country_name": "India", "region": "Andaman and Nicobar", "name": "Port Blair", "lat": 11.6, "lon": 92.7}
 ok("...names match whole words ('Indian Ocean' is not India)", src.tsunami(port_blair, get=lambda url, **k: atom) == [])
 
+# ---- DriveBC: ONE request for all the BC areas of a check (it answered '429 Too Many Requests' to one per area)
+import aa_traffic
+lm = places.make("CA", "British Columbia", "Lower Mainland")
+vi = places.make("CA", "British Columbia", "Vancouver Island")
+def bc_ev(i, lon, lat): return {"id": f"b{i}", "event_type": "INCIDENT", "severity": "MAJOR", "description": f"Crash {i}", "roads": [{"name": "Hwy"}],
+                                "geography": {"type": "Point", "coordinates": [lon, lat]}}
+bc_asked = []
+def bc_get(url, params, key=""):
+    bc_asked.append(params["bbox"])
+    return {"events": [bc_ev(1, lm["lon"], lm["lat"]), bc_ev(2, vi["lon"], vi["lat"])]}
+aa_traffic._drivebc_batch.update(box=None, t=0.0, events=None)
+aa_traffic.prefetch_drivebc([lm, vi], get=bc_get)
+got_lm, got_vi = aa_traffic.drivebc(lm, get=bc_get), aa_traffic.drivebc(vi, get=bc_get)
+ok("DriveBC: asked once for every BC area of the check, not once per area", len(bc_asked) == 1, bc_asked)
+ok("...each area gets the events in its own box", [a.id for a in got_lm] == ["drivebc:b1:Incident"] and [a.id for a in got_vi] == ["drivebc:b2:Incident"],
+   ([a.id for a in got_lm], [a.id for a in got_vi]))
+aa_traffic._drivebc_batch.update(t=0.0)
+aa_traffic.drivebc(lm, get=bc_get)
+ok("...an old answer (or none) isn't used: asked for that area alone", len(bc_asked) == 2)
+aa_traffic._drivebc_batch.update(box=None, t=0.0, events=None)
+
 # ---- US public emergency alerts (FEMA IPAWS): the area's county, never the NWS's own (they're 'weather'), never tests
 def cap(ident, event, same=None, polygon=None, sender="ops@county.example.gov", who="Los Angeles County Sheriff", code="CEM", status="Actual",
         expires="2099-01-01T00:00:00-00:00", refs=""):

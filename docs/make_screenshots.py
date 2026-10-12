@@ -48,7 +48,11 @@ SAMPLE_NODE = {"info": {"tx_power": 22, "max_tx_power": 22, "public_key": "a1b2c
                "core": {"battery_mv": 3947, "uptime_secs": 248451, "errors": 0, "queue_len": 0},
                "radio": {"noise_floor": -115, "last_rssi": -59, "last_snr": 13.25, "tx_air_secs": 111, "rx_air_secs": 2294}}
 
-import gui_common   # noqa: E402
+import gui_common, subprocess   # noqa: E402
+# pictures only: nothing here may reach a radio or start a program (flashing, the packet listener) - whatever is plugged in
+def _no_radio(*a, **k): raise RuntimeError("screenshots: no radio")
+io.execute_mesh_command = _no_radio
+subprocess.run = subprocess.Popen = subprocess.call = subprocess.check_output = _no_radio
 mcIRC.load_settings = lambda: dict(gui_common.DEFAULT_SETTINGS)   # a fresh setup: none of YOUR nodes, nick lists or names in public pictures
 root = tk.Tk()
 app = mcIRC.App(root, demo=True)
@@ -137,7 +141,71 @@ def steps():
     yield from addon("mesh_bot", "addon-mesh-bot.png", {"enabled": True})
     yield from addon("packet_upload", "addon-packet-upload.png")
     yield from addon("map_uploader", "addon-map-uploader.png")
+    yield from how_to()
     root.destroy()
+
+
+def how_to():
+    """Step-by-step pictures for the wiki: connecting (USB / Bluetooth / Wi-Fi), the node's pages, every Options page, MeshCore tools."""
+    def options(page, picture, values=None, fill=False):
+        app.open_options(page); yield 700
+        dlg = child(gui_dialogs.OptionsDialog)
+        if fill: dlg.node_pages.fill(SAMPLE_NODE)
+        for k, v in (values or {}).items(): dlg.vars[k].set(v)
+        dlg.tree.selection_set(page); yield 500
+        grab(dlg, picture)
+        dlg.destroy(); yield 300
+
+    yield from options("Connect", "connect-usb.png", {"mode": "usb", "port": "COM3"})
+    yield from options("Connect", "connect-bluetooth.png", {"mode": "bluetooth", "ble_target": "MeshCore-4F2A"})
+    yield from options("Connect", "connect-wifi.png", {"mode": "tcp", "tcp_host": "192.168.1.50", "tcp_port": "5000"})
+    app.settings["extra_nodes"] = [{"label": "915", "mode": "tcp", "host": "192.168.1.60", "port": 5000, "enabled": True}]   # an example second node
+    yield from options("More nodes", "options-more-nodes.png")
+    app.settings["extra_nodes"] = []
+    yield from options("Node: behaviour", "node-behaviour.png", fill=True)
+    yield from options("Node: status", "node-status.png", fill=True)
+    for page, picture in (("Node memory", "options-node-memory.png"), ("Map", "options-map.png"), ("Display", "options-display.png"),
+                          ("Sounds", "options-sounds.png")):
+        yield from options(page, picture)
+
+    tools = app.addons.loaded.get("node_tools", (None,))[0]
+    if tools is None: print("not loaded: node_tools"); return
+    import random, time as _t
+    rnd, now = random.Random(7), _t.time()             # a day of made-up readings for the health graphs
+    tools.samples = [{"t": now - (288 - i) * 300, "noise_floor": -116 + rnd.randint(-3, 3), "last_rssi": -60 + rnd.randint(-15, 8),
+                      "last_snr": round(9 + rnd.uniform(-5, 4), 1), "battery_mv": 4150 - i * 2 + rnd.randint(-10, 10),
+                      "tx_air_secs": i * 2, "rx_air_secs": i * 9 + rnd.randint(0, 6), "errors": i // 90} for i in range(288)]
+    example = {   # what each window shows when a node answers (made up)
+        "channels": lambda w: [w.t.insert("", "end", values=v) for v in ((0, "Public", "11", "8b3387e9c5cdea6ac9e5edbaa115cd72"),
+                                                                        (1, "#weather", "a4", "(from the name)"), (2, "#bot-van", "3c", "(from the name)"))]
+                              and w.say("3 channel(s)."),
+        "firmware": lambda w: next(x for x in _descendants(w) if isinstance(x, tk.Text)).insert(
+            "end", "Your node: Heltec V3, companion firmware v1.16.0\nNewest MeshCore release: v1.17.1 (companion)\n\n"
+                   "Pick v1.17.1 and press 'Update the node...' - mcIRC downloads it and flashes it over USB.\n"),
+        "clock": lambda w: w.say("The node's clock: 08:15:02 - this PC: 08:15:04 (2 s apart)."),
+    }
+    for key, picture in (("clock", "tool-clock.png"), ("channels", "tool-channels.png"), ("backup", "tool-backup.png"),
+                         ("firmware", "tool-firmware.png"), ("paths", "tool-paths.png"), ("monitor", "tool-packet-monitor.png"),
+                         ("health", "tool-radio-health.png"), ("coverage", "tool-coverage.png")):
+        tools.open(key); yield 1200
+        win = tools.windows.get(key)
+        if win is None: print("no window:", key); continue
+        if hasattr(win, "say"): win.say("")                # (not 'Connect to your node first': demo mode has no radio)
+        if key in example: example[key](win)
+        yield 400
+        grab(win, picture)
+        win.destroy(); yield 300
+    tools.open("wifi"); yield 1000                       # (the versions come from GitHub, the boards from MeshCore's source: up to 90 s)
+    win = tools.windows["wifi"]
+    for _ in range(180):
+        if win.boards and not win.busy: break
+        yield 500
+    for k, v in (("port", "COM3"), ("ssid", "MyHomeWiFi"), ("pwd", "example-password"), ("label", "node2")): win.v[k].set(v)
+    win.update_fields(); yield 600
+    grab(win, "firmware-builder.png")
+    win.v["kind"].set("repeater"); win.update_fields(); yield 600
+    grab(win, "firmware-builder-repeater.png")
+    win.destroy()
 
 
 def _descendants(w):

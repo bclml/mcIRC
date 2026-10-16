@@ -1,6 +1,7 @@
 """Colour themes for the chat panes (like mIRC's colour schemes).  The Windows-style chrome (menus, toolbar, buttons) stays classic grey;
 a theme recolours the message text, nick list, window tree, input line and topic bar."""
 from tkinter import ttk
+import gui_platform
 
 _BASE_NICKS = ["#0000cc", "#009300", "#cc0000", "#7f007f", "#fc7f00", "#009393", "#7f0000", "#00007f", "#4b4b4b"]
 _DARK_NICKS = ["#6fa8ff", "#5fd35f", "#ff6b6b", "#d98cff", "#ffb347", "#4fe0e0", "#ff9a9a", "#9aa8ff", "#c0c0c0"]
@@ -55,6 +56,9 @@ def style_text(text, theme, font):
     text.tag_config("mention_me", foreground=t["me_fg"], background=t["me_bg"], font=bold)
     text.tag_config("highlight", foreground=t["hl_fg"], background=t["hl_bg"], underline=True)
     for i, c in enumerate(t["nicks"]): text.tag_config(f"nick{i}", foreground=c)
+    text.tag_config("emoji", font=(gui_platform.EMOJI_FONT_NAME, font.cget("size")))      # emoji as pictures (black and white: Tk has no colour emoji)
+    text.tag_config("symbol", font=(gui_platform.SYMBOL_FONT_NAME, font.cget("size")))
+    text.tag_raise("emoji"); text.tag_raise("symbol")
 
 
 def style_panes(app, theme):

@@ -17,7 +17,8 @@ import meshcore_io as ea
 import gui_addons as ga
 from gui_addons import AddonManager
 from gui_common import (BG, TEXT_BG, FONT_FAMILY, NICK_COLORS, CHANNELS, safe_text, load_settings, save_settings, SETTINGS_PATH,
-                        channel_index, display_for_index)
+                        channel_index, display_for_index, insert_text, tk_offset)
+import gui_common
 from gui_dialogs import OptionsDialog, ChannelListDialog, AddonsDialog, NodeListDialog, show_about
 from gui_map import MapWindow
 from gui_nodes import NodeStore, sync as sync_nodes
@@ -115,14 +116,14 @@ class ChatWindow:
                 for line in old:
                     line = safe_text(line)
                     start, cut = t.index("end-1c"), (line.find("> ") + 2 if "> " in line else 0)
-                    t.insert("end", line + "\n", "hist")
+                    insert_text(t, line + "\n", "hist")
                     lt, gt = line.find("<"), line.find("> ")
                     if 0 <= lt < gt:
-                        t.tag_add("nickname", f"{start}+{lt + 1}c", f"{start}+{gt}c")      # old lines get the right-click on names too
+                        t.tag_add("nickname", f"{start}+{tk_offset(line, lt + 1)}c", f"{start}+{tk_offset(line, gt)}c")      # old lines get the right-click on names too
                         if lt <= 10 and line[lt + 1:gt].strip(): self.nicks.add(line[lt + 1:gt])          # ...and their writers are in the name list again
                     for m in MENTION.finditer(line, cut):      # old lines get the same @mention highlighting as new ones
                         mine = bool(my_name) and _plain(m.group(1) or m.group(2) or "") == _plain(my_name)
-                        t.tag_add("mention_me" if mine else "mention", f"{start}+{m.start()}c", f"{start}+{m.end()}c")
+                        t.tag_add("mention_me" if mine else "mention", f"{start}+{tk_offset(line, m.start())}c", f"{start}+{tk_offset(line, m.end())}c")
                 t.config(state="disabled")
                 t.see("end")
             log.stamp("Session Start")
@@ -131,7 +132,7 @@ class ChatWindow:
         t = self.text
         at_bottom = t.yview()[1] >= 0.999
         t.config(state="normal")
-        for text, tag in parts: t.insert("end", safe_text(text), tag)
+        for text, tag in parts: insert_text(t, safe_text(text), tag)
         self._marks = getattr(self, "_marks", 0) + 1
         mark = f"line{self._marks}"
         t.mark_set(mark, "end-1c")                        # the end of this line: a note can be added there later ("heard 2 repeats")
@@ -265,6 +266,7 @@ class App(PrivateMixin, MenusMixin, CommandsMixin, gui_multinode.MultiNodeMixin,
           gui_nicks.NickListMixin):
     def __init__(self, root, demo=False):
         self.root, self.demo, self.connected = root, demo, False
+        gui_common.FULL_UNICODE = gui_common.tk_full_unicode(root)      # emoji shown (Tk 8.6.10+), not dropped
         first_start = not os.path.exists(SETTINGS_PATH)          # a brand-new setup: the default addons get installed below
         self.settings = load_settings()
         if not demo: self._fold_main_node()

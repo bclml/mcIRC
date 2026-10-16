@@ -41,6 +41,8 @@ UI_FONT_NAME = "Tahoma" if IS_WIN else "Helvetica" if IS_MAC else "DejaVu Sans"
 UI_FONT_SIZE = 8 if IS_WIN else 11 if IS_MAC else 9
 MONO_FONT_NAME = "Courier New" if IS_WIN else "Menlo" if IS_MAC else "DejaVu Sans Mono"
 EDITOR_FONT_NAME = "Consolas" if IS_WIN else MONO_FONT_NAME
+EMOJI_FONT_NAME = "Segoe UI Emoji" if IS_WIN else "Apple Color Emoji" if IS_MAC else "Noto Color Emoji"     # emoji in the chat text
+SYMBOL_FONT_NAME = "Segoe UI Symbol" if IS_WIN else EMOJI_FONT_NAME     # the older symbols (sun, cloud, snowflake): Windows' emoji font draws the sun as a ring
 DIALOG_FONT_NAME = "Segoe UI" if IS_WIN else UI_FONT_NAME            # headings in dialogs
 UI_FONT = (UI_FONT_NAME, UI_FONT_SIZE)
 

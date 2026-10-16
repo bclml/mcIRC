@@ -54,10 +54,40 @@ CHANNELS = {
 _EMOJI = {"\U0001F6A8": "[!]", "\U0001F30E": "[EQ]"}
 
 
+FULL_UNICODE = False        # Tk draws characters beyond the BMP (emoji) - Tk 8.6.10 and later; set when the window starts (tk_full_unicode)
+EMOJI_RE = re.compile("[\U0001F000-\U0001FAFF\u2600-\u27BF\u2B00-\u2BFF\u2300-\u23FF\u2190-\u21FF]+")
+
+
+def tk_full_unicode(root):
+    """Can this Tk draw emoji (characters beyond the BMP)?  Older ones on Windows drew garbage or nothing."""
+    try: return tuple(int(x) for x in str(root.tk.call("info", "patchlevel")).split(".")[:3]) >= (8, 6, 10)
+    except Exception: return False
+
+
 def safe_text(text):
-    """Tk on Windows can't always draw characters outside the BMP (most emoji) - swap them for plain text."""
+    """Text as the chat windows show it: emoji kept where Tk can draw them (an older Tk: swapped for plain text / left out); the
+    invisible 'show as emoji' marks (U+FE0F / FE0E) dropped - Tk draws them as gaps."""
+    text = text.replace("\ufe0f", "").replace("\ufe0e", "")
+    if FULL_UNICODE: return text
     for k, v in _EMOJI.items(): text = text.replace(k, v)
     return re.sub(r'[\U00010000-\U0010FFFF]', '', text)
+
+
+def tk_offset(text, i):
+    """Tk 8.6 counts a character beyond the BMP (most emoji) as two: the index of text[i] as Tk counts it."""
+    return i + sum(1 for ch in text[:i] if ord(ch) > 0xFFFF)
+
+
+def insert_text(t, text, tags=()):
+    """Inserts text at the end of a Text widget, emoji in the emoji font (the 'emoji' tag) so they show as pictures, not blobs."""
+    tags = (tags,) if isinstance(tags, str) else tuple(tags)
+    pos = 0
+    for m in EMOJI_RE.finditer(text):
+        if m.start() > pos: t.insert("end", text[pos:m.start()], tags)
+        for run in re.findall("[𐀀-􏿿]+|[^𐀀-􏿿]+", m.group()):
+            t.insert("end", run, tags + ("emoji" if ord(run[0]) > 0xFFFF else "symbol",))
+        pos = m.end()
+    if pos < len(text): t.insert("end", text[pos:], tags)
 
 
 def load_settings():

@@ -88,7 +88,7 @@ ok("updater ships the new launchers", "Run_GUI.sh" in gui_update.EXACT and "Run_
 import json
 cat = json.load(open(os.path.join(B, "addons-catalog.json")))
 mans = {p: json.load(open(os.path.join(B, "packages", p, "addon.json"))) for p in ("auto_reply", "broadcast_alerts")}
-ok("addon versions in the manifests match the catalog (and are at least 1.1.1, so installed copies refresh)", all(m["version"] == next(c["version"] for c in cat["addons"] if c["name"] == n) for n, m in mans.items()) and all(tuple(map(int, m["version"].split("."))) >= (1, 1, 1) for m in mans.values()), [(n, m["version"]) for n, m in mans.items()])
+ok("addon versions in the manifests match the catalog (and are at least 1.1.1, so installed copies refresh)", all(m["version"] == next(c["version"] for c in cat["addons"] if c["name"] == n) for n, m in mans.items() if not m.get("replaced_by")) and all(tuple(map(int, m["version"].split("."))) >= (1, 1, 1) for m in mans.values()), [(n, m["version"]) for n, m in mans.items()])
 src = open(os.path.join(B, "mcIRC.py"), encoding="utf-8").read() + "".join(open(os.path.join(B, f), encoding="utf-8").read() for f in os.listdir(B) if f.startswith("gui_") and f.endswith(".py"))
 ok("no os.startfile left outside gui_platform", src.count("os.startfile") == 1, src.count("os.startfile"))
 ok("no hard-coded Segoe UI / Consolas left in the app", '"Segoe UI"' not in src.replace('"Segoe UI" if IS_WIN', "") and src.count('"Consolas"') <= 2)

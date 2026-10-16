@@ -8,5 +8,6 @@
     "broadcast_alerts.py": "addons/broadcast_alerts.py",
     "../../emergency_agent.py": "emergency_agent.py",
     "../../ec_areas.py": "ec_areas.py"
-  }
+  },
+  "replaced_by": "area_alerts"
 }

@@ -34,7 +34,14 @@ api = AddonAPI(app, "weather_bot")
 msg = {"channel": "#weather", "channel_idx": 6, "nick": "Alice", "text": "wx", "dm": False}
 
 api.reply(msg, "Sunny"); drain()
-ok("by default a bot answers in the channel", chans == [("#weather", "Sunny")] and dms == [])
+ok("by default a bot answers in the channel - starting with who it answers: '@Alice: '", chans == [("#weather", "@Alice: Sunny")] and dms == [], chans)
+chans.clear()
+import gui_addons as _ga
+ok("...'@[Bob Smith]: ' for a name with a space (MeshCore's mention form); a text that already names them first is left as it is",
+   _ga.addressed("Bob Smith", "hi") == "@[Bob Smith]: hi" and _ga.addressed("Alice", "@[Alice] Pong") == "@[Alice] Pong"
+   and _ga.addressed("Alice", "@Alice: x") == "@Alice: x" and _ga.addressed("", "x") == "x", _ga.addressed("Bob Smith", "hi"))
+api.reply(dict(msg, text="hello"), "Pong"); api.reply(dict(msg, text="hello"), "part 2"); drain()
+ok("...each part of a longer answer too", chans == [("#weather", "@Alice: Pong"), ("#weather", "@Alice: part 2")], chans)
 chans.clear()
 app.settings.setdefault("addons", {}).setdefault("weather_bot", {})["_reply_private"] = True
 api.reply(msg, "Sunny"); drain()
@@ -46,7 +53,7 @@ ok("a question that came in on another node is answered through that node", dms 
 dms.clear()
 api.reply(dict(msg, nick="Stranger"), "Cloudy"); drain()
 ok("someone not in node memory yet: answered in the channel after all, and Status says why",
-   chans == [("#weather", "Cloudy")] and any("Couldn't answer Stranger privately" in t for _, t in lines), (chans, lines))
+   chans == [("#weather", "@Stranger: Cloudy")] and any("Couldn't answer Stranger privately" in t for _, t in lines), (chans, lines))
 chans.clear()
 api.reply(dict(msg, dm=True, channel="@Alice"), "x"); drain()
 ok("a private question is always answered privately", chans == [])

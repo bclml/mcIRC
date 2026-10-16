@@ -2,11 +2,11 @@ import os as _os; _os.environ["MCIRC_NO_LOG_FILE"] = "1"      # tests must never
 import os, sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT); os.chdir(ROOT)
-"""The weather bot and the fun bot: commands, places, channels, rate limits, message splitting.  Canned data only - no internet, no radio."""
+"""The weather commands (Area alerts, formerly the Weather bot) and the fun bot: commands, places, channels, rate limits, message splitting.  Canned data only - no internet, no radio."""
 import datetime as dt, filecmp, time, importlib.util, random, tkinter as tk
 from unittest import mock
 
-sys.path[:0] = [os.path.join(ROOT, "packages", "weather_bot"), os.path.join(ROOT, "packages", "fun_bot")]
+sys.path[:0] = [os.path.join(ROOT, "packages", "area_alerts"), os.path.join(ROOT, "packages", "fun_bot")]
 import meshbot_common as mc
 import wxbot_sources as ws
 import mcIRC
@@ -18,7 +18,7 @@ def ok(label, cond, detail=""):
     if not cond: fails.append(label)
 
 # ---- shared plumbing
-ok("both bots ship the same meshbot_common.py", filecmp.cmp("packages/weather_bot/meshbot_common.py", "packages/fun_bot/meshbot_common.py", shallow=False))
+ok("both bots ship the same meshbot_common.py", filecmp.cmp("packages/area_alerts/meshbot_common.py", "packages/fun_bot/meshbot_common.py", shallow=False))
 C = {"wx", "sun", "joke"}
 ok("'wx Surrey' is the wx command with 'Surrey'", mc.parse_command("wx Surrey", C) == ("wx", "Surrey"))
 ok("'!wx V3T 1V8' works without a prefix set", mc.parse_command("!wx V3T 1V8", C) == ("wx", "V3T 1V8"))
@@ -97,18 +97,21 @@ def run_now(fn, done):
     done(r)
 app.bg = run_now
 sent = []
-app.send_to = lambda ch, text: sent.append((ch, text))
+import re as _re
+WHO = _re.compile(r"^@\[[^\]]*\]: |^@\S+: ")             # the '@Bob: ' every answer in a channel starts with (gui_addons.addressed)
+raw_sent = []
+app.send_to = lambda ch, text: (raw_sent.append((ch, text)), sent.append((ch, WHO.sub("", text, count=1))))
 app.send_dm = lambda w, text: sent.append((w.name, text))
 def load(pkg, name):
     spec = importlib.util.spec_from_file_location("t_" + name, os.path.join(ROOT, "packages", pkg, name + ".py"))
     m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
     api = AddonAPI(app, name); api.after = lambda ms, fn: fn()
     inst = m.Addon(api); inst.on_load(); return m, inst, api
-wmod, wx_bot, wapi = load("weather_bot", "weather_bot")
+wmod, wx_bot, wapi = load("area_alerts", "area_alerts")
 msg = lambda text, ch="#weather", nick="Bob", dm=False: {"channel": ch, "channel_idx": 7, "nick": nick, "text": text, "snr": 5, "hops": 1, "raw": {}, "dm": dm}
 wx_bot.on_message(msg("moon"))
-ok("the weather bot is off until switched on", sent == [])
-wapi.set("enabled", True)
+ok("the weather commands are off until switched on", sent == [])
+wapi.set("wx_on", True)
 with mock.patch.object(ws, "gwx", lambda lat, lon, label, units="metric", get=None: f"{label}: canned"), \
         mock.patch.object(ws, "wx", mock.Mock(side_effect=ValueError("NOAA covers the US only"))), \
         mock.patch.object(mc, "resolve_place", lambda arg, **k: (49.1, -122.8, arg.title() or "here")):
@@ -118,14 +121,15 @@ with mock.patch.object(ws, "gwx", lambda lat, lon, label, units="metric", get=No
     ok("not answered outside its channels", sent == [])
     sent.clear(); wx_bot.on_message(msg("wx langley", nick="Bob"))
     ok("the same person is rate-limited", sent == [])
-    sent.clear(); wx_bot.limiter.last_any = 0; wx_bot.on_message(msg("wx surrey", ch="@Dan", nick="Dan", dm=True))
+    sent.clear(); wx_bot.wx_limiter.last_any = 0; wx_bot.on_message(msg("wx surrey", ch="@Dan", nick="Dan", dm=True))
     ok("private messages are ignored unless switched on", sent == [])
-wx_bot.limiter = mc.Limiter(0, 0)
+wx_bot.wx_limiter = mc.Limiter(0, 0)
 sent.clear(); wx_bot.on_message(msg("moon", nick="Eve"))
 ok("moon answers in the channel", len(sent) == 1 and sent[0][1].startswith("Moon:"), sent)
+ok("...starting with who asked: '@Eve: Moon: ...'", raw_sent[-1][1].startswith("@Eve: Moon:"), raw_sent[-1:])
 sent.clear(); wx_bot.on_message(msg("channels", nick="Fay"))
 ok("channels says where it answers", sent and "I answer in #weather" in sent[0][1], sent)
-wapi.set("off", ["moon"]); sent.clear(); wx_bot.on_message(msg("moon", nick="Gus"))
+wapi.set("wx_off", ["moon"]); sent.clear(); wx_bot.on_message(msg("moon", nick="Gus"))
 ok("a command switched off is ignored", sent == [])
 with mock.patch.object(ws, "aqi", mock.Mock(side_effect=OSError("timed out"))), mock.patch.object(mc, "resolve_place", lambda arg, **k: (1, 1, "X")):
     sent.clear(); wx_bot.on_message(msg("aqi hope", nick="Hal"))
@@ -143,7 +147,7 @@ TOWNS = {(49.05, -122.3): "Abbotsford BC", (49.36, -121.44): "Hope BC", (49.31, 
 looked, got = [], []
 fake_town = lambda lat, lon, *a: looked.append((lat, lon)) or TOWNS.get((round(lat, 2), round(lon, 2)))
 with mock.patch.object(app, "nodes", AskNodes()), mock.patch.object(wapi, "node_position", lambda: (49.31, -122.61, "Me")),         mock.patch.object(mc, "town_name", fake_town), mock.patch.object(ws, "wx", mock.Mock(side_effect=ValueError("US only"))),         mock.patch.object(ws, "gwx", lambda lat, lon, label, units="metric", get=None: got.append((lat, lon, label)) or f"{label}: canned"):
-    wx_bot.limiter = mc.Limiter(0, 0)
+    wx_bot.wx_limiter = mc.Limiter(0, 0)
     sent.clear(); wx_bot.on_message(msg("wx", nick="Ann", ch="#weather"))
     ok("'wx' alone: the weather where the asker's node is, named by its town", got[-1] == (49.05, -122.30, "Abbotsford BC") and sent[-1][1] == "Abbotsford BC: canned", (got, sent))
     app.packet_log = [{"t": time.time() - 2, "type": "GRP_TXT", "path": "C3D4", "size": 1}]
@@ -158,13 +162,13 @@ with mock.patch.object(app, "nodes", AskNodes()), mock.patch.object(wapi, "node_
         wx_bot.on_message(msg("wx hope", nick="Ann"))
     ok("...a place that is asked for still wins", got[-1] == (1.0, 2.0, "Hope"), got)
 with mock.patch.object(wapi, "node_position", lambda: (10.0, 10.0, "Me")), mock.patch.object(mc, "town_name", lambda *a: None):
-    ok("...'here' only when there is no town at the bot (or the lookup fails)", wx_bot.home()[2] == "here")
+    ok("...'here' only when there is no town at the bot (or the lookup fails)", wx_bot.wx_home()[2] == "here")
 
 # ---- every command that can use a place takes one: city, postal code, ZIP, node name or coordinates
 import wxbot_sky as sky
 asked = []
 fake_place = lambda arg, **k: asked.append(arg) or (49.1, -122.8, arg or "here")
-wapi.set("off", [])
+wapi.set("wx_off", [])
 with mock.patch.object(mc, "resolve_place", fake_place),         mock.patch.object(ws, "aurora", lambda lat, lon, label, get=None: f"aurora {label}"),         mock.patch.object(sky, "satpass", lambda sat, lat, lon, label, get=None, now=None: f"pass {sat} {label}"),         mock.patch.object(sky, "airplanes", lambda lat, lon, label, nm=25, get=None: f"planes {nm} {label}"):
     for text, want in (("aurora surrey", "aurora surrey"), ("satpass iss surrey", "pass iss surrey"), ("satpass 25544", "pass 25544 here"),
                        ("satpass V3T 1V8", "pass iss V3T 1V8"), ("airplanes surrey", "planes 25 surrey"), ("airplanes 10 surrey", "planes 10 surrey"),

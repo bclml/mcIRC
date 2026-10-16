@@ -469,7 +469,9 @@ class App(PrivateMixin, MenusMixin, CommandsMixin, gui_multinode.MultiNodeMixin,
         w.node = node_label if node_label and not name.startswith("@") else None      # windows of an extra node carry its label: 'Public [915]'
         if in_tree and hasattr(self, "tree") and not name.startswith("@") and self.tree.exists("Channels"):   # the tree holds Status + channels only; people/repeaters/rooms live on the top bar
             shown = "#Public" if base == "Public" else base                  # shown like the others; on the node it stays 'Public' (slot 0)
-            self.tree.insert(self.node_parent(node_label) if node_label else "Channels", "end", iid=name, text=shown)
+            if not node_label: self.tree.insert("Channels", "end", iid=name, text=shown)
+            elif base == "Status": self.tree.insert(self.node_parent(node_label), 0, iid=name, text="Status")         # first, like the main node's
+            else: self.tree.insert(self.node_channels(node_label), "end", iid=name, text=shown)
         if name.startswith("@"): self._add_button(name)   # the switchbar is for direct messages only
         return w
 

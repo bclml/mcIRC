@@ -87,8 +87,8 @@ def addon(pkg, **values):
     return inst
 norm = lambda names: sorted({str(n).lstrip("#").lower() for n in names})
 cases = [
-    ("weather_bot", {"enabled": True, "channels": "#wx, #weather"}, ["weather", "wx"]),
-    ("weather_bot", {"enabled": False, "channels": "#wx"}, []),
+    ("area_alerts", {"wx_on": True, "wx_channels": "#wx, #weather"}, ["weather", "wx"]),            # its weather commands (the Weather bot's)
+    ("area_alerts", {"wx_on": False, "wx_channels": "#wx"}, []),
     ("fun_bot", {"enabled": True, "channels": {"joke": "#jokes", "dice": "#jokes, #games"}}, ["games", "jokes"]),
     ("mesh_bot", {"enabled": True, "channels": {"ping": "#pings"}, "greet_on": True, "greet_channels": "#hello"}, ["hello", "pings"]),
     ("channel_list", {"enabled": True, "where": "#lists"}, ["lists"]),
@@ -97,6 +97,8 @@ cases = [
                                                {"enabled": False, "listen": "#off"}]}, ["answers", "ask"]),
     ("area_alerts", {"enabled": True, "broadcast": True, "kinds": {"weather": True, "disasters": False}, "channels": {"weather": "#wx, #alerts2"}},
      ["alerts2", "wx"]),
+    ("area_alerts", {"enabled": True, "broadcast": True, "kinds": {"weather": False, "disasters": False}, "forecast_on": True, "channels": {"weather": "#fc"}},
+     ["fc"]),
     ("area_alerts", {"enabled": True, "broadcast": False, "kinds": {"weather": True}}, []),
 ]
 for pkg, values, want in cases:
@@ -134,13 +136,64 @@ ok("...a full node: nothing overwritten, and Status says which channel couldn't 
    all(v.startswith(("x", "#test", "drivebc", "Public")) for v in full2.slots.values()) and any("#jokes" in t and "free channel slot" in t for _, t in app.lines), app.lines)
 added = []
 with mock.patch.object(mgr, "load", lambda name: None), mock.patch.object(mgr, "unload", lambda name: None), \
-        mock.patch.object(mgr, "ensure_channels", lambda: added.append(1)):
+        mock.patch.object(mgr, "ensure_channels", lambda: added.append(1)), mock.patch.object(mgr, "ensure_extra_channels", lambda: None):
     mgr.set_enabled("a", True); mgr.set_enabled("a", False)
 ok("switching an addon on adds its channels (switching off doesn't touch the node)", added == [1])
 import gui_addonsettings
 ok("saving an addon's settings adds its channels; so does connecting (after the node's channels are read)",
    "self.app.addons.ensure_channels()" in open(gui_addonsettings.__file__, encoding="utf-8").read()
    and open(os.path.join(ROOT, "mcIRC.py"), encoding="utf-8").read().count("self.addons.ensure_channels()") >= 2)       # (and right after connecting)
+
+# ---- an extra node (Options > More nodes): its addons' channels (with that node's settings) are added to it too
+import contextlib, gui_channels
+class NodeAPI:
+    def __init__(self, base, per): self.base, self.per, self.node = base, per, None
+    @contextlib.contextmanager
+    def for_node(self, node):
+        old, self.node = self.node, node
+        try: yield
+        finally: self.node = old
+class NodeBot:
+    def __init__(self, api): self.api = api
+    def channels_used(self): return self.api.per.get(self.api.node, self.api.base)
+class Extra: pass
+class XApp(App, gui_channels.ChannelsMixin):
+    def __init__(self):
+        super().__init__(); self.extra_nodes, self.opened = {}, []
+    def node_ready(self, key): return key in self.extra_nodes
+    def node_target(self, key): return contextlib.nullcontext()
+    def node_connected(self, label): self.opened.append(label)
+xapp = XApp(); xmgr = ga.AddonManager(xapp)
+wn = Node(); wifi = Extra(); wifi.channels = {"Public": 0, "#test": 1}; wifi.args, wifi.lock, wifi.health = ["-t", "x"], None, None
+xapp.extra_nodes["wifi 1"] = wifi
+xapp.settings = {"addons": {"area_alerts": {"_nodes": ["main", "wifi 1"]}, "fun_bot": {"_nodes": ["main"]}}}
+api = NodeAPI(["#alerts"], {"wifi 1": ["#wx", "#test"]})
+xmgr.loaded = {"area_alerts": (NodeBot(api), api), "fun_bot": (Bot(["#jokes"]), None)}
+ok("an extra node's channels: from its own settings, and only addons that work on that node", sorted(xmgr.channels_needed("wifi 1")) == ["#test", "#wx"],
+   xmgr.channels_needed("wifi 1"))
+ok("...the main node's: the main settings, every addon", sorted(xmgr.channels_needed()) == ["#alerts", "#jokes"], xmgr.channels_needed())
+with mock.patch.object(io, "channel_map", lambda *a, **k: {v: k_ for k_, v in wn.slots.items() if v}):
+    with_node(wn, xmgr.ensure_extra_channels)
+ok("the missing #wx is added to the extra node's first free slot; #test (it has it) and the main node's channels are left alone",
+   wn.slots[3] == "#wx" and not wn.slots[4] and ["set_channel", "3", "#wx"] in wn.cmds and len([c for c in wn.cmds if c[0] == "set_channel"]) == 1, wn.cmds)
+ok("...its windows are opened and Status says so", xapp.opened == ["wifi 1"] and any("#wx" in t and "wifi 1" in t for _, t in xapp.lines), xapp.lines)
+ok("...the node's channel list is read again", wifi.channels.get("#wx") == 3, wifi.channels)
+wf = Node(full=True); xapp.lines.clear(); wifi.channels = {"Public": 0}
+with mock.patch.object(io, "channel_map", lambda *a, **k: {v: k_ for k_, v in wf.slots.items() if v}):
+    with_node(wf, xmgr.ensure_extra_channels)
+ok("a full extra node: nothing overwritten, Status says which channel couldn't be added",
+   not any(c[0] == "set_channel" for c in wf.cmds) and any("#wx" in t and "free channel slot" in t for l, t in xapp.lines if l == "warn"), xapp.lines)
+wf.cmds.clear()
+with mock.patch.object(io, "channel_map", lambda *a, **k: {v: k_ for k_, v in wf.slots.items() if v}):
+    with_node(wf, xmgr.ensure_extra_channels)
+ok("...and it isn't asked again every time", not any(c[0] == ".get_channels" for c in wf.cmds), wf.cmds)
+del xapp.extra_nodes["wifi 1"]; wn2 = Node()
+with_node(wn2, xmgr.ensure_extra_channels)
+ok("an extra node that isn't connected: nothing is asked", wn2.cmds == [])
+mm = open(os.path.join(ROOT, "gui_multinode.py"), encoding="utf-8").read()
+ok("an extra node connecting checks its addons' channels; so do saving settings and switching an addon on",
+   "ensure_extra_channels()" in mm and "ensure_extra_channels()" in open(gui_addonsettings.__file__, encoding="utf-8").read()
+   and "self.ensure_extra_channels()" in open(ga.__file__, encoding="utf-8").read())
 
 ea.TX["muted"] = True
 io.ON_CHANNELS_ADDED = None

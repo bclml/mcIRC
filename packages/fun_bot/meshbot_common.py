@@ -209,12 +209,18 @@ def reply_delays_ms(api, msg=None):
     return int(first * 1000), int(gap * 1000)
 
 
+def name_room(msg):
+    """Room for the '@Bob: ' mcIRC puts in front of an answer in a channel (mcIRC 2026.10.16) - the parts stay mesh-sized."""
+    nick = str((msg or {}).get("nick") or "")
+    return 0 if not nick or (msg or {}).get("dm") else len(nick) + 5
+
+
 def send_parts(api, msg, text, max_parts=3, first_delay=None, gap=None, label=False):      # (gap: mcIRC listens ~8 s after each message for its repeats)
     """Answer `msg` with `text` in mesh-sized parts.  The first part waits a few seconds (5 by default, the bot's settings): answering at
     once collides with the repeaters still repeating the question.  With label=True later parts start with the text before the first ': ' (the place: 'Hope BC: Mon 14/8C ...')
     so each one makes sense on its own."""
     label = text.split(": ", 1)[0] if label and ": " in text[:34] else ""
-    parts = split_message(text, limit=MAX_CHARS - (len(label) + 2 if label else 0), max_parts=max_parts)
+    parts = split_message(text, limit=MAX_CHARS - (len(label) + 2 if label else 0) - name_room(msg), max_parts=max_parts)
     if label: parts = [p if not i or p.startswith(label) else f"{label}: {p}" for i, p in enumerate(parts)]
     d_first, d_gap = reply_delays_ms(api, msg)
     first_delay, gap = d_first if first_delay is None else first_delay, d_gap if gap is None else gap

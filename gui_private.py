@@ -80,7 +80,8 @@ class PrivateMixin:
         node = self.nodes.find_by_name(nick) if nick else None
         if not node:
             self.status_line(f"*** Couldn't answer {nick or 'someone'} privately (not in node memory yet) - answered in {msg.get('channel')} instead.", "warn")
-            return self.send_to(msg.get("channel"), text)
+            from gui_addons import addressed
+            return self.send_to(msg.get("channel"), addressed(msg.get("nick", ""), text))      # (who it answers: "@Bob: ...")
         w = self.find_private_window(node["public_key"], node["name"]) or self._new_private(node["name"], node["public_key"])
         if not w.key: w.key = node["public_key"]
         if msg.get("node"): w.node = msg["node"]               # it came in on an extra node: the answer goes out there too

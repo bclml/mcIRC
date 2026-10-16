@@ -46,6 +46,21 @@ class ChannelsMixin:
         if node: return dict(getattr(self.extra_nodes.get(node), "channels", {}) or {})
         return dict(io.CHANNEL_INDEX_BY_NAME)
 
+    def add_channel_to_node(self, name, node):
+        """Adds channel '#name' (a hashtag channel) to an extra node's first free slot unless it has it; -> (its slot, added now?).  Blocking: a worker
+        thread (the addons' channels - AddonManager.ensure_extra_channels).  Raises when the node is full."""
+        disp, on_node, key = parse_join(name)
+        with self.node_target(node):
+            slots = read_slots(io.node_args())
+            slot = next((s for s, n in slots if n and norm(n) == norm(on_node)), None)
+            new = slot is None
+            if new:
+                slot = next((s for s, n in slots if s and not n), None)
+                if slot is None: raise RuntimeError("the node has no free channel slot")
+                io.execute_mesh_command(io.node_args() + ["set_channel", str(slot), on_node], timeout=40)
+        self._refresh_channels(node)                  # (also when it had it: the list we knew was out of date)
+        return slot, new
+
     def _refresh_channels(self, node):
         """Re-reads the node's channels (runs in the background)."""
         if node:

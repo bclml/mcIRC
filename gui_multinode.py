@@ -194,6 +194,13 @@ class MultiNodeMixin:
             self.tree.insert("", "end", iid=iid, text=f"Node {label}", open=True)
         return iid
 
+    def node_channels(self, label):
+        """The node's 'Channels' folder in the tree (under 'Node <label>', after its Status) - laid out like the main node's."""
+        iid, parent = f"chans:{label}", self.node_parent(label)
+        if hasattr(self, "tree") and not self.tree.exists(iid):
+            self.tree.insert(parent, "end", iid=iid, text="Channels", open=True)
+        return iid
+
     def remove_node(self, label, ask=True):
         """Right-click on 'Node <label>' > Remove: disconnects it, takes it out of Options > More nodes and closes its windows.
         Their log files stay in the logs folder, renamed '... removed <date>.old.txt' so they don't come back at the next start."""
@@ -234,6 +241,7 @@ class MultiNodeMixin:
             disp = channel_display(name, idx)
             w = self.add_window(tag(disp, label), f"{disp} on node '{label}'")
             w.node = label
+        if hasattr(self.addons, "ensure_extra_channels"): self.addons.ensure_extra_channels()      # its addons' channels it doesn't have yet
 
     def _h_xchat(self, label, kind, idx, text, nick, extra):
         n = self.extra_nodes.get(label)

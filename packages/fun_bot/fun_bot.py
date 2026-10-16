@@ -67,7 +67,7 @@ def world_cup(arg, get=mc.http_json):
 class Addon(AddonBase):
     title = "Fun bot"
     command_words = list(COMMANDS)          # (the settings window's 'Command names...': other names for each command)
-    version = "1.1.2"
+    version = "1.1.3"
     author = "mcIRC"
     description = ("dice, roll, magic8, joke, dadjoke, hacker, catfact and wc (World Cup scores and tables) - each switched on for the channels you "
                    "choose. Thousands of jokes and cat facts from free online collections, not repeated for a long while. Off until you switch it on.")

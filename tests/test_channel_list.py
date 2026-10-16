@@ -14,13 +14,16 @@ def ok(label, cond, detail=""):
     print(f"[{'PASS' if cond else 'FAIL'}] {label}" + (f" - {detail}" if detail and not cond else ""))
     if not cond: fails.append(label)
 
-ok("it ships the same meshbot_common.py as the other bots", filecmp.cmp("packages/channel_list/meshbot_common.py", "packages/weather_bot/meshbot_common.py", shallow=False))
+ok("it ships the same meshbot_common.py as the other bots", filecmp.cmp("packages/channel_list/meshbot_common.py", "packages/area_alerts/meshbot_common.py", shallow=False))
 root = tk.Tk()
 app = mcIRC.App(root, demo=True); root.update()
 app.settings["bots_in_public"] = True      # these tests answer in Public on purpose (the no-bots-in-Public rule: test_private_replies)
 app.connected = True
 sent = []
-app.send_to = lambda ch, text: sent.append((ch, text))
+import re as _re
+WHO = _re.compile(r"^@\[[^\]]*\]: |^@\S+: ")             # the '@Bob: ' every answer in a channel starts with (gui_addons.addressed)
+raw_sent = []
+app.send_to = lambda ch, text: (raw_sent.append((ch, text)), sent.append((ch, WHO.sub("", text, count=1))))
 spec = importlib.util.spec_from_file_location("t_channel_list", os.path.join(ROOT, "packages", "channel_list", "channel_list.py"))
 m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
 api = AddonAPI(app, "channel_list"); api.after = lambda ms, fn: fn()

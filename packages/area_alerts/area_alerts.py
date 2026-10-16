@@ -1,7 +1,8 @@
 """Area alerts: natural disasters, earthquakes, tsunamis, official weather warnings, public emergency alerts, public transit service alerts,
 road closures and BC Ferries for the areas you choose - anywhere in the world (country, then region, then area).  Since 2.0 it also does
 what the Traffic, transit and weather addon did (aa_extras.py): 'route <address>' by private message, the map's DriveBC and earthquake
-layers, daily forecast posts and the weekly reminder - and it takes that addon's settings over.
+layers, daily forecast posts and the weekly reminder - and it takes that addon's settings over.  Since 2.1 it also answers the Weather
+bot's commands (aa_wx.py: wx <place>, aqi, sun, moon, solar, rain, aurora ...) and takes the Weather bot's settings over.
 
 Sources: GDACS, USGS, NOAA tsunami centres, Environment Canada, the US National Weather Service, MeteoAlarm (no key); the transit agencies
 of the Mobility Database (most open, some need a free key); DriveBC (no key) and 20 other 511 road sites (free developer key each).
@@ -23,6 +24,7 @@ import aa_traffic as traffic
 import aa_transit as transit
 import aa_ferries as ferries
 from aa_extras import Extras
+from aa_wx import WeatherCmds
 
 KINDS = {"disasters": ("Natural disasters (GDACS: earthquakes, cyclones, floods, volcanoes, droughts, wildfires)", "#alerts"),
          "quakes": ("Earthquakes (USGS)", "#alerts"),
@@ -48,14 +50,15 @@ def _chan_field(parent, var, width=24, **options):
     return channel_box(parent, var, **options)
 
 
-class Addon(Extras, AddonBase):
+class Addon(WeatherCmds, Extras, AddonBase):
     KINDS, DEFAULT_ON, WINDOW = KINDS, DEFAULT_ON, WINDOW
     title = "Area alerts"
-    version = "2.0.0"
+    version = "2.1.0"
     author = "mcIRC"
     description = ("Natural disasters, earthquakes, tsunamis, weather warnings, public emergency alerts (Canada, US), public transit alerts, road closures and BC Ferries "
                    "for the areas you choose anywhere in the world (country, region, area), plus 'route <address>' by private message and daily forecasts "
-                   "(all of Traffic, transit and weather). Shown on this PC; broadcast to the mesh only if you tick it. Off until you switch it on.")
+                   "(all of Traffic, transit and weather), and the Weather bot's commands (wx <place>, aqi, sun, moon, rain ...). Shown on this PC; "
+                   "broadcast to the mesh only if you tick it. Off until you switch it on.")
     tick_seconds = 60
     switch = "enabled"
 
@@ -68,6 +71,7 @@ class Addon(Extras, AddonBase):
         self.api.add_menu_item("Check now", lambda: self.check(force=True))
         self.api.add_menu_item("Alerts in force...", self.show_current)
         self.extras_load()
+        self.wx_load()
 
     def on_unload(self):
         self.queue.clear()
@@ -75,6 +79,7 @@ class Addon(Extras, AddonBase):
 
     # ---- checking ----
     def on_tick(self):
+        self.wx_tick()                                      # the weather commands' rain warning: whether or not alerts are checked
         on = self.api.get("enabled", False)
         if on and not self.was_on: self.quiet_next = True   # switched on (toolbar or settings): what is in force now is only shown
         self.was_on = on
@@ -199,13 +204,14 @@ class Addon(Extras, AddonBase):
         return out[:MAX_CHANNELS] or [KINDS[al.kind][1]]
 
     def channels_used(self):
-        """Where its alerts go while it broadcasts: each ticked kind's channels, the transit agencies' and road sources' own (mcIRC adds
-        these to the node when it lacks them)."""
-        if not (self.api.get("enabled", False) and self.api.get("broadcast", False)): return []
-        boxes = [self.channel(k) for k in self.kinds_on()]
+        """Where its alerts go while it broadcasts: each ticked kind's channels, the transit agencies' and road sources' own, the daily
+        forecasts' - and where the weather commands are answered (mcIRC adds these to the node when it lacks them)."""
+        wx = self.wx_channels_used()
+        if not (self.api.get("enabled", False) and self.api.get("broadcast", False)): return wx
+        boxes = [self.channel(k) for k in self.kinds_on()] + ([self.channel("weather")] if self.api.get("forecast_on", False) else [])
         if "transit" in self.kinds_on(): boxes += list(self.api.get("transit_channels", {}).values())
         if "traffic" in self.kinds_on(): boxes += list(self.api.get("traffic_channels", {}).values())
-        return [n for b in boxes for n in re.split(r"[,;\s]+", b or "") if n.strip()]
+        return [n for b in boxes for n in re.split(r"[,;\s]+", b or "") if n.strip()] + wx
 
     def channel(self, kind):
         return (self.api.get("channels", {}).get(kind) or KINDS[kind][1]).strip()
@@ -234,10 +240,11 @@ class Addon(Extras, AddonBase):
         self.key_vars = {}
         tabs = ttk.Notebook(f); tabs.pack(fill="both", expand=True, pady=4)
         pages = {}
-        for name in ("Areas and alerts", "Public transit", "Traffic", "Route and more"):
+        for name in ("Areas and alerts", "Public transit", "Traffic", "Weather commands", "Route and more"):
             pages[name] = tk.Frame(tabs, bg=bg); tabs.add(pages[name], text=name)
         self._areas_page(pages["Areas and alerts"], bg)
         self.extras_page(pages["Route and more"], bg)
+        self.wx_page(pages["Weather commands"], bg)
         self.transit_page, self.traffic_page = pages["Public transit"], pages["Traffic"]
         self.feed_vars = {fid: tk.BooleanVar(value=True) for fid in g("transit_feeds", [])}
         self.tch_vars, self.rch_vars = {}, {}
@@ -275,6 +282,9 @@ class Addon(Extras, AddonBase):
             self.ch_vars[k] = tk.StringVar(value=chans.get(k, default_ch))
             tk.Checkbutton(kinds, text=title, variable=self.k_vars[k], bg=bg, anchor="w").grid(row=i, column=0, sticky="w")
             _chan_field(kinds, self.ch_vars[k], 20, public=False, max_items=MAX_CHANNELS, empty=f"({default_ch})").grid(row=i, column=1, padx=4, sticky="w")
+        self.v_fc = tk.BooleanVar(value=g("forecast_on", False))
+        tk.Checkbutton(kinds, text="Daily weather: a 3-day forecast at 6 AM and a 5-day outlook at 8 AM for each area (to the Weather warnings channels)",
+                       variable=self.v_fc, bg=bg, anchor="w", wraplength=520, justify="left").grid(row=len(KINDS), column=0, columnspan=2, sticky="w")
         opt = tk.Frame(page, bg=bg); opt.pack(fill="x", pady=2)
         self.v_level = tk.StringVar(value=g("min_level", "orange"))
         self.v_mag, self.v_rad = tk.StringVar(value=str(g("min_mag", 5.0))), tk.StringVar(value=str(g("quake_radius", 300)))
@@ -410,6 +420,7 @@ class Addon(Extras, AddonBase):
         except ValueError: pass
         self.api.set("roadwork", bool(self.v_roadwork.get()))
         self.extras_apply()
+        self.wx_apply()
         ticked = {fid for fid, v in self.feed_vars.items() if v.get()}
         self.api.set("transit_channels", {fid: v.get().strip() for fid, v in self.tch_vars.items() if fid in ticked and v.get().strip()})
         slots = {traffic.slot_for(a) for a in self.chosen} - {None}

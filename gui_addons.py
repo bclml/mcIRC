@@ -38,6 +38,15 @@ class AddonBase:
     def apply_options(self): """Options OK/Apply was pressed - read your widgets and store them via self.api.set()."""
 
 
+def addressed(nick, text):
+    """An answer in a channel starts with who it answers: '@Bob: Pong!' - '@[Bob Smith]: ...' for a name with spaces or symbols (MeshCore's
+    mention form, so it isn't cut short).  Not when it already names them first: '@Bob ...', '@[Bob] ...'."""
+    nick = (nick or "").strip().lstrip("@")
+    if not nick or nick == "someone": return text
+    if text.startswith((f"@{nick}", f"@[{nick}]")): return text
+    return (f"@{nick}: " if re.fullmatch(r"[^\s,:;!?()\[\]]+", nick) else f"@[{nick}]: ") + text
+
+
 _UNSET = object()          # no node chosen (a tick, a background job, ...): the addon acts for the main node, so its settings are read
 
 
@@ -112,9 +121,11 @@ class AddonAPI:
         return dict(self._store().get("_per_node", {}).get(node, {}))
 
     # -- another addon (an addon that took over another one's job moves its settings over) --
-    def addon_settings(self, name):
-        """A copy of another addon's settings as they count for the main node (its defaults, the main node's own on top); {} if none."""
+    def addon_settings(self, name, raw=False):
+        """A copy of another addon's settings as they count for the main node (its defaults, the main node's own on top); {} if none.
+        raw=True: all of them as saved - each extra node's own under '_per_node' (to move them to the addon that replaces it)."""
         base = copy.deepcopy(self._app.settings.get("addons", {}).get(name, {}))
+        if raw: return base
         main = base.pop("_per_node", {}).get("main", {})
         base.update(main)
         return base
@@ -191,7 +202,7 @@ class AddonAPI:
             w = self._app.windows.get(msg["channel"])
             if w is not None: self._app.q.put(("call", lambda: self._app.send_dm(w, text)))
         else:
-            self._app.send_to(msg["channel"], text)
+            self._app.send_to(msg["channel"], addressed(msg.get("nick", ""), text))
     def node_position(self):
         """(lat, lon, node name) from Options > Node, for "near me" answers; lat/lon are 0 when not set."""
         s = self._app.settings
@@ -504,13 +515,16 @@ class AddonManager:
         self.app.settings.setdefault("addons_enabled", {})[name] = on
         self.app.save()
         (self.load if on else self.unload)(name)
-        if on: self.ensure_channels()
+        if on: self.ensure_channels(); self.ensure_extra_channels()
 
-    def channels_needed(self):
-        """Every channel the loaded addons use (their channels_used()), '#name' once each; not 'all', Public, private or other nodes'."""
+    def channels_needed(self, node="main"):
+        """Every channel the loaded addons use on that node (their channels_used(), with that node's settings; only addons that work on
+        it - 'Use on these nodes'), '#name' once each; not 'all', Public, private or other nodes'."""
         out = {}
-        for name, (inst, _api) in list(self.loaded.items()):
-            try: names = list(inst.channels_used() or [])
+        for name, (inst, api) in list(self.loaded.items()):
+            if node != "main" and node not in self.nodes_for(name): continue
+            try:
+                with (_node_ctx(api, node) if node != "main" else contextlib.nullcontext()): names = list(inst.channels_used() or [])
             except Exception: continue
             for n in names:
                 n = str(n).strip()
@@ -534,6 +548,38 @@ class AddonManager:
             if failed: self.app.status_line(f"*** An addon uses {', '.join(failed)} but it couldn't be added to the node (no free channel slot? "
                                             "Tools > Addons > MeshCore tools > Channels, or /part a channel) - nothing is heard or sent there.", "warn")
         self.app.bg(lambda: [(c, io.ensure_channel(c)) for c in missing], done)
+
+    def ensure_extra_channels(self):
+        """The same for each connected extra node (Options > More nodes): its addons' channels that it doesn't have are added to it."""
+        if getattr(self.app, "demo", False): return
+        add = getattr(self.app, "add_channel_to_node", None)
+        if add is None: return
+        busy = self.__dict__.setdefault("_ensuring_extra", set())
+        failed_before = self.__dict__.setdefault("_extra_failed", set())
+        for label in list(getattr(self.app, "extra_nodes", {}) or {}):
+            if label in busy or not self.app.node_ready(label): continue
+            have = {n.lstrip("#").lower() for n in self.app._channels_on(label)}
+            missing = [c for c in self.channels_needed(label) if c.lstrip("#").lower() not in have and (label, c.lower()) not in failed_before]
+            if not missing: continue
+            busy.add(label)
+            def work(label=label, missing=missing):
+                out = []
+                for c in missing:
+                    try: out.append((c, add(c, label)))
+                    except Exception as e: out.append((c, e))
+                return out
+            def done(r, label=label):
+                busy.discard(label)
+                if isinstance(r, Exception): return self.app.status_line(f"*** Couldn't add the addons' channels to node '{label}': {r}", "warn")
+                added = [c for c, res in r if isinstance(res, tuple) and res[1]]
+                failed = [c for c, res in r if not isinstance(res, tuple)]
+                failed_before.update((label, c.lower()) for c, res in r if not isinstance(res, tuple) or not res[1])   # not asked again (it was there, or no room)
+                if any(isinstance(res, tuple) for _, res in r) and hasattr(self.app, "node_connected"): self.app.node_connected(label)   # their windows
+                if added:
+                    self.app.status_line(f"*** Added {', '.join(added)} to node '{label}' - an addon uses {'them' if len(added) > 1 else 'it'} there.", "info")
+                if failed: self.app.status_line(f"*** An addon uses {', '.join(failed)} on node '{label}' but it couldn't be added there (no free "
+                                                "channel slot? MeshCore tools > Channels for that node) - nothing is heard or sent there.", "warn")
+            self.app.bg(work, done)
 
     def _call(self, name, hook, *args):
         inst = self.loaded[name][0]

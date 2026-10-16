@@ -57,7 +57,7 @@ def _chan_field(parent, var, width=24, **options):
 class Addon(AddonBase):
     title = "Bot help"
     replies = True                        # (its settings window offers private answers and the answer wait)
-    version = "1.0.8"
+    version = "1.0.9"
     author = "mcIRC"
     description = ("Answers 'bothelp' with the bot commands that work in that channel (Weather bot, Fun bot, Auto reply, ...), and can announce "
                    "'Type bothelp for a list of commands.' once a day at a set time. Off until you switch it on.")
@@ -88,7 +88,8 @@ class Addon(AddonBase):
         self.last_any = self.last_by[who] = now
         get = getattr(self.api, "reply_delays", None)              # the settings window's 'Wait ... seconds' (5 and 9 by default)
         first, gap = get(node=msg.get("node")) if get else (5.0, 9.0)
-        for i, part in enumerate(help_lines(found)):
+        room = 0 if msg.get("dm") else len(str(msg.get("nick") or "")) + 5         # the '@Bob: ' in front of an answer in a channel
+        for i, part in enumerate(help_lines(found, limit=MAX_CHARS - room)):
             self.api.after(int((first + i * gap) * 1000), lambda p=part: self.api.reply(msg, p))      # after the repeats of the question
 
     # ---- the daily announcement ----

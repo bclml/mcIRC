@@ -58,7 +58,7 @@ class Extras:
     # ---- daily forecast posts and the weekly reminder (every tick) ----
     def extras_tick(self):
         now = datetime.datetime.now()
-        if self.api.get("forecast_on", False) and "weather" in self.kinds_on():
+        if self.api.get("forecast_on", False):                     # its own switch on the first tab (not tied to Weather warnings)
             sent = dict(self.api.get("forecast_sent", {}))
             due = more.due_posts(now, sent)
             if due:
@@ -146,7 +146,7 @@ class Extras:
     def extras_page(self, page, bg):
         g = self.api.get
         self.v_route, self.v_tomtom = tk.BooleanVar(value=g("route_on", False)), tk.StringVar(value=g("tomtom_key", ""))
-        self.v_fc, self.v_week = tk.BooleanVar(value=g("forecast_on", False)), tk.BooleanVar(value=g("weekly_on", False))
+        self.v_week = tk.BooleanVar(value=g("weekly_on", False))
         self.v_week_ch, self.v_hour = tk.StringVar(value=g("weekly_channel", "Public")), tk.StringVar(value=str(g("per_hour", 10)))
         self.v_prefix = tk.StringVar(value=g("prefix", ""))
         tk.Checkbutton(page, text="Answer 'route <address>' by private message", variable=self.v_route, bg=bg, font=("TkDefaultFont", 9, "bold")).pack(anchor="w")
@@ -159,8 +159,6 @@ class Extras:
         tk.Label(row, text="TomTom key (optional, live traffic):", bg=bg).pack(side="left")
         tk.Entry(row, textvariable=self.v_tomtom, width=34, show="*").pack(side="left", padx=4)
         ttk.Button(row, text="Open the sign-up page", command=lambda: webbrowser.open(TOMTOM_SIGNUP)).pack(side="left")
-        tk.Checkbutton(page, text="Daily forecast posts: a 3-day forecast at 6 AM and a 5-day outlook at 8 AM for each area (to the Weather warnings "
-                       "channels)", variable=self.v_fc, bg=bg, wraplength=560, justify="left").pack(anchor="w", pady=(4, 0))
         row = tk.Frame(page, bg=bg); row.pack(anchor="w", pady=(4, 0))
         tk.Checkbutton(row, text="Weekly reminder on Sundays around noon (which channels carry the alerts), in:", variable=self.v_week, bg=bg).pack(side="left")
         try:
@@ -179,7 +177,7 @@ class Extras:
     def extras_apply(self):
         self.api.set("route_on", bool(self.v_route.get()))
         self.api.set("tomtom_key", self.v_tomtom.get().strip())
-        self.api.set("forecast_on", bool(self.v_fc.get()))
+        if hasattr(self, "v_fc"): self.api.set("forecast_on", bool(self.v_fc.get()))         # (on the 'Areas and alerts' tab)
         self.api.set("weekly_on", bool(self.v_week.get()))
         self.api.set("weekly_channel", self.v_week_ch.get().strip() or "Public")
         self.api.set("prefix", self.v_prefix.get().strip()[:12])

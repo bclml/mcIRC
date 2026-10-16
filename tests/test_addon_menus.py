@@ -98,8 +98,8 @@ mu_api.set("_toolbar", False); mu_api._draw_switch(); root.update()
 ok("'Show its switch on the toolbar' unticked: the switch goes", switch_btn(mu_api) is None and not b.winfo_exists())
 mu_api.set("_toolbar", True); mu_api._draw_switch(); root.update()
 ok("...ticked again: it's back", switch_btn(mu_api) is not None and switch_btn(mu_api).winfo_exists())
-sys.path[:0] = [os.path.join(ROOT, "packages", p) for p in ("fun_bot", "weather_bot", "bot_help", "channel_list")]
-for pkg in ("fun_bot", "weather_bot", "mesh_bot", "channel_list", "bot_help", "map_uploader", "packet_upload"):
+sys.path[:0] = [os.path.join(ROOT, "packages", p) for p in ("fun_bot", "area_alerts", "bot_help", "channel_list")]
+for pkg in ("fun_bot", "area_alerts", "mesh_bot", "channel_list", "bot_help", "map_uploader", "packet_upload"):
     spec = importlib.util.spec_from_file_location(f"t_sw_{pkg}", os.path.join(ROOT, "packages", pkg, pkg + ".py"))
     mod = importlib.util.module_from_spec(spec); spec.loader.exec_module(mod)
     ok(f"{pkg} has an ON/OFF switch", getattr(mod.Addon, "switch", None) == "enabled")

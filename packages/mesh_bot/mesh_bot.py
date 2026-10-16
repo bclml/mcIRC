@@ -28,7 +28,7 @@ GREETING = cmds.DEFAULT_GREETINGS[0]                     # the single greeting o
 class Addon(AddonBase):
     title = "Mesh bot"
     command_words = list(COMMANDS)          # (the settings window's 'Command names...': other names for each command)
-    version = "1.2.13"
+    version = "1.2.14"
     author = "mcIRC (commands after agessaman/meshcore-bot, MIT)"
     description = ("ping, hello, path, prefix, multitest, stats, sports and version - the meshcore-bot commands mcIRC's other bots don't have - "
                    "plus its greeter for newcomers (a random greeting from your list), each switched on for the channels you choose. Off until you switch it on.")
@@ -145,7 +145,7 @@ class Addon(AddonBase):
         text = cmds.greeting_for(nick, line, msg.get("channel", ""))
         private = bool(self.api.get("greet_private", False))     # only to the newcomer: nothing in the channel
         first, gap = mc.reply_delays_ms(self.api, msg)
-        for i, part in enumerate(mc.split_message(text, limit=mc.MAX_CHARS, max_parts=2)):
+        for i, part in enumerate(mc.split_message(text, limit=mc.MAX_CHARS - (0 if private else mc.name_room(msg)), max_parts=2)):
             self.api.after(first + i * gap, lambda p=part: self.api.reply(msg, p, private=private))
 
     def greetings(self):

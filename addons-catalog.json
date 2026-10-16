@@ -5,16 +5,16 @@
     {
       "name": "area_alerts",
       "title": "Area alerts",
-      "version": "2.0.0",
+      "version": "2.1.0",
       "author": "bclml",
-      "description": "Natural disasters (GDACS), earthquakes (USGS), tsunami warnings (NOAA), official weather warnings (Environment Canada, US NWS, MeteoAlarm for 38 European countries), public emergency alerts (Canada: Alert Ready; US: FEMA IPAWS), public transit service alerts (489 agencies in 28 countries), road closures (DriveBC and 20 other 511 sites) and BC Ferries for the areas you choose anywhere in the world: country, region, area. Also everything Traffic, transit and weather did: 'route <address>' by private message (optional TomTom live traffic), the map's DriveBC and earthquake layers, daily forecast posts and a weekly reminder - and it takes that addon's settings over. Shown on this PC; broadcast to the mesh only if you tick it. Most sources are free with no key. Off until you switch it on.",
+      "description": "Natural disasters (GDACS), earthquakes (USGS), tsunami warnings (NOAA), official weather warnings (Environment Canada, US NWS, MeteoAlarm for 38 European countries), public emergency alerts (Canada: Alert Ready; US: FEMA IPAWS), public transit service alerts (489 agencies in 28 countries), road closures (DriveBC and 20 other 511 sites) and BC Ferries for the areas you choose anywhere in the world: country, region, area. Also everything Traffic, transit and weather did: 'route <address>' by private message (optional TomTom live traffic), the map's DriveBC and earthquake layers, daily forecast posts and a weekly reminder - and it takes that addon's settings over. And the Weather bot's commands: wx <place>, gwx, aqi, sun, moon, solar, sf, hfcond, satpass, airplanes, rain, aurora (answered in the channels you choose, '@name:' first) and its rain warning - it takes the Weather bot's settings over too. Shown on this PC; broadcast to the mesh only if you tick it. Most sources are free with no key. Off until you switch it on.",
       "path": "packages/area_alerts",
       "tested": "2026-10-09 with app 3.0.0"
     },
     {
       "name": "auto_reply",
       "title": "Auto reply",
-      "version": "1.1.9",
+      "version": "1.1.10",
       "author": "bclml",
       "description": "Keyword rules: answer the words you choose on the channels you choose, with your own reply text, sent to the channels you pick. Comes with a 'test' rule.",
       "path": "packages/auto_reply",
@@ -39,18 +39,9 @@
       "tested": "2026-10-04 with app 1.5.2 on Windows (demo mode and screenshots); Linux only in CI"
     },
     {
-      "name": "weather_bot",
-      "title": "Weather bot",
-      "version": "1.0.14",
-      "author": "bclml",
-      "description": "Answers weather commands in the channels you choose (default #weather): wx <place> (city, postal code, ZIP, node name or lat,lon; nothing = where the asker's node is), gwx, aqi, sun, moon, solar, sf, hfcond, satpass, airplanes, rain, aurora, channels, status, contact. Free data, no API keys. Off until you switch it on; rate-limited. satpass needs 'pip install sgp4'.",
-      "path": "packages/weather_bot",
-      "tested": "2026-10-04 with app 1.5.2: every data source checked live; answering checked with canned data and a stand-in radio (not over the air yet)"
-    },
-    {
       "name": "fun_bot",
       "title": "Fun bot",
-      "version": "1.1.2",
+      "version": "1.1.3",
       "author": "bclml",
       "description": "dice, roll, magic8 (60 answers), joke (1,700+), dadjoke (700+), hacker, catfact (400+) and wc (World Cup scores and tables) - each switched on for the channels you choose. Jokes and cat facts come from free online collections (clean ones only; the built-in ones offline) and aren't repeated for a long while. Off until you switch it on. Rate-limited.",
       "path": "packages/fun_bot",
@@ -59,7 +50,7 @@
     {
       "name": "bot_help",
       "title": "Bot help",
-      "version": "1.0.8",
+      "version": "1.0.9",
       "author": "bclml",
       "description": "Answers 'bothelp' with the bot commands that work in that channel (Weather bot, Fun bot, Auto reply, ...), and can announce 'Type bothelp for a list of commands.' once a day at a set time. Choose which bots it lists. Off until you switch it on; rate-limited.",
       "path": "packages/bot_help",
@@ -68,7 +59,7 @@
     {
       "name": "channel_list",
       "title": "Channel list",
-      "version": "1.2.5",
+      "version": "1.2.6",
       "author": "bclml",
       "description": "Answers 'channel list' with the channels you keep in its list (add / remove / rename / reorder them in Options, and people can add one with 'channel list add #name' - checked names, at most 30, you see who added what; starts with 13 BC channels). Off until you switch it on; one answer per person per minute.",
       "path": "packages/channel_list",
@@ -114,7 +105,7 @@
     {
       "name": "mesh_bot",
       "title": "Mesh bot",
-      "version": "1.2.13",
+      "version": "1.2.14",
       "author": "bclml (commands after agessaman/meshcore-bot, MIT)",
       "description": "ping, hello, path, prefix, multitest, stats, sports, version and firmware (the newest MeshCore releases) - the agessaman/meshcore-bot commands mcIRC's other bots don't have - plus its greeter (a random greeting from a list you can edit), each switched on for the channels you choose. Off until you switch it on.",
       "path": "packages/mesh_bot",

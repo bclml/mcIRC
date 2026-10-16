@@ -94,7 +94,11 @@ class AddonSettingsWindow(tk.Toplevel):
             tk.Label(self.top, bg=BG, fg="#555", justify="left", wraplength=680, anchor="w",
                      text=f"These settings are for '{node}' only. What you don't change here follows the main node.").pack(anchor="w")
             if self.api.own_settings(node): self.reset_btn.pack(side="left")
-        self.node_vars, self.private_var, self.toolbar_var, self.delay_vars = {}, None, None, None
+        self.node_vars, self.private_var, self.toolbar_var, self.delay_vars, self.here_var = {}, None, None, None, None
+        if node:                                                # works on this node at all? (the same as 'Use on these nodes' on the main tab)
+            self.here_var = tk.BooleanVar(value=node in self.app.addons.nodes_for(self.name))
+            tk.Checkbutton(self.top, text=f"Use this addon on node '{node}' (it answers and posts there; the channels it uses are added to that node)",
+                           variable=self.here_var, bg=BG, anchor="w", font=(gui_platform.UI_FONT_NAME, 9, "bold")).pack(fill="x")
         if not node and self.extra:                             # which nodes this addon works on at all
             row = tk.Frame(self.top, bg=BG); row.pack(fill="x")
             tk.Label(row, text="Use on these nodes:", bg=BG).pack(side="left")
@@ -199,6 +203,9 @@ class AddonSettingsWindow(tk.Toplevel):
                 except ValueError: continue
                 with self._ctx(): self.api.set(key, int(value) if value == int(value) else value)
         if self.node_vars: store["_nodes"] = [k for k, v in self.node_vars.items() if v.get()]
+        if self.here_var is not None and self.tab:
+            nodes = [n for n in self.app.addons.nodes_for(self.name) if n != self.tab] + ([self.tab] if self.here_var.get() else [])
+            store["_nodes"] = [n for n in ["main"] + self.extra if n in nodes]
         if self.toolbar_var is not None and self.name in self.app.addons.loaded:
             store["_toolbar"] = bool(self.toolbar_var.get())
             self.api._draw_switch()
@@ -212,6 +219,7 @@ class AddonSettingsWindow(tk.Toplevel):
         self.app.save()
         self._refresh_tabs()
         self.app.addons.ensure_channels()                    # a channel typed in that the node doesn't have yet: added to it
+        if hasattr(self.app.addons, "ensure_extra_channels"): self.app.addons.ensure_extra_channels()     # ...and on extra nodes
         return True
 
     def _prune(self, node):

@@ -133,9 +133,9 @@ def steps():
         win.destroy(); yield 300
 
     yield from addon("auto_reply", "auto-reply-options.png")       # (its example rules were set above)
-    yield from addon("area_alerts", "addon-area-alerts.png", {"kinds": {"disasters": True, "weather": True, "emergency": True}})
-    yield from addon("area_alerts", "addon-area-alerts-route.png", {"route_on": True, "forecast_on": True}, tab=3)    # Route and more
-    yield from addon("weather_bot", "addon-weather-bot.png", {"enabled": True, "channels": "#weather"})
+    yield from addon("area_alerts", "addon-area-alerts.png", {"kinds": {"disasters": True, "weather": True, "emergency": True}, "forecast_on": True})
+    yield from addon("area_alerts", "addon-area-alerts-route.png", {"route_on": True}, tab=4)    # Route and more
+    yield from addon("area_alerts", "addon-area-alerts-weather.png", {"wx_on": True, "wx_channels": "#weather"}, tab=3)    # Weather commands (the Weather bot's)
     yield from addon("fun_bot", "addon-fun-bot.png", {"enabled": True, "channels": {c: "#fun" for c in ("dice", "roll", "magic8", "joke", "dadjoke", "hacker", "catfact")}})
     yield from addon("mesh_bot", "addon-mesh-bot.png", {"enabled": True})
     yield from addon("packet_upload", "addon-packet-upload.png")

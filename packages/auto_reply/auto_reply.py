@@ -22,6 +22,13 @@ def norm(name): return re.sub(r"\s*\[[^\]]*\]$", "", (name or "").strip()).lstri
 def split_list(text): return [x.strip() for x in (text or "").split(",") if x.strip()]
 
 
+
+def addressed(nick, text):
+    """An answer in a channel starts with who it answers: '@Bob: ...' ('@[Bob Smith]: ...'); not when it starts with a name already."""
+    nick = (nick or "").replace("[", "").replace("]", "").strip()
+    if not nick or text.startswith("@"): return text
+    return (f"@{nick}: " if re.fullmatch(r"[^\s,:;!?()]+", nick) else f"@[{nick}]: ") + text
+
 class _Safe(dict):
     def __missing__(self, key): return "{" + key + "}"     # unknown placeholders stay as typed instead of crashing
 
@@ -53,7 +60,7 @@ def _chan_field(parent, var, width=24, **options):
 class Addon(AddonBase):
     title = "Auto reply"
     reply_delay, part_gap = 0, 9          # answers at once unless a wait is set in its settings window
-    version = "1.1.9"
+    version = "1.1.10"
     author = "bclml"
     description = "Keyword rules: answer chosen words on chosen channels with your own text, to the channels you pick."
 
@@ -109,7 +116,7 @@ class Addon(AddonBase):
             get = getattr(self.api, "reply_delays", None)              # the settings window's 'Wait ... seconds' (0 by default: at once)
             wait = int(get(self.reply_delay, self.part_gap, node=msg.get("node"))[0] * 1000) if get else 0
             if not dests: send = lambda: self.api.reply(msg, reply)    # the same channel - or privately, if set in the settings window
-            else: send = lambda: [self.api.send(dest, reply) for dest in dests]
+            else: send = lambda: [self.api.send(dest, reply if dest.startswith("@") else addressed(msg["nick"], reply)) for dest in dests]   # '@Bob: ...' - who it answers
             if wait: self.api.after(wait, send)
             else: send()
             return

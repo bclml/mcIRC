@@ -5,7 +5,7 @@ sys.path.insert(0, ROOT); os.chdir(ROOT)
 """'bothelp' lists the commands every bot answers in that channel; the optional daily 'Type bothelp...' announcement. No radio, no internet."""
 import datetime as dt, importlib.util, tkinter as tk
 
-sys.path[:0] = [os.path.join(ROOT, "packages", p) for p in ("weather_bot", "fun_bot")]
+sys.path[:0] = [os.path.join(ROOT, "packages", p) for p in ("area_alerts", "fun_bot")]
 import mcIRC
 from gui_addons import AddonAPI
 
@@ -18,7 +18,10 @@ root = tk.Tk()
 app = mcIRC.App(root, demo=True); root.update()
 app.connected = True
 sent = []
-app.send_to = lambda ch, text: sent.append((ch, text))
+import re as _re
+WHO = _re.compile(r"^@\[[^\]]*\]: |^@\S+: ")             # the '@Bob: ' every answer in a channel starts with (gui_addons.addressed)
+raw_sent = []
+app.send_to = lambda ch, text: (raw_sent.append((ch, text)), sent.append((ch, WHO.sub("", text, count=1))))
 app.send_dm = lambda w, text: sent.append((w.name, text))
 for ch in ("#weather", "#bot-van", "#quiet"): app.add_window(ch, "")
 def load(pkg, settings):
@@ -27,18 +30,18 @@ def load(pkg, settings):
     api = AddonAPI(app, pkg); api.after = lambda ms, fn: fn()
     for k, v in settings.items(): api.set(k, v)
     inst = m.Addon(api); api.display = inst.title; inst.on_load(); return m, inst, api
-_, wx, _ = load("weather_bot", {"enabled": True, "channels": "#weather"})
+_, wx, _ = load("area_alerts", {"wx_on": True, "wx_channels": "#weather"})
 _, fun, _ = load("fun_bot", {"enabled": True, "channels": {"dice": "#bot-van", "joke": "#bot-van, #weather"}})
 _, ar, _ = load("auto_reply", {"enabled": True, "rules": [{"name": "t", "enabled": True, "triggers": "test, t", "match": "exact", "listen": "#bot-van", "reply": "ok"}]})
 bmod, bh, bapi = load("bot_help", {"enabled": True})
 msg = lambda ch, text="bothelp", nick="Bob", dm=False: {"channel": ch, "channel_idx": 1, "nick": nick, "text": text, "snr": 1, "hops": 0, "raw": {}, "dm": dm}
 
 found = bh.found("#weather")
-ok("in #weather: the weather bot and the joke from the fun bot", set(found) >= {"Weather bot", "Fun bot"} and "wx <place>" in found["Weather bot"] and found["Fun bot"] == ["joke"], found)
+ok("in #weather: Area alerts' weather commands and the joke from the fun bot", set(found) >= {"Area alerts", "Fun bot"} and "wx <place>" in found["Area alerts"] and found["Fun bot"] == ["joke"], found)
 found = bh.found("#bot-van")
 ok("in #bot-van: fun bot (dice, joke) and auto reply's words, no weather", set(found) == {"Fun bot", "Auto reply"} and found["Fun bot"] == ["dice 3d6", "joke"] and found["Auto reply"] == ["test", "t"], found)
 bh.on_message(msg("#weather"))
-ok("'bothelp' in #weather answers there, in mesh-sized messages", sent and all(c == "#weather" and len(t) <= 115 for c, t in sent) and any(t.startswith("Weather bot: wx <place>") for _, t in sent), sent)
+ok("'bothelp' in #weather answers there, in mesh-sized messages", sent and all(c == "#weather" and len(t) <= 115 for c, t in sent) and any(t.startswith("Area alerts: wx <place>") for _, t in sent), sent)
 ok("...and lists every bot that answers there", any("Fun bot: joke" in t for _, t in sent), sent)
 sent.clear(); bh.on_message(msg("#weather"))
 ok("the same person asking again within a minute is ignored", sent == [])
@@ -56,12 +59,12 @@ ok("off -> quiet", sent == [])
 bapi.set("enabled", True)
 
 # ---- per bot: leave one out of 'bothelp' (and out of the announcement)
-ok("the Options page knows every bot", set(bapi.bot_names()) >= {"Weather bot", "Fun bot", "Auto reply"})
+ok("the Options page knows every bot", set(bapi.bot_names()) >= {"Area alerts", "Fun bot", "Auto reply"})
 frame = bh.build_options(tk.Frame(root)); root.update()
-ok("...and shows a checkbox per bot (not for itself)", set(bh.v_bots) >= {"Weather bot", "Fun bot", "Auto reply"} and "Bot help" not in bh.v_bots)
+ok("...and shows a checkbox per bot (not for itself)", set(bh.v_bots) >= {"Area alerts", "Fun bot", "Auto reply"} and "Bot help" not in bh.v_bots)
 bh.v_bots["Fun bot"].set(False); bh.apply_options()
 ok("unticking Fun bot stores it", "Fun bot" in bapi.get("hidden", []))
-ok("...and bothelp no longer lists it", "Fun bot" not in bh.found("#weather") and "Weather bot" in bh.found("#weather") and set(bh.found("#bot-van")) == {"Auto reply"})
+ok("...and bothelp no longer lists it", "Fun bot" not in bh.found("#weather") and "Area alerts" in bh.found("#weather") and set(bh.found("#bot-van")) == {"Auto reply"})
 bh.v_bots["Auto reply"].set(False); bh.apply_options()
 ok("a channel where only hidden bots answer gets no bothelp answer", bh.found("#bot-van") == {})
 bapi.set("hidden", [])

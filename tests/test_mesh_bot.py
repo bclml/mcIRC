@@ -14,7 +14,7 @@ def ok(label, cond, detail=""):
     print(f"[{'PASS' if cond else 'FAIL'}] {label}" + (f" - {detail}" if detail and not cond else ""))
     if not cond: fails.append(label)
 
-ok("it ships the same meshbot_common.py as the other bots", filecmp.cmp("packages/mesh_bot/meshbot_common.py", "packages/weather_bot/meshbot_common.py", shallow=False))
+ok("it ships the same meshbot_common.py as the other bots", filecmp.cmp("packages/mesh_bot/meshbot_common.py", "packages/area_alerts/meshbot_common.py", shallow=False))
 now = time.time()
 NODES = [{"name": "Hilltop", "public_key": "a1b2" + "0" * 60, "type": 2, "last_seen": now - 600},
          {"name": "Harbour", "public_key": "a1c3" + "0" * 60, "type": 2, "last_seen": now - 90000},

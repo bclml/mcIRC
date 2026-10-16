@@ -50,9 +50,10 @@ class MenusMixin:
             m.add_command(label=f"Join channel on node '{label}'...", command=lambda: self.ask_join(label))
             m.add_command(label=f"Remove node '{label}'...", command=lambda: self.remove_node(label))
             m.tk_popup(e.x_root, e.y_root)
-        elif iid == "Channels":
+        elif iid == "Channels" or iid.startswith("chans:"):
+            label = iid[6:] if iid.startswith("chans:") else None
             m = tk.Menu(self.root, tearoff=0)
-            m.add_command(label="Join channel...", command=self.ask_join)
+            m.add_command(label="Join channel...", command=(lambda: self.ask_join(label)) if label else self.ask_join)
             m.tk_popup(e.x_root, e.y_root)
         elif iid in self.windows:
             self.select_window(iid)

@@ -64,7 +64,10 @@ with mock.patch.object(io, "execute_mesh_command", fake_exec), mock.patch.object
     ok("the extra node connects (its own channel list and name)", n.connected and n.channels == {"Public": 0, "#weather": 1} and n.info.get("name") == "Node915", (n.connected, n.channels))
     ok("it uses its own radio lock, not the main node's", all(not main_lock for port, _, main_lock in sent if port == "COMX2"))
     ok("Status [915], Public [915] and #weather [915] windows", all(x in app.windows for x in ("Status [915]", "Public [915]", "#weather [915]")), sorted(app.windows))
-    ok("...grouped under the node in the tree", app.tree.exists("node:915") and app.tree.parent("#weather [915]") == "node:915" and app.tree.item("#weather [915]", "text") == "#weather")
+    ok("...grouped under the node in the tree, like the main node: its Status first, then a Channels folder",
+       app.tree.exists("node:915") and app.tree.get_children("node:915")[:1] == ("Status [915]",) and app.tree.parent("Status [915]") == "node:915"
+       and app.tree.parent("#weather [915]") == "chans:915" and app.tree.parent("Public [915]") == "chans:915" and app.tree.parent("chans:915") == "node:915"
+       and app.tree.item("#weather [915]", "text") == "#weather" and app.tree.item("chans:915", "text") == "Channels", [(c, app.tree.get_children(c)) for c in app.tree.get_children("node:915")])
     txt = app.windows["#weather [915]"].text.get("1.0", "end")
     ok("a channel message from the 915 node lands in '#weather [915]'", "hello from 915" in txt, txt[-200:])
     dm = next((w for nm, w in app.windows.items() if nm.startswith("@") and "private on 915" in w.text.get("1.0", "end")), None)

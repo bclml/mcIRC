@@ -267,6 +267,7 @@ class App(PrivateMixin, MenusMixin, CommandsMixin, gui_multinode.MultiNodeMixin,
         self.root, self.demo, self.connected = root, demo, False
         first_start = not os.path.exists(SETTINGS_PATH)          # a brand-new setup: the default addons get installed below
         self.settings = load_settings()
+        if not demo: self._fold_main_node()
         if not self.settings.get("auto_reset_v2"):                 # restarting a silent radio is on by default now (also on existing installs, once)
             self.settings["auto_reset_radio"], self.settings["auto_reset_v2"] = True, True
         if demo: self.settings.update(node_name="DemoNode", mode="usb", port="auto", tcp_host="", ble_target="", auto_connect=False)   # demo = fake everything
@@ -842,6 +843,17 @@ class App(PrivateMixin, MenusMixin, CommandsMixin, gui_multinode.MultiNodeMixin,
     def open_map(self): self._open_single("map_win", lambda: MapWindow(self.root, self))
     def open_node_list(self): self._open_single("nodes_win", lambda: NodeListDialog(self))
     def open_addons(self): self._open_single("addons_win", lambda: AddonsDialog(self))
+
+    def _fold_main_node(self):
+        """Settings saved on an addon's old 'main node' tab become its main settings (once; a copy of gui_settings.json is kept first)."""
+        if not any(isinstance(s, dict) and "main" in (s.get("_per_node") or {}) for s in (self.settings.get("addons") or {}).values()): return
+        try:
+            import shutil
+            os.makedirs(os.path.join(os.path.dirname(SETTINGS_PATH), "backup"), exist_ok=True)
+            shutil.copy2(SETTINGS_PATH, os.path.join(os.path.dirname(SETTINGS_PATH), "backup", time.strftime("gui_settings-before-main-node-%Y%m%d-%H%M%S.json")))
+        except OSError: return                                  # no copy, no change
+        ga.fold_main_node(self.settings)
+        save_settings(self.settings)
 
     def quit(self):
         self.switchbar.remember()

@@ -43,6 +43,13 @@ def match_rule(rule, text):
     return None
 
 
+def _chan_field(parent, var, width=24, **options):
+    """A channel setting: the list with 'Add' / x (gui_chanbox, mcIRC 2026.10.13 and later), else the old text box."""
+    try: from gui_chanbox import channel_box
+    except ImportError: return tk.Entry(parent, textvariable=var, width=width)
+    return channel_box(parent, var, **options)
+
+
 class Addon(AddonBase):
     title = "Auto reply"
     reply_delay, part_gap = 0, 9          # answers at once unless a wait is set in its settings window
@@ -222,12 +229,9 @@ class RuleDialog(tk.Toplevel):
         tk.Label(body, text=label, justify="left").grid(row=row, column=0, sticky="w", pady=2)
         cell = tk.Frame(body)
         cell.grid(row=row, column=1, sticky="w")
-        tk.Entry(cell, textvariable=self.v[key], width=width).pack(side="left")
-        if picker:
-            mb = tk.Menubutton(cell, text="Pick ▾", relief="raised", padx=6)
-            mb.pack(side="left", padx=4)
-            menu = tk.Menu(mb, tearoff=0, postcommand=lambda m=None: self._fill_picker(menu, key))
-            mb.config(menu=menu)
+        if picker: _chan_field(cell, self.v[key], width, choices=self.api.channels if hasattr(self.api, "channels") else None,
+                               empty="(every channel)" if key == "listen" else "(where it was heard)").pack(side="left")
+        else: tk.Entry(cell, textvariable=self.v[key], width=width).pack(side="left")
 
     def _fill_picker(self, menu, key):
         """A tick-list of the channels mcIRC knows; ticking adds/removes the name in the text box."""

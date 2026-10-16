@@ -47,6 +47,13 @@ def _wrap(text, limit):
     return out + ([cur] if cur else [])
 
 
+def _chan_field(parent, var, width=24, **options):
+    """A channel setting: the list with 'Add' / x (gui_chanbox, mcIRC 2026.10.13 and later), else the old text box."""
+    try: from gui_chanbox import channel_box
+    except ImportError: return tk.Entry(parent, textvariable=var, width=width)
+    return channel_box(parent, var, **options)
+
+
 class Addon(AddonBase):
     title = "Bot help"
     replies = True                        # (its settings window offers private answers and the answer wait)
@@ -120,11 +127,12 @@ class Addon(AddonBase):
         tk.Checkbutton(f, text="Also answer 'bothelp' in private messages", variable=self.v["answer_dm"], bg=bg).pack(anchor="w")
         tk.Checkbutton(f, text="Announce it once a day", variable=self.v["announce"], bg=bg).pack(anchor="w", pady=(8, 0))
         for label, key, width in (("Time (HH:MM, 24-hour):", "announce_time", 6), ("Message:", "announce_text", 44),
-                                  ("Channels (blank = every channel where a bot answers):", "announce_channels", 24)):
+                                  ("Channels:", "announce_channels", 24)):
             r = tk.Frame(f, bg=bg)
             r.pack(fill="x", pady=1, padx=(20, 0))
             tk.Label(r, text=label, bg=bg).pack(side="left")
-            tk.Entry(r, textvariable=self.v[key], width=width).pack(side="left", padx=4)
+            if key == "announce_channels": _chan_field(r, self.v[key], width, empty="(every channel where a bot answers)").pack(side="left", padx=4)
+            else: tk.Entry(r, textvariable=self.v[key], width=width).pack(side="left", padx=4)
         tk.Label(f, text="List these bots in 'bothelp' (untick to leave one out):", bg=bg).pack(anchor="w", pady=(8, 0))
         names = [n for n in (self.api.bot_names() if hasattr(self.api, "bot_names") else []) if n != self.title]
         hidden = set(self.api.get("hidden", []))

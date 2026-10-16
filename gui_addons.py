@@ -41,6 +41,19 @@ class AddonBase:
 _UNSET = object()          # no node chosen (a tick, a background job, ...): the addon acts for the main node, so its settings are read
 
 
+def fold_main_node(settings):
+    """Before 2026.10.15 an addon's settings window had 'All nodes' and a 'main node' tab of its own.  Now the main node's settings ARE the
+    base ones: what was saved on a 'main node' tab is put into them (the main node keeps exactly what it used).  -> addons changed."""
+    changed = []
+    for name, store in (settings.get("addons") or {}).items():
+        main = (store.get("_per_node") or {}).pop("main", None) if isinstance(store, dict) else None
+        if main:
+            store.update(main)
+            changed.append(name)
+        if isinstance(store, dict) and store.get("_per_node") == {}: store.pop("_per_node")
+    return changed
+
+
 def _node_ctx(api, node):
     """api.for_node(node), or nothing for an api object without it."""
     f = getattr(api, "for_node", None)
@@ -97,6 +110,22 @@ class AddonAPI:
     def own_settings(self, node):
         """The settings this node has of its own ({} when it uses the defaults)."""
         return dict(self._store().get("_per_node", {}).get(node, {}))
+
+    # -- another addon (an addon that took over another one's job moves its settings over) --
+    def addon_settings(self, name):
+        """A copy of another addon's settings as they count for the main node (its defaults, the main node's own on top); {} if none."""
+        base = copy.deepcopy(self._app.settings.get("addons", {}).get(name, {}))
+        main = base.pop("_per_node", {}).get("main", {})
+        base.update(main)
+        return base
+    def addon_installed(self, name): return name in self._app.addons.discover()
+    def addon_enabled(self, name): return bool(self._app.settings.get("addons_enabled", {}).get(name))
+    def install_addon(self, name):
+        """Installs an addon that ships with mcIRC (packages/<name>) - nothing from the internet.  -> its version."""
+        return install_package(os.path.join(BASE_DIR, "packages", name, "addon.json"))["version"]
+    def set_addon_enabled(self, name, on):
+        """Switches another addon (or this one) on or off - a moment later, outside the hook that asks."""
+        self._app.root.after(300, lambda: self._app.addons.set_enabled(name, bool(on)))
     def clear_own_settings(self, node):
         if self._store().get("_per_node", {}).pop(node, None) is not None: self._app.save()
 

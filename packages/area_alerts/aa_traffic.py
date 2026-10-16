@@ -154,6 +154,17 @@ def _in_box(e, box):
     return any(isinstance(p, (list, tuple)) and len(p) >= 2 and box[0] <= p[0] <= box[2] and box[1] <= p[1] <= box[3] for p in pts) if pts else True
 
 
+INCIDENTS_SEEN = {}     # DriveBC id -> (lat, lon, label, details, when): the map's 'DriveBC incidents' layer
+
+
+def _first_point(e):
+    g = e.get("geography") or {}
+    c = g.get("coordinates")
+    if g.get("type") == "Point": return c
+    while isinstance(c, list) and c and isinstance(c[0], list): c = c[0]
+    return c if isinstance(c, list) and len(c) >= 2 else None
+
+
 _drivebc_batch = {"box": None, "t": 0.0, "events": None}       # one DriveBC answer for all the areas of a check (DriveBC limits requests)
 
 
@@ -191,6 +202,8 @@ def drivebc(area, radius_km=DEFAULT_KM, roadwork=False, get=None, now=None):
         road = ", ".join(r.get("name", "") for r in e.get("roads", [])[:1] if r.get("name") != "Other Roads")
         what = "CLOSED" if closed else {"INCIDENT": "Incident", "CONSTRUCTION": "Roadwork"}.get(kind, kind.replace("_", " ").title())
         out.append(Alert(f"drivebc:{e.get('id')}:{what}", "traffic", short(f"{what}: {road + ' - ' if road else ''}{desc}"), "DriveBC"))
+        pt = _first_point(e)
+        if pt: INCIDENTS_SEEN[e.get("id")] = (pt[1], pt[0], f"{what}: {road}" if road else what, desc, now)
     return out
 
 

@@ -80,9 +80,11 @@ def fake_get(url, timeout=20):
     return open(os.path.join(src_repo, url.split("/main/", 1)[1].replace("/", os.sep)), "rb").read()
 RAW = "https://raw.githubusercontent.com/test/repo/main/"
 cat = ga.fetch_catalog(RAW, fake_get)
-check("catalog parses", cat and cat[0]["name"] == "broadcast_alerts", f"{len(cat)} entry")
+first = cat[0]["name"] if cat else ""
+check("catalog parses", cat and all(e.get("name") and e.get("version") for e in cat), f"{len(cat)} entries")
+check("...Traffic, transit and weather isn't offered any more (it is part of Area alerts)", "broadcast_alerts" not in [e["name"] for e in cat] and "area_alerts" in [e["name"] for e in cat])
 r = ga.install_from_catalog(cat[0], RAW, fake_get)
-check("install straight from the catalog", r["name"] == "broadcast_alerts" and os.path.exists(os.path.join(ga.ADDON_DIR, "broadcast_alerts.py")))
+check("install straight from the catalog", r["name"] == first and os.path.exists(os.path.join(ga.ADDON_DIR, first + ".py")))
 check("version ordering", ga.vkey("1.10.0") > ga.vkey("1.9.2") and ga.vkey("v2") > ga.vkey("1.99"))
 
 INSTALLED_VER = json.load(open(os.path.join(REAL, "packages", "broadcast_alerts", "addon.json")))["version"]

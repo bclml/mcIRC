@@ -102,11 +102,9 @@ cases = [
 for pkg, values, want in cases:
     got = norm(addon(pkg, **values).channels_used())
     ok(f"{pkg} {'(on)' if want else '(off / not broadcasting)'}: its channels are {want or 'none'}", got == want, got)
-ea.TX["muted"], ea.CHANNEL_LISTS = False, {"DriveBC": ["drivebc", "roads"], "Weather": ["weather"]}
-with mock.patch.dict(ea.TX["sources"], {"Weather": False}):
-    ok("Traffic, transit and weather broadcasting: the switched-on alert types' channels", norm(addon("broadcast_alerts").channels_used()) == ["drivebc", "roads"])
-ea.TX["muted"] = True
-ok("...not broadcasting (map only): none", addon("broadcast_alerts").channels_used() == [])
+ok("Traffic, transit and weather 2.0 only hands over to Area alerts: no channels of its own", addon("broadcast_alerts").channels_used() == [])
+ok("Area alerts' BC Ferries kind: its channel while broadcasting", norm(addon("area_alerts", enabled=True, broadcast=True, kinds={"ferries": True, "disasters": False,
+   "weather": False}, channels={"ferries": "#ferries"}).channels_used()) == ["ferries"])
 
 class App:
     def __init__(self): self.connected, self.demo, self.lines, self.settings = True, False, [], {}

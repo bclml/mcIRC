@@ -26,7 +26,7 @@ def answer_text(channels, intro="Channels:"):
 
 class Addon(AddonBase):
     title = "Channel list"
-    version = "1.2.4"
+    version = "1.2.5"
     author = "mcIRC"
     description = ("Answers 'channel list' with the channels you keep in its list (add / remove / rename / reorder them in Options); "
                    "'channel list add #name' adds one from the mesh. Off until you switch it on.")
@@ -108,12 +108,13 @@ class Addon(AddonBase):
         tk.Checkbutton(f, text="Also answer private messages", variable=self.v["answer_dm"], bg=bg).pack(anchor="w")
         tk.Checkbutton(f, text=f"Let people add channels: 'channel list add #name' (checked names, at most {MAX_CHANNELS}; you see who added what)",
                        variable=self.v["allow_add"], bg=bg, wraplength=460, justify="left").pack(anchor="w")
-        for label, key, width in (("...but not in these channels (comma separated):", "no_add_in", 24), ("Answer in channels (comma separated, or 'all'):", "where", 24), ("Words that ask for it (comma separated):", "triggers", 30),
+        for label, key, width in (("...but not in these channels:", "no_add_in", 24), ("Answer in channels:", "where", 24), ("Words that ask for it (comma separated):", "triggers", 30),
                                   ("Answer starts with:", "intro", 20)):
             r = tk.Frame(f, bg=bg)
             r.pack(fill="x", pady=1)
             tk.Label(r, text=label, bg=bg).pack(side="left")
-            tk.Entry(r, textvariable=self.v[key], width=width).pack(side="left", padx=4)
+            if key in ("no_add_in", "where"): mc.chan_field(r, self.v[key], width, all_option=key == "where").pack(side="left", padx=4)
+            else: tk.Entry(r, textvariable=self.v[key], width=width).pack(side="left", padx=4)
         tk.Label(f, text="The list (in this order):", bg=bg).pack(anchor="w", pady=(6, 0))
         row = tk.Frame(f, bg=bg)
         row.pack(fill="x")

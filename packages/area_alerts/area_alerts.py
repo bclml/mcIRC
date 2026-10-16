@@ -1,5 +1,7 @@
-"""Area alerts: natural disasters, earthquakes, tsunamis, official weather warnings, public transit service alerts and road closures for
-the areas you choose - anywhere in the world (country, then region, then area).
+"""Area alerts: natural disasters, earthquakes, tsunamis, official weather warnings, public emergency alerts, public transit service alerts,
+road closures and BC Ferries for the areas you choose - anywhere in the world (country, then region, then area).  Since 2.0 it also does
+what the Traffic, transit and weather addon did (aa_extras.py): 'route <address>' by private message, the map's DriveBC and earthquake
+layers, daily forecast posts and the weekly reminder - and it takes that addon's settings over.
 
 Sources: GDACS, USGS, NOAA tsunami centres, Environment Canada, the US National Weather Service, MeteoAlarm (no key); the transit agencies
 of the Mobility Database (most open, some need a free key); DriveBC (no key) and 20 other 511 road sites (free developer key each).
@@ -19,6 +21,8 @@ import aa_places as places
 import aa_sources as src
 import aa_traffic as traffic
 import aa_transit as transit
+import aa_ferries as ferries
+from aa_extras import Extras
 
 KINDS = {"disasters": ("Natural disasters (GDACS: earthquakes, cyclones, floods, volcanoes, droughts, wildfires)", "#alerts"),
          "quakes": ("Earthquakes (USGS)", "#alerts"),
@@ -26,7 +30,8 @@ KINDS = {"disasters": ("Natural disasters (GDACS: earthquakes, cyclones, floods,
          "weather": ("Weather warnings (Environment Canada, US NWS, MeteoAlarm Europe)", "#weather"),
          "emergency": ("Public emergency alerts (Canada: Alert Ready, US: FEMA IPAWS)", "#alerts"),
          "transit": ("Public transit: service stops and big delays (the agencies ticked on the Public transit tab)", "#transit"),
-         "traffic": ("Roads: closures and incidents (DriveBC, 511 sites - see the Traffic tab)", "#traffic")}
+         "traffic": ("Roads: closures and incidents (DriveBC, 511 sites - see the Traffic tab)", "#traffic"),
+         "ferries": ("BC Ferries: service notices and sailing delays (British Columbia)", "#bcferries")}
 DEFAULT_ON = ("disasters", "weather")
 CHECK_EVERY = 300            # seconds between checks
 GAP, PER_HOUR = 30, 10       # broadcasting limits
@@ -36,13 +41,21 @@ FORGET = 6 * 3600            # an alert not in force for this long is forgotten:
 WINDOW = "Area alerts"
 
 
-class Addon(AddonBase):
+def _chan_field(parent, var, width=24, **options):
+    """A channel setting: the list with 'Add' / x (gui_chanbox, mcIRC 2026.10.13 and later), else the old text box."""
+    try: from gui_chanbox import channel_box
+    except ImportError: return tk.Entry(parent, textvariable=var, width=width)
+    return channel_box(parent, var, **options)
+
+
+class Addon(Extras, AddonBase):
+    KINDS, DEFAULT_ON, WINDOW = KINDS, DEFAULT_ON, WINDOW
     title = "Area alerts"
-    version = "1.5.2"
+    version = "2.0.0"
     author = "mcIRC"
-    description = ("Natural disasters, earthquakes, tsunamis, weather warnings, public emergency alerts (Canada, US), public transit alerts and road closures for the areas you "
-                   "choose anywhere in the world (country, region, area). Shown on this PC; broadcast to the mesh only if you tick it. "
-                   "Off until you switch it on.")
+    description = ("Natural disasters, earthquakes, tsunamis, weather warnings, public emergency alerts (Canada, US), public transit alerts, road closures and BC Ferries "
+                   "for the areas you choose anywhere in the world (country, region, area), plus 'route <address>' by private message and daily forecasts "
+                   "(all of Traffic, transit and weather). Shown on this PC; broadcast to the mesh only if you tick it. Off until you switch it on.")
     tick_seconds = 60
     switch = "enabled"
 
@@ -54,6 +67,7 @@ class Addon(AddonBase):
         self.was_on, self.unloaded = self.api.get("enabled", False), False
         self.api.add_menu_item("Check now", lambda: self.check(force=True))
         self.api.add_menu_item("Alerts in force...", self.show_current)
+        self.extras_load()
 
     def on_unload(self):
         self.queue.clear()
@@ -69,6 +83,7 @@ class Addon(AddonBase):
             return
         self.drain()
         if time.time() - self.last_check >= CHECK_EVERY: self.check()
+        self.extras_tick()
 
     def check(self, force=False):
         if self.busy or not (self.api.get("enabled", False) or force): return
@@ -101,6 +116,7 @@ class Addon(AddonBase):
                     try:
                         if kind == "disasters": got = src.gdacs(a, opts["min_level"])
                         elif kind == "quakes": got = src.usgs(a, opts["min_mag"], opts["radius"])
+                        elif kind == "ferries": got = ferries.ferries(a)
                         elif kind == "traffic":
                             site = traffic.site_for(a)
                             got = traffic.traffic(a, opts["keys"].get(f"511:{site[0]}", "") if site else "", opts["road_km"], opts["roadwork"])
@@ -149,12 +165,14 @@ class Addon(AddonBase):
         if not self.queue or not self.api.get("enabled", False) or not self.api.get("broadcast", False) or not self.api.connected: return
         now = time.time()
         self.sent_times = [t for t in self.sent_times if now - t < 3600]
-        if len(self.sent_times) >= PER_HOUR or (self.sent_times and now - self.sent_times[-1] < GAP): return
+        per_hour = int(self.api.get("per_hour", PER_HOUR))
+        if len(self.sent_times) >= per_hour or (self.sent_times and now - self.sent_times[-1] < GAP): return
         chans = self.channels_for(self.queue[0])
-        if len(self.sent_times) + len(chans) > PER_HOUR: return     # every channel is one transmission
+        if len(self.sent_times) + len(chans) > per_hour: return     # every channel is one transmission
         al = self.queue.pop(0)
+        prefix = (self.api.get("prefix", "") or "").strip()            # e.g. '[on]' - a group's region code (Route and more)
         for ch in chans:
-            self.api.send(ch, al.text)
+            self.api.send(ch, f"{prefix} {al.text}" if prefix else al.text)
             self.sent_times.append(now)
         if self.queue: self.api.after(GAP * 1000 + 500, self.drain)
 
@@ -209,16 +227,17 @@ class Addon(AddonBase):
         tk.Checkbutton(f, text="Broadcast to the mesh (this transmits on your radio)", variable=self.v_bc, bg=bg,
                        font=("TkDefaultFont", 9, "bold")).pack(anchor="w")
         tk.Label(f, bg=bg, fg="#555", wraplength=560, justify="left", text=(
-            "Each alert once, at most one every 30 seconds and 10 messages an hour, never in Public. A channel box can hold up to 5 channels "
-            "('#weather, #mcirc'): the alert goes to each. A channel your node doesn't have is added to it. "
+            "Each alert once, at most one every 30 seconds (and 10 messages an hour - see Route and more), never in Public. A channel box can hold up to 5 channels "
+            "(Add): the alert goes to each. A channel your node doesn't have is added to it. "
             "The first check (after starting mcIRC, switching on or adding areas) only shows what is already in force.")).pack(anchor="w", padx=18)
         self.keys = dict(g("keys", {}))
         self.key_vars = {}
         tabs = ttk.Notebook(f); tabs.pack(fill="both", expand=True, pady=4)
         pages = {}
-        for name in ("Areas and alerts", "Public transit", "Traffic"):
+        for name in ("Areas and alerts", "Public transit", "Traffic", "Route and more"):
             pages[name] = tk.Frame(tabs, bg=bg); tabs.add(pages[name], text=name)
         self._areas_page(pages["Areas and alerts"], bg)
+        self.extras_page(pages["Route and more"], bg)
         self.transit_page, self.traffic_page = pages["Public transit"], pages["Traffic"]
         self.feed_vars = {fid: tk.BooleanVar(value=True) for fid in g("transit_feeds", [])}
         self.tch_vars, self.rch_vars = {}, {}
@@ -255,7 +274,7 @@ class Addon(AddonBase):
             self.k_vars[k] = tk.BooleanVar(value=saved.get(k, k in DEFAULT_ON))
             self.ch_vars[k] = tk.StringVar(value=chans.get(k, default_ch))
             tk.Checkbutton(kinds, text=title, variable=self.k_vars[k], bg=bg, anchor="w").grid(row=i, column=0, sticky="w")
-            tk.Entry(kinds, textvariable=self.ch_vars[k], width=20).grid(row=i, column=1, padx=4)
+            _chan_field(kinds, self.ch_vars[k], 20, public=False, max_items=MAX_CHANNELS, empty=f"({default_ch})").grid(row=i, column=1, padx=4, sticky="w")
         opt = tk.Frame(page, bg=bg); opt.pack(fill="x", pady=2)
         self.v_level = tk.StringVar(value=g("min_level", "orange"))
         self.v_mag, self.v_rad = tk.StringVar(value=str(g("min_mag", 5.0))), tk.StringVar(value=str(g("quake_radius", 300)))
@@ -309,7 +328,7 @@ class Addon(AddonBase):
                 tk.Checkbutton(row, text=transit.label(f) + ("   (free key needed)" if f["auth"] else ""), variable=var, bg=bg).pack(side="left")
                 own = "#" + transit.slug(f) if len(feeds) > 1 or len(transit.feeds_for(a)) > 1 else self.ch_vars["transit"].get()
                 ch = self.tch_vars.setdefault(f["id"], tk.StringVar(value=self.api.get("transit_channels", {}).get(f["id"], own)))
-                tk.Entry(row, textvariable=ch, width=22).pack(side="right", padx=4)
+                _chan_field(row, ch, 22, public=False, max_items=MAX_CHANNELS, empty="(the kind's channel)").pack(side="right", padx=4)
                 tk.Label(row, text="channel:", bg=bg).pack(side="right")
                 if f["auth"]: self._key_row(inner, bg, f"transit:{f['id']}", transit.key_help(f), f["info"])
         if not seen:
@@ -338,7 +357,7 @@ class Addon(AddonBase):
                 own = "#" + traffic.slug(slot) if len(slots) > 1 else self.ch_vars["traffic"].get()
                 ch = self.rch_vars.setdefault(slot, tk.StringVar(value=self.api.get("traffic_channels", {}).get(slot, own)))
                 tk.Label(row, text=f"{traffic.label(slot)} goes to channel:", bg=bg).pack(side="left")
-                tk.Entry(row, textvariable=ch, width=22).pack(side="left", padx=4)
+                _chan_field(row, ch, 22, public=False, max_items=MAX_CHANNELS, empty="(the kind's channel)").pack(side="left", padx=4)
             site = traffic.site_for(a)
             if site and site[0] not in sites:
                 sites.add(site[0])
@@ -390,6 +409,7 @@ class Addon(AddonBase):
         try: self.api.set("traffic_km", max(5, min(300, int(self.v_km.get()))))
         except ValueError: pass
         self.api.set("roadwork", bool(self.v_roadwork.get()))
+        self.extras_apply()
         ticked = {fid for fid, v in self.feed_vars.items() if v.get()}
         self.api.set("transit_channels", {fid: v.get().strip() for fid, v in self.tch_vars.items() if fid in ticked and v.get().strip()})
         slots = {traffic.slot_for(a) for a in self.chosen} - {None}

@@ -244,6 +244,7 @@ class API:
     def get(self, k, d=None): return self.s.get(k, d)
     def set(self, k, v): self.s[k] = v
     def add_menu_item(self, label, fn): pass
+    def add_map_layer(self, label, fn, color=None): pass
     def log(self, text, level="info"): self.notes.append(text)
     def notice(self, text, level="info"): self.notes.append(text)
     def write(self, window, text, tag="text"): self.lines.append((window, text))

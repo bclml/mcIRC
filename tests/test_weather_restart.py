@@ -79,20 +79,7 @@ class FakeDT(_dt.datetime):
 with mock.patch.object(ea.datetime, "datetime", FakeDT), mock.patch.object(ea, "execute_mesh_command", lambda *a, **k: calls.append(a)),         mock.patch.object(ea, "tx_allowed", lambda kind: True):
     ea.check_weekly_channel_ad()
 ok("...so it is not sent again", calls == [], calls)
-# ---- the weekly reminder is opt-in: an install that had it on (the old default) gets it switched off once; a later 'on' is kept
-import importlib.util
-spec = importlib.util.spec_from_file_location("ba_t", os.path.join(ROOT, "packages", "broadcast_alerts", "broadcast_alerts.py"))
-ba = importlib.util.module_from_spec(spec); spec.loader.exec_module(ba)
-store = {"sources": {"DriveBC": True, "Weekly reminder": True}}
-class API:
-    def get(self, k, d=None): return store.get(k, d)
-    def set(self, k, v): store[k] = v
-a = ba.Addon(API()); a.apply_settings()
-ok("an old install's 'weekly reminder on' is switched off once", ea.TX["sources"]["Weekly reminder"] is False and store["sources"]["Weekly reminder"] is False and store["weekly_opt_in"])
-store["sources"]["Weekly reminder"] = True; a.apply_settings()
-ok("...after that, switching it on yourself is kept", ea.TX["sources"]["Weekly reminder"] is True)
-store.clear(); a.apply_settings()
-ok("a fresh install has it off", ea.TX["sources"]["Weekly reminder"] is False and ea.TX["sources"]["DriveBC"] is True)
+# (the weekly reminder's opt-in was the old addon's; Area alerts 2.0 has it off until ticked - see test_146)
 
 # the log rotated (5 MB) just before a restart: what was announced is in emergency_agent.log.1, the new log is almost empty
 rot = tempfile.mkdtemp(); cur = os.path.join(rot, "emergency_agent.log")

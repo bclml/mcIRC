@@ -67,7 +67,7 @@ def world_cup(arg, get=mc.http_json):
 class Addon(AddonBase):
     title = "Fun bot"
     command_words = list(COMMANDS)          # (the settings window's 'Command names...': other names for each command)
-    version = "1.1.1"
+    version = "1.1.2"
     author = "mcIRC"
     description = ("dice, roll, magic8, joke, dadjoke, hacker, catfact and wc (World Cup scores and tables) - each switched on for the channels you "
                    "choose. Thousands of jokes and cat facts from free online collections, not repeated for a long while. Off until you switch it on.")
@@ -150,7 +150,7 @@ class Addon(AddonBase):
         self.v_prefix = tk.StringVar(value=self.api.get("prefix", ""))
         self.v_cool = tk.StringVar(value=str(self.api.get("cooldown", 20)))
         tk.Checkbutton(f, text="Answer fun commands (sends to the mesh when someone asks)", variable=self.v_on, bg=bg).pack(anchor="w")
-        tk.Label(f, text="For each command, the channels it answers in (comma separated, 'all', or blank = off):", bg=bg).pack(anchor="w", pady=(6, 2))
+        tk.Label(f, text="For each command, the channels it answers in (Add, or x to remove; none = off):", bg=bg).pack(anchor="w", pady=(6, 2))
         grid = tk.Frame(f, bg=bg)
         grid.pack(anchor="w")
         saved = self.api.get("channels", {})
@@ -158,7 +158,7 @@ class Addon(AddonBase):
         for i, (c, what) in enumerate(COMMANDS.items()):
             self.v_ch[c] = tk.StringVar(value=saved.get(c, ""))
             tk.Label(grid, text=c, bg=bg, width=8, anchor="w").grid(row=i, column=0, sticky="w")
-            tk.Entry(grid, textvariable=self.v_ch[c], width=24).grid(row=i, column=1, padx=4, pady=1)
+            mc.chan_field(grid, self.v_ch[c], 24, all_option=True, empty="(off)").grid(row=i, column=1, padx=4, pady=1, sticky="w")
             tk.Label(grid, text=what, bg=bg, fg="#555", anchor="w").grid(row=i, column=2, sticky="w")
         r = tk.Frame(f, bg=bg)
         r.pack(anchor="w", pady=(6, 0))

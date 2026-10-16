@@ -83,6 +83,9 @@ def gdacs(area, min_level="orange", get=None):
     return out
 
 
+QUAKES_SEEN = {}          # USGS id -> (lat, lon, magnitude, place): the map's 'Earthquakes' layer
+
+
 def usgs(area, min_mag=5.0, radius_km=300, hours=24, get=None, now=None):
     """Earthquakes of min_mag or more within radius_km of the area in the last `hours`."""
     since = time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime((now or time.time()) - hours * 3600))
@@ -94,6 +97,7 @@ def usgs(area, min_mag=5.0, radius_km=300, hours=24, get=None, now=None):
         coords = (f.get("geometry") or {}).get("coordinates") or []
         if p.get("mag") is None or len(coords) < 2 or coords[0] is None or coords[1] is None: continue     # incomplete: skipped, not the area
         d = int(km(area["lat"], area["lon"], coords[1], coords[0]))
+        QUAKES_SEEN[f.get("id")] = (coords[1], coords[0], p["mag"], p.get("place") or "")
         out.append(Alert(f"usgs:{f.get('id')}", "quakes", short(f"Earthquake M{p['mag']:.1f}: {p.get('place') or 'unknown place'} ({d} km from {area['name']})"), "USGS"))
     return out
 

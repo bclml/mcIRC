@@ -28,7 +28,7 @@ GREETING = cmds.DEFAULT_GREETINGS[0]                     # the single greeting o
 class Addon(AddonBase):
     title = "Mesh bot"
     command_words = list(COMMANDS)          # (the settings window's 'Command names...': other names for each command)
-    version = "1.2.12"
+    version = "1.2.13"
     author = "mcIRC (commands after agessaman/meshcore-bot, MIT)"
     description = ("ping, hello, path, prefix, multitest, stats, sports and version - the meshcore-bot commands mcIRC's other bots don't have - "
                    "plus its greeter for newcomers (a random greeting from your list), each switched on for the channels you choose. Off until you switch it on.")
@@ -167,14 +167,14 @@ class Addon(AddonBase):
         self.v_teams = tk.StringVar(value=g("sports_teams", "canucks, whitecaps, seahawks, mariners, kraken"))
         self.v_greet_ch = tk.StringVar(value=g("greet_channels", ""))
         tk.Checkbutton(f, text="Answer these commands (sends to the mesh when someone asks)", variable=self.v_on, bg=bg).pack(anchor="w")
-        tk.Label(f, text="For each command, the channels it answers in (comma separated, 'all', or blank = off):", bg=bg).pack(anchor="w", pady=(6, 2))
+        tk.Label(f, text="For each command, the channels it answers in (Add, or x to remove; none = off):", bg=bg).pack(anchor="w", pady=(6, 2))
         grid = tk.Frame(f, bg=bg); grid.pack(anchor="w")
         saved = g("channels", {})
         self.v_ch = {}
         for i, (c, what) in enumerate(COMMANDS.items()):
             self.v_ch[c] = tk.StringVar(value=saved.get(c, ""))
             tk.Label(grid, text=c, bg=bg, width=9, anchor="w").grid(row=i, column=0, sticky="w")
-            tk.Entry(grid, textvariable=self.v_ch[c], width=22).grid(row=i, column=1, padx=4, pady=1)
+            mc.chan_field(grid, self.v_ch[c], 22, all_option=True, empty="(off)").grid(row=i, column=1, padx=4, pady=1, sticky="w")
             tk.Label(grid, text=what, bg=bg, fg="#555", anchor="w").grid(row=i, column=2, sticky="w")
         r = tk.Frame(f, bg=bg); r.pack(anchor="w", pady=(6, 0))
         tk.Button(r, text="Same channel for all", command=self._same_for_all).pack(side="left")
@@ -195,7 +195,7 @@ class Addon(AddonBase):
                        bg=bg).pack(anchor="w")
         r = tk.Frame(f, bg=bg); r.pack(fill="x", pady=1)
         tk.Label(r, text="Greet newcomers in channels:", bg=bg).pack(side="left")
-        tk.Entry(r, textvariable=self.v_greet_ch, width=22).pack(side="left", padx=4)
+        mc.chan_field(r, self.v_greet_ch, 22).pack(side="left", padx=4)
         tk.Label(f, bg=bg, text="With one of these, picked at random (one per line; {nick} = their name, {channel} = the channel):").pack(anchor="w")
         self.greet_box = tk.Text(f, height=6, width=70, wrap="none", font=(gui_platform.EDITOR_FONT_NAME, 9))
         self.greet_box.insert("1.0", "\n".join(self.greetings()))

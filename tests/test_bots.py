@@ -28,6 +28,8 @@ ok("other ways to call it: /wx, .wx, and after addressing the bot (@[mcIRC] wx, 
 ok("...but a mention followed by chat is still chat", mc.parse_command("@[Bob] see you later", C) is None and mc.parse_command("...", C) is None)
 ok("with prefix '!', plain 'wx' is ignored", mc.parse_command("wx 98101", C, "!") is None and mc.parse_command("!wx 98101", C, "!") == ("wx", "98101"))
 ok("channel lists: '#weather, Public' / 'all'", mc.channel_list("#weather, Public") == {"#weather", "public"} and mc.channel_list("all") == {"*"})
+ok("...a dot, a comma or a space separates them ('#test.#buds' was one channel that matched nothing)", mc.channel_list("#test.#buds") == {"#test", "#buds"}
+   and mc.channel_list("#test,#buds") == mc.channel_list("#test #buds") == {"#test", "#buds"})
 ok("channel names match with or without '#'", mc.channel_ok("#Weather", mc.channel_list("weather")) and not mc.channel_ok("#bot-van", mc.channel_list("#weather")))
 lim = mc.Limiter(per_user=30, gap=5)
 ok("rate limit: one answer, then the same person waits", lim.allow("a", 100) and not lim.allow("a", 120) and lim.allow("a", 131))

@@ -3,20 +3,11 @@
   "note": "Only addons that were reviewed and tested by a maintainer are listed here. See docs/ADDONS.md for how to get yours added.",
   "addons": [
     {
-      "name": "broadcast_alerts",
-      "title": "Traffic, transit and weather",
-      "version": "1.6.5",
-      "author": "bclml",
-      "description": "DriveBC, BC Ferries, BC Transit, TransLink, weather (Environment Canada warnings for the areas you pick in any province or territory), earthquake and tsunami alerts. Keeps the map layers up to date; broadcasting them to the mesh is off until you switch it on (per-alert switches).",
-      "path": "packages/broadcast_alerts",
-      "tested": "2026-10-03 with app 1.5.2"
-    },
-    {
       "name": "area_alerts",
       "title": "Area alerts",
-      "version": "1.5.2",
+      "version": "2.0.0",
       "author": "bclml",
-      "description": "Natural disasters, earthquakes, tsunami, weather warnings, public emergency alerts (Canada's Alert Ready, US FEMA IPAWS), public transit alerts and road closures for the areas you choose anywhere in the world (country, region, area). Shown on this PC; broadcast to the mesh only if you tick it. Free sources; the few needing a free key say how to get it.",
+      "description": "Natural disasters (GDACS), earthquakes (USGS), tsunami warnings (NOAA), official weather warnings (Environment Canada, US NWS, MeteoAlarm for 38 European countries), public emergency alerts (Canada: Alert Ready; US: FEMA IPAWS), public transit service alerts (489 agencies in 28 countries), road closures (DriveBC and 20 other 511 sites) and BC Ferries for the areas you choose anywhere in the world: country, region, area. Also everything Traffic, transit and weather did: 'route <address>' by private message (optional TomTom live traffic), the map's DriveBC and earthquake layers, daily forecast posts and a weekly reminder - and it takes that addon's settings over. Shown on this PC; broadcast to the mesh only if you tick it. Most sources are free with no key. Off until you switch it on.",
       "path": "packages/area_alerts",
       "tested": "2026-10-09 with app 3.0.0"
     },
@@ -50,7 +41,7 @@
     {
       "name": "weather_bot",
       "title": "Weather bot",
-      "version": "1.0.13",
+      "version": "1.0.14",
       "author": "bclml",
       "description": "Answers weather commands in the channels you choose (default #weather): wx <place> (city, postal code, ZIP, node name or lat,lon; nothing = where the asker's node is), gwx, aqi, sun, moon, solar, sf, hfcond, satpass, airplanes, rain, aurora, channels, status, contact. Free data, no API keys. Off until you switch it on; rate-limited. satpass needs 'pip install sgp4'.",
       "path": "packages/weather_bot",
@@ -59,7 +50,7 @@
     {
       "name": "fun_bot",
       "title": "Fun bot",
-      "version": "1.1.1",
+      "version": "1.1.2",
       "author": "bclml",
       "description": "dice, roll, magic8 (60 answers), joke (1,700+), dadjoke (700+), hacker, catfact (400+) and wc (World Cup scores and tables) - each switched on for the channels you choose. Jokes and cat facts come from free online collections (clean ones only; the built-in ones offline) and aren't repeated for a long while. Off until you switch it on. Rate-limited.",
       "path": "packages/fun_bot",
@@ -77,7 +68,7 @@
     {
       "name": "channel_list",
       "title": "Channel list",
-      "version": "1.2.4",
+      "version": "1.2.5",
       "author": "bclml",
       "description": "Answers 'channel list' with the channels you keep in its list (add / remove / rename / reorder them in Options, and people can add one with 'channel list add #name' - checked names, at most 30, you see who added what; starts with 13 BC channels). Off until you switch it on; one answer per person per minute.",
       "path": "packages/channel_list",
@@ -123,7 +114,7 @@
     {
       "name": "mesh_bot",
       "title": "Mesh bot",
-      "version": "1.2.12",
+      "version": "1.2.13",
       "author": "bclml (commands after agessaman/meshcore-bot, MIT)",
       "description": "ping, hello, path, prefix, multitest, stats, sports, version and firmware (the newest MeshCore releases) - the agessaman/meshcore-bot commands mcIRC's other bots don't have - plus its greeter (a random greeting from a list you can edit), each switched on for the channels you choose. Off until you switch it on.",
       "path": "packages/mesh_bot",

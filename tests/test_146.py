@@ -47,68 +47,115 @@ ok("map-only: both incidents are tracked with their pins", f"DriveBC|{real['id']
 ok("map info is stored for them", ea.ALERT_MAPINFO[f"DriveBC|{real['id']}"][0] == "INCIDENT - Silver Skagit Road (Hope)")
 ok("muted + no radio: nothing is sent and the radio is never asked anything", not calls, calls)
 
-# ---- the addon: defaults, lifecycle, options
-import broadcast_alerts as ba
-store = {}
+# ---- Traffic, transit and weather 2.0: hands over to Area alerts (installs / switches it on, then itself off - nothing removed)
+import importlib.util
+def load(path, name):
+    spec = importlib.util.spec_from_file_location(name, path); m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m); return m
+ttw = load(os.path.join(ROOT, "packages", "broadcast_alerts", "broadcast_alerts.py"), "t_ttw")
 root = tk.Tk()
-class API:
-    connected = False
-    def __init__(self): self.layers = {}; self.logs = []
-    def get(self, k, d=None): return store.get(k, d)
-    def set(self, k, v): store[k] = v
-    def log(self, *a, **k): self.logs.append(a)
-    def add_toolbar_button(self, text, fn): return tk.Button(root, text=text)
-    def add_command(self, *a, **k): pass
-    def add_menu_item(self, *a, **k): pass
-    def add_map_layer(self, name, fn, color): self.layers[name] = fn
-async def dummy(): await asyncio.sleep(3600)
-with mock.patch.object(ea, "traffic_loop", dummy), mock.patch.object(ea, "weather_loop", dummy), mock.patch.object(ea, "reload_active_alerts_from_log", lambda: None), mock.patch.object(ea, "reload_critical_alert_ids_from_log", lambda: None):
-    api = API(); a = ba.Addon(api); a.on_load()
-    ok("fresh install: broadcasting is OFF by default", ea.TX["muted"] is True and a.button.cget("text") == "Traffic, transit and weather: map only", (ea.TX["muted"], a.button.cget("text")))
-    time.sleep(0.4)
-    ok("...and the feeds already run for the map, without any radio", a.thread is not None and a.thread.is_alive())
-    a.on_disconnect(); time.sleep(0.2)
-    ok("map-only mode keeps running when the radio disconnects", a.thread.is_alive())
-    io.PENDING_SENDS.append({"idx": 3, "msg": "x", "alert": "new", "guid": None, "queued": time.time()})
-    a.set_muted(False); time.sleep(0.5)
-    ok("switching broadcasting on while there is no radio stops the feeds (nothing to send with)", ea.TX["muted"] is False and not a.thread.is_alive() and a.button.cget("text") == "Traffic, transit and weather: BROADCASTING")
-    api.connected = True; a.on_connect(); time.sleep(0.4)
-    ok("with a radio connected the feeds run again", a.thread.is_alive())
-    a.on_disconnect(); time.sleep(0.5)
-    ok("while broadcasting, losing the radio stops the feeds (as before)", not a.thread.is_alive())
-    io.PENDING_SENDS.append({"idx": 3, "msg": "x", "alert": "new", "guid": None, "queued": time.time()})
-    a.set_muted(True)
-    ok("switching broadcasting off drops anything queued", not io.PENDING_SENDS)
-    # saved settings from before this version are respected
-    store.clear(); store["muted"] = False
-    a2 = ba.Addon(API()); a2.apply_settings()
-    ok("an existing 'broadcasting on' setting is kept (updates do not silence a running bot)", ea.TX["muted"] is False)
-    store.clear(); store["muted"] = True
-    a2.apply_settings(); ok("an existing 'muted' setting is kept", ea.TX["muted"] is True)
-    # options page
-    store.clear(); a3 = ba.Addon(API()); a3.on_load(); page = a3.build_options(tk.Frame(root))
-    ok("Options: 'Broadcast alerts' is unticked on a fresh install", a3.broadcast.get() is False)
-    texts = []
-    def walk(w):
-        for c in w.winfo_children():
-            try: texts.append(c.cget("text"))
-            except tk.TclError: pass
-            walk(c)
-    walk(page)
-    ok("Options explains map-only mode", any("keeps the map" in t and "nothing is" in t and "transmitted" in t for t in texts), [t for t in texts if "map" in t][:2])
-    a3.broadcast.set(True); a3.apply_options()
-    ok("ticking it and applying turns broadcasting on", store["muted"] is False and ea.TX["muted"] is False)
-    a3.broadcast.set(False); a3.apply_options()
-    ok("unticking and applying turns it off again", store["muted"] is True and ea.TX["muted"] is True)
-    # map layer feed
-    ea.active_traffic_alerts["DriveBC|" + real["id"]] = ("DriveBC", "x")
-    ea.ALERT_LOCATIONS["DriveBC|" + real["id"]] = (49.3624, -121.4718, "INCIDENT (Hope)")
-    ea.ALERT_MAPINFO["DriveBC|" + real["id"]] = ea._drivebc_mapinfo(real, "INCIDENT", "Hope", [])
-    inc = a3._incidents()
-    ok("the incident layer gives (lat, lon, label, details)", inc and len(inc[0]) == 4 and "Location approximate" in inc[0][3], inc)
-    ea.active_traffic_alerts["DriveBC|demo"] = ("DriveBC", "x"); ea.ALERT_LOCATIONS["DriveBC|demo"] = (49.0, -123.0, "Demo incident")
-    ok("entries without map info still work (demo mode)", any(i[2] == "Demo incident" and i[3] == "Demo incident" for i in a3._incidents()))
-    a3._stop_feeds()
+class HandAPI:
+    def __init__(self, installed=False, new_core=True):
+        self.calls, self.logs, self._installed = [], [], installed
+        if not new_core: del HandAPI.install_addon
+    def after(self, ms, fn): pass
+    def log(self, text, level="info"): self.logs.append(text)
+    def addon_installed(self, name): return self._installed
+    def addon_enabled(self, name): return False
+    def install_addon(self, name): self.calls.append(("install", name)); self._installed = True; return "2.0.0"
+    def set_addon_enabled(self, name, on): self.calls.append(("enabled", name, on))
+h = HandAPI(); t = ttw.Addon(h); t.hand_over()
+ok("Traffic, transit and weather 2.0: installs Area alerts (from the packages that come with mcIRC), switches it on, switches itself off",
+   h.calls == [("install", "area_alerts"), ("enabled", "area_alerts", True), ("enabled", "broadcast_alerts", False)], h.calls)
+ok("...and never transmits or listens itself (no channels)", t.channels_used() == [] and t.tick_seconds == 0)
+class OldCoreAPI:
+    def __init__(self): self.logs = []
+    def after(self, ms, fn): pass
+    def log(self, text, level="info"): self.logs.append(text)
+o = OldCoreAPI(); ttw.Addon(o).hand_over()
+ok("...on an mcIRC from before the update (still running): only 'restart mcIRC to finish'", o.logs and "restart mcIRC" in o.logs[0], o.logs)
+
+# ---- Area alerts takes the settings over: ADDED to its own, nothing overwritten or removed
+sys.path.insert(0, os.path.join(ROOT, "packages", "area_alerts"))
+for _m in ("aa_more", "aa_extras", "aa_places", "aa_sources", "aa_traffic", "aa_ferries", "aa_transit", "aa_route"): sys.modules.pop(_m, None)
+import aa_more, aa_places, aa_ferries, aa_traffic, aa_sources
+OLD = {"muted": False, "route_on": True, "tomtom_key": "TT", "translink_key": "TL", "weather_areas": ["Lower Mainland", "Vancouver Island"],
+       "sources": {"DriveBC": True, "BC Ferries": True, "BC Transit": True, "TransLink": True, "Weather": True, "Earthquake": True, "Tsunami": True,
+                   "Weekly reminder": False},
+       "channel_lists": {"DriveBC": "#drivebc", "BC Ferries": "#bcferries", "BC Transit": "#bctransit", "TransLink": "#translink", "Weather": "#weather"}}
+lm = aa_places.make("CA", "British Columbia", "Lower Mainland")
+MINE = {"areas": [lm], "kinds": {"weather": True, "traffic": True, "transit": True}, "channels": {"weather": "#alerts", "transit": "#transportation"},
+        "transit_feeds": ["mdb-2572"], "transit_channels": {"mdb-2572": "#bus"}, "keys": {"transit:mdb-2572": "mine"}}
+KCH = {"weather": "#weather", "traffic": "#traffic", "transit": "#transit", "ferries": "#bcferries", "quakes": "#alerts", "tsunami": "#alerts"}
+new = aa_more.move_settings(OLD, lambda k, d=None: MINE.get(k, d), ("disasters", "weather"), lambda k: KCH[k],
+                            lambda n: aa_places.make("CA", "British Columbia", n))
+ok("its regions become areas - the ones already there not twice", [a["name"] for a in new["areas"]] == ["Lower Mainland", "Vancouver Island", "Sunshine Coast"], new.get("areas"))
+ok("what it broadcast is switched on (ferries, quakes, tsunami); broadcasting on", all(new["kinds"].get(k) for k in ("ferries", "quakes", "tsunami", "weather", "traffic", "transit"))
+   and new.get("broadcast") is True)
+ok("channels: its channels ADDED next to Area alerts' own (weather: #alerts + #weather; DriveBC: #traffic + #drivebc)",
+   new["channels"]["weather"] == "#alerts, #weather" and new["channels"]["ferries"] == "#bcferries" and new["traffic_channels"]["drivebc"] == "#traffic, #drivebc", new)
+ok("...a channel set for an agency is kept and the old one added (Victoria: #bus + #bctransit); new agencies: the transit box + theirs",
+   new["transit_channels"]["mdb-2572"] == "#bus, #bctransit" and new["transit_channels"]["mdb-2474"] == "#transportation, #bctransit"
+   and new["transit_channels"]["mdb-3348"] == "#transportation, #translink", new["transit_channels"])
+ok("...the BC Transit systems it read, and TransLink (its key moved); a key already there is kept",
+   set(aa_more.BC_TRANSIT.values()) <= set(new["transit_feeds"]) and "mdb-3348" in new["transit_feeds"] and new["keys"]["transit:mdb-3348"] == "TL"
+   and new["keys"]["transit:mdb-2572"] == "mine")
+ok("the route command, its TomTom key, the daily forecasts; a busier hour (30)", new["route_on"] and new["tomtom_key"] == "TT" and new["forecast_on"]
+   and new["per_hour"] == 30 and "weekly_on" not in new)
+ok("nothing of Area alerts' own is lost: every value it had is still in the result", all(v in new["transit_feeds"] for v in MINE["transit_feeds"])
+   and new["channels"]["transit"] == "#transportation")
+new2 = aa_more.move_settings(dict(OLD, use_scopes=True, scope_lm="on", scope_vi="", scope_sc="on"), lambda k, d=None: MINE.get(k, d),
+                             ("disasters", "weather"), lambda k: KCH[k], lambda n: aa_places.make("CA", "British Columbia", n))
+ok("its region code ('[on] NEW ...') becomes the prefix of every alert; none set: none", new2.get("prefix") == "[on]" and "prefix" not in new)
+# Area alerts' take-over, once
+area = load(os.path.join(ROOT, "packages", "area_alerts", "area_alerts.py"), "t_area")
+class TakeAPI:
+    def __init__(self): self.s, self.switched, self.logs = {}, [], []
+    def get(self, k, d=None): return self.s.get(k, d)
+    def set(self, k, v): self.s[k] = v
+    def addon_settings(self, name): return dict(OLD)
+    def addon_installed(self, name): return True
+    def addon_enabled(self, name): return True
+    def set_addon_enabled(self, name, on): self.switched.append((name, on))
+    def log(self, text, level="info"): self.logs.append(text)
+x = area.Addon.__new__(area.Addon); x.api = TakeAPI(); x.take_over()
+ok("Area alerts takes over: settings added, it switched on, Traffic, transit and weather switched off, said in Status",
+   x.api.s.get("enabled") and x.api.s.get("broadcast") and x.api.switched == [("broadcast_alerts", False)] and x.api.s.get("ttw_moved")
+   and any("now part of Area alerts" in l for l in x.api.logs), (x.api.switched, x.api.logs))
+x.api.switched.clear()
+scheduled = []
+x.api.after = lambda ms, fn: scheduled.append(fn)
+x.api.add_menu_item = x.api.add_map_layer = x.api.add_bot_commands = lambda *a, **k: None
+x2 = area.Addon.__new__(area.Addon); x2.api = x.api; x2.extras_load()
+ok("...only once: the next start doesn't take over again (you may switch the old one back on)", scheduled == [] and x.api.switched == [])
+del x.api.s["ttw_moved"]; x2.extras_load()
+ok("...(before the move it does)", len(scheduled) == 1)
+# map layers, ferries, daily posts
+aa_traffic.INCIDENTS_SEEN.clear(); aa_traffic.INCIDENTS_SEEN["e1"] = (49.36, -121.47, "CLOSED: Hwy 1", "Closed at exit 170", time.time())
+aa_traffic.INCIDENTS_SEEN["old"] = (49.0, -122.0, "Incident", "gone", time.time() - 7200)
+aa_sources.QUAKES_SEEN.clear(); aa_sources.QUAKES_SEEN["q1"] = (48.5, -125.1, 5.2, "Off Vancouver Island")
+ok("map layers: DriveBC incidents (the last half hour) and earthquakes", x._incidents() == [(49.36, -121.47, "CLOSED: Hwy 1", "Closed at exit 170")]
+   and x._quakes() == [(48.5, -125.1, "M5.2 Off Vancouver Island")])
+NOTICES = ('<h3>Metro Vancouver - Sunshine Coast</h3><a href="/current-conditions/service-notices?serviceNoticeCode=123">Horseshoe Bay - Langdale: '
+           'cancelled sailings</a><h3>Northern</h3><a href="x?serviceNoticeCode=9">Prince Rupert - Haida Gwaii: delays</a>')
+DEPART = ('<h3>Horseshoe Bay</h3><table><tr><td>Horseshoe Bay - Langdale Sailing duration: 40 minutes</td></tr>'
+          '<tr><td>Queen of Surrey SCHEDULED: 10:30 AM ACTUAL: 11:05 AM ETA: 11:45 AM Earlier incident</td></tr>'
+          '<tr><td>Queen of Surrey SCHEDULED: 12:30 PM ACTUAL: 12:34 PM ETA: 1:10 PM</td></tr></table>')
+aa_ferries._cache.update(t=0.0, items=None)
+got = aa_ferries.ferries(aa_places.make("CA", "British Columbia", "Sunshine Coast"), get=lambda url: NOTICES if "service-notices" in url else DEPART)
+ok("BC Ferries: the notices and late sailings that name a place in the area (not Haida Gwaii; a 4-minute delay isn't one)",
+   [g.id for g in got] == ["bcf:123", "bcf-delay:Horseshoe_Bay_-_Langdale:Queen_of_Surrey:10:30_AM:" + __import__("datetime").date.today().isoformat()]
+   and "35 min late" in got[1].text and got[0].kind == "ferries", [g.text for g in got])
+ok("...outside British Columbia: nothing asked", aa_ferries.ferries({"country": "US", "region": "Washington", "name": "Seattle"}, get=lambda u: 1 / 0) == [])
+import datetime as _dt
+daily = {"daily": {"time": ["2026-10-13", "2026-10-14", "2026-10-15", "2026-10-16", "2026-10-17"], "weathercode": [0, 61, 3, 71, 95],
+                   "temperature_2m_max": [14.4, 12.0, 11.6, 9.0, 8.0], "temperature_2m_min": [6.2, 7.0, 5.0, 2.0, 1.0]}}
+f6 = aa_more.forecast(lm, 6, "LM", get=lambda u, p: daily); f8 = aa_more.forecast(lm, 8, "LM", get=lambda u, p: daily)
+ok("6 AM: a 3-day forecast; 8 AM: a 5-day outlook - one message each, to the weather channel", f6.text.startswith("3-day forecast Lower Mainland: ")
+   and "Tue H14 L6" in f6.text and f8.text.startswith("5-day outlook Lower Mainland: ") and f6.kind == f8.kind == "weather", (f6.text, f8.text))
+ok("...once a day each", aa_more.due_posts(_dt.datetime(2026, 10, 13, 6, 5), {}) == [6] and aa_more.due_posts(_dt.datetime(2026, 10, 13, 6, 5), {"6": "2026-10-13"}) == []
+   and aa_more.due_posts(_dt.datetime(2026, 10, 13, 7, 0), {}) == [])
+ok("weekly reminder: Sundays at noon, once a week", aa_more.weekly_due(_dt.datetime(2026, 10, 11, 12, 3), "")[0]
+   and not aa_more.weekly_due(_dt.datetime(2026, 10, 11, 12, 3), "2026-W41")[0] and not aa_more.weekly_due(_dt.datetime(2026, 10, 12, 12, 3), "")[0])
 
 # ---- the map window uses the details
 import mcIRC

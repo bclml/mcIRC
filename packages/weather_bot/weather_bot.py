@@ -27,7 +27,7 @@ COMMANDS = {        # command: (what it does, needs a place)
     "contact": "who runs this bot",
 }
 ALIASES = {"solarforecast": "sf", "overhead": "airplanes"}
-VERSION = "1.0.13"
+VERSION = "1.0.14"
 
 
 def first_hop(packet_log, heard_at, hops):
@@ -221,14 +221,15 @@ class Addon(AddonBase):
                   "units": tk.StringVar(value=self.cfg("units", "metric")), "contact": tk.StringVar(value=self.cfg("contact", "")),
                   "cooldown": tk.StringVar(value=str(self.cfg("cooldown", 30)))}
         tk.Checkbutton(f, text="Answer weather commands (sends to the mesh when someone asks)", variable=self.v["enabled"], bg=bg).pack(anchor="w")
-        for label, key, width in (("Channels it answers in (comma separated, or 'all'):", "channels", 28),
+        for label, key, width in (("Channels it answers in:", "channels", 28),
                                   ("Its own location (blank = the node position from Options > Node):", "home", 28),
                                   ("Command prefix (blank: 'wx Surrey' and '!wx Surrey' both work; '!' = only '!wx'):", "prefix", 4),
                                   ("Seconds before the same person gets another answer:", "cooldown", 6), ("'contact' answer:", "contact", 40)):
             r = tk.Frame(f, bg=bg)
             r.pack(fill="x", pady=1)
             tk.Label(r, text=label, bg=bg, anchor="w").pack(side="left")
-            tk.Entry(r, textvariable=self.v[key], width=width).pack(side="left", padx=4)
+            if key == "channels": mc.chan_field(r, self.v[key], width, all_option=True, empty="(off)").pack(side="left", padx=4)
+            else: tk.Entry(r, textvariable=self.v[key], width=width).pack(side="left", padx=4)
         r = tk.Frame(f, bg=bg)
         r.pack(fill="x", pady=1)
         tk.Label(r, text="Units:", bg=bg).pack(side="left")

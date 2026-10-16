@@ -2,6 +2,7 @@
 and cutting an answer into mesh-sized messages.  Nothing here touches the radio; the addons send through self.api."""
 import json
 import re
+import tkinter as tk
 import time
 import urllib.parse
 import urllib.request
@@ -77,10 +78,17 @@ def norm_channel(name):
     return n if n.startswith("#") else "#" + n if n else ""
 
 
+def chan_field(parent, var, width=24, **options):
+    """A channel setting: the list with 'Add' / x (gui_chanbox, mcIRC 2026.10.13 and later), else the old text box."""
+    try: from gui_chanbox import channel_box
+    except ImportError: return tk.Entry(parent, textvariable=var, width=width)
+    return channel_box(parent, var, **options)
+
+
 def channel_list(text):
-    """'#weather, Public' -> {'#weather', 'public'};  'all' / '*' -> {'*'}."""
+    """'#weather, Public' -> {'#weather', 'public'};  'all' / '*' -> {'*'}.  A dot separates too ('#test.#buds'): channel names have none."""
     out = set()
-    for part in re.split(r"[,;\s]+", text or ""):
+    for part in re.split(r"[,;.\s]+", text or ""):
         if part.strip() in ("all", "*"): out.add("*")
         elif part.strip(): out.add(norm_channel(part))
     return out

@@ -73,22 +73,16 @@ ok("'send answers by private message' can be set per node too", sorted(calls) ==
 
 # ---- the settings window: a tab per node
 win = gs.AddonSettingsWindow(app, "echo"); root.update()
-ok("with more than one node the window has tabs: All nodes, main node, each extra node (* = has settings of its own)",
-   [b.cget("text") for b in win.tab_buttons.values()] == ["All nodes", "main node", "wifi 1 *"], [b.cget("text") for b in win.tab_buttons.values()])
-win.tab_var.set("main"); win.switch("main"); root.update()
-ok("a node's tab shows what that node uses (here: the defaults)", win.inst.v_greeting.get() == "Hello")
+ok("with more than one node the window has a tab per node - 'main node' (its settings are the base ones) and each extra node; no 'All nodes'",
+   [b.cget("text") for b in win.tab_buttons.values()] == ["main node", "wifi 1 *"], [b.cget("text") for b in win.tab_buttons.values()])
+ok("the main node's tab shows the main settings", win.inst.v_greeting.get() == "Hello")
 win.inst.v_greeting.set("G'day"); win.apply()
-ok("changing one field on a node's tab keeps only that one as the node's own", api.own_settings("main") == {"greeting": "G'day"}, api.own_settings("main"))
-ok("...and the tab is marked", win.tab_buttons["main"].cget("text") == "main node *")
+ok("changing it changes the main settings (no separate 'main node' layer)", app.settings["addons"]["echo"]["greeting"] == "G'day" and api.own_settings("main") == {})
 win.tab_var.set("wifi 1"); win.switch("wifi 1"); root.update()
-ok("switching tabs keeps what was changed and shows the next node's settings", win.inst.v_greeting.get() == "Bonjour" and api.own_settings("main") == {"greeting": "G'day"})
+ok("switching tabs keeps what was changed and shows the next node's settings", win.inst.v_greeting.get() == "Bonjour" and app.settings["addons"]["echo"]["greeting"] == "G'day")
 win.reset_node(); root.update()
-ok("'Use All nodes settings for this node' clears that node's own settings", api.own_settings("wifi 1") == {} and win.inst.v_greeting.get() == "Hello"
-   and win.tab_buttons["wifi 1"].cget("text") == "wifi 1")
-win.tab_var.set(""); win.switch(""); root.update()
-win.inst.v_greeting.set("Hi there"); win.apply()
-ok("the 'All nodes' tab changes the defaults; a node with its own value keeps it", app.settings["addons"]["echo"]["greeting"] == "Hi there"
-   and api.own_settings("main") == {"greeting": "G'day"})
+ok("'Use the main node's settings for this node' clears that node's own settings", api.own_settings("wifi 1") == {} and win.inst.v_greeting.get() == "G'day"
+   and win.tab_buttons["wifi 1"].cget("text") == "wifi 1" and "main node" in win.reset_btn.cget("text"))
 win.destroy()
 app.settings["extra_nodes"] = []
 win = gs.AddonSettingsWindow(app, "echo"); root.update()
@@ -108,6 +102,19 @@ ok("with an older core still running: no node tabs, but the page itself is there
 win.inst.v_greeting.set("Yo"); win.apply()
 ok("...and saving works", OldAPI.store.get("greeting") == "Yo", OldAPI.store)
 win.destroy()
+# ---- before 2026.10.15 a 'main node' tab of its own existed: what was saved there becomes the main settings (once)
+from gui_addons import fold_main_node
+old = {"addons": {"area": {"areas": [], "channel": "#all", "kinds": {"a": 1}, "_per_node": {"main": {"areas": ["LM", "VI"], "channel": "#mine"}, "wifi 1": {"channel": "#w"}}},
+                  "bot": {"x": 1, "_per_node": {"main": {"x": 2}}}, "plain": {"y": 3}}}
+changed = fold_main_node(old)
+ok("old 'main node' tabs are folded into the main settings - the main node keeps exactly what it used", old["addons"]["area"]["areas"] == ["LM", "VI"]
+   and old["addons"]["area"]["channel"] == "#mine" and old["addons"]["area"]["kinds"] == {"a": 1} and old["addons"]["bot"] == {"x": 2} and sorted(changed) == ["area", "bot"], old)
+ok("...other nodes keep their own settings; addons without any are untouched", old["addons"]["area"]["_per_node"] == {"wifi 1": {"channel": "#w"}}
+   and old["addons"]["plain"] == {"y": 3} and fold_main_node(old) == [])
+import mcIRC as _mc
+ok("...mcIRC does it once at start, after copying gui_settings.json to backup/ (no copy, no change)", "gui_settings-before-main-node" in open(_mc.__file__, encoding="utf-8").read()
+   and "except OSError: return" in open(_mc.__file__, encoding="utf-8").read())
+
 # ---- set up on the 'main node' tab only: a tick / background job / mcIRC's channel step reads the MAIN node's settings (Area alerts
 # found no areas: its check read the defaults, where they weren't)
 api2 = AddonAPI(app, "areas_test")

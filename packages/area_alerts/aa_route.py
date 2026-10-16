@@ -1,4 +1,4 @@
-"""Traffic, transit and weather: 'route <address>' - driving directions from the asker's node to an address, with the DriveBC closures,
+"""Area alerts: 'route <address>' (moved here from the Traffic, transit and weather addon) - driving directions from the asker's node to an address, with the DriveBC closures,
 incidents and roadwork along the way (British Columbia), as a few short mesh messages.
 
 Free services, no key: OpenStreetMap Nominatim (finding the address, at most one lookup a second) and OSRM (routes, with alternatives).
@@ -38,6 +38,20 @@ CLOSED = re.compile(r"(?:^|[.:]\s+)(?:road |bridge |highway |route )?closed\b(?!
 SIMILAR_MIN = 3                 # routes this close in time count as equally quick: then fewer incidents and roadwork decide
 _lock, _last = threading.Lock(), [0.0]
 _cache = {}                     # DriveBC's answer for a minute (it limits how often it is asked)
+
+
+# DriveBC's feed sends some names with their letters broken into '¿' ('stal¿¿¿¿w¿¿as¿¿m Bridge', the bridge that replaced the Pattullo)
+_GARBLED = ((re.compile("stal[¿�]+w[¿�]+as[¿�]+m", re.I), "stal̓əw̓asəm"),)
+
+
+def fix_drivebc_text(obj):
+    """The same event with DriveBC's broken letters mended (strings anywhere in it)."""
+    if isinstance(obj, str):
+        for pat, name in _GARBLED: obj = pat.sub(name, obj)
+        return re.sub("[¿�]+", "", obj)
+    if isinstance(obj, dict): return {k: fix_drivebc_text(v) for k, v in obj.items()}
+    if isinstance(obj, list): return [fix_drivebc_text(v) for v in obj]
+    return obj
 
 
 def _get(url, params=None, timeout=20):
@@ -198,8 +212,6 @@ def drivebc_events(coords, get=None, now=None):
         data = (get or _get)(DRIVEBC, {"status": "ACTIVE", "format": "json", "bbox": bbox, "limit": 500})
         if get is None: _cache.clear(); _cache[key] = data
     out, now = [], now or time.time()
-    try: from emergency_agent import fix_drivebc_text           # (DriveBC's broken letters: 'stal¿¿¿¿w¿¿as¿¿m Bridge')
-    except ImportError: fix_drivebc_text = lambda e: e
     for e in map(fix_drivebc_text, data.get("events", [])):
         if not _on_now(e.get("schedule"), now): continue
         desc = re.sub(r"\s+", " ", e.get("description", "")).strip()

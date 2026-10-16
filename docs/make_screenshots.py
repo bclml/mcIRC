@@ -133,9 +133,8 @@ def steps():
         win.destroy(); yield 300
 
     yield from addon("auto_reply", "auto-reply-options.png")       # (its example rules were set above)
-    yield from addon("broadcast_alerts", "addon-traffic.png", {"muted": False})
-    yield from addon("broadcast_alerts", "addon-traffic-route.png", {"route_on": True}, tab=3)
     yield from addon("area_alerts", "addon-area-alerts.png", {"kinds": {"disasters": True, "weather": True, "emergency": True}})
+    yield from addon("area_alerts", "addon-area-alerts-route.png", {"route_on": True, "forecast_on": True}, tab=3)    # Route and more
     yield from addon("weather_bot", "addon-weather-bot.png", {"enabled": True, "channels": "#weather"})
     yield from addon("fun_bot", "addon-fun-bot.png", {"enabled": True, "channels": {c: "#fun" for c in ("dice", "roll", "magic8", "joke", "dadjoke", "hacker", "catfact")}})
     yield from addon("mesh_bot", "addon-mesh-bot.png", {"enabled": True})

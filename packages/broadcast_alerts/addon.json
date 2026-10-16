@@ -1,17 +1,12 @@
 {
   "name": "broadcast_alerts",
   "title": "Traffic, transit and weather",
-  "version": "1.6.5",
-  "description": "DriveBC, BC Ferries, BC Transit, TransLink, weather (Environment Canada warnings for the areas you pick in any province or territory), earthquake and tsunami alerts. Keeps the map layers up to date; broadcasting them to the mesh is off until you switch it on (per-alert switches).",
-  "requires": [
-    "requests",
-    "gtfs-realtime-bindings",
-    "pyserial"
-  ],
+  "version": "2.0.0",
+  "description": "Now part of Area alerts. Switching this on (or updating it) moves its settings - channels, alert types, areas, TransLink and TomTom keys, the route command - into Area alerts, installs and switches on Area alerts if needed, and switches this addon off. Nothing is removed.",
+  "requires": [],
   "files": {
     "broadcast_alerts.py": "addons/broadcast_alerts.py",
     "../../emergency_agent.py": "emergency_agent.py",
-    "../../ec_areas.py": "ec_areas.py",
-    "traffic_route.py": "traffic_route.py"
+    "../../ec_areas.py": "ec_areas.py"
   }
 }

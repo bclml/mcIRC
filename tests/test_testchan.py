@@ -58,12 +58,5 @@ check("custom text with placeholders", say(0, hops=255) == "@Bob 7.5 dB / 0 hops
 cfg(redirect="{bad placeholder}", channel="#x")
 check("bad placeholder falls back safely instead of crashing", say(0) == "@Bob Test received")
 
-# the addon wires the settings in
-spec = importlib.util.spec_from_file_location("ba", os.path.join(ROOT, "packages", "broadcast_alerts", "broadcast_alerts.py"))
-m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
-saved = {"test_channel": " #kod-bot ", "test_watch": "Public, #bot-van ,", "test_redirect": "@{sender} use {channel}", "test_reply": "@{sender} ok", "sources": {"Test reply": True}}
-api = mock.MagicMock(); api.get = lambda k, d=None: saved.get(k, d)
-a = m.Addon(api); a.apply_settings()
-check("addon title is 'Traffic, transit and weather'", m.Addon.title == "Traffic, transit and weather")
 print("\nALL PASSED" if all(results) else f"\n{results.count(False)} FAILED of {len(results)}")
 sys.exit(0 if all(results) else 1)

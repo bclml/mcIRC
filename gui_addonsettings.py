@@ -36,12 +36,12 @@ class AddonSettingsWindow(tk.Toplevel):
         if not hasattr(self.api, "own_settings"): self.extra = []      # mcIRC not restarted since an update: no node tabs, the rest works
         self.tab = ALL
         self.tab_var = tk.StringVar(value=ALL)
-        if self.extra:                                          # one tab per node, besides the defaults for all of them
+        if self.extra:                                          # one tab per node: the main node's settings, then each extra node's changes
             tabs = tk.Frame(self, bg=BG)
             tabs.pack(fill="x", padx=10, pady=(6, 0))
             tk.Label(tabs, text="Settings for:", bg=BG).pack(side="left", padx=(0, 6))
             self.tab_buttons = {}
-            for node in [ALL, "main"] + self.extra:
+            for node in [ALL] + self.extra:
                 b = ttk.Radiobutton(tabs, text=self._tab_text(node), value=node, variable=self.tab_var, style="Toolbutton",
                                     command=lambda: self.switch(self.tab_var.get()))
                 b.pack(side="left", padx=1)
@@ -51,7 +51,7 @@ class AddonSettingsWindow(tk.Toplevel):
         ttk.Button(buttons, text="Cancel", command=self.destroy).pack(side="right")
         ttk.Button(buttons, text="Apply", command=self.apply).pack(side="right", padx=4)
         ttk.Button(buttons, text="OK", command=lambda: self.apply() and self.destroy()).pack(side="right")
-        self.reset_btn = ttk.Button(buttons, text="Use 'All nodes' settings for this node", command=self.reset_node)
+        self.reset_btn = ttk.Button(buttons, text="Use the main node's settings for this node", command=self.reset_node)
         self.top = tk.Frame(self, bg=BG)                        # the general switches (they depend on the tab)
         self.top.pack(fill="x", padx=10, pady=(4, 0))
         body = tk.Frame(self, bg=BG)
@@ -71,7 +71,7 @@ class AddonSettingsWindow(tk.Toplevel):
 
     # ---- tabs ----
     def _tab_text(self, node):
-        if node == ALL: return "All nodes"
+        if node == ALL: return "main node"                                    # (the main node's settings are the base ones)
         name = "main node" if node == "main" else node
         return name + (" *" if self.api.own_settings(node) else "")          # * = has settings of its own
 
@@ -91,9 +91,8 @@ class AddonSettingsWindow(tk.Toplevel):
         self.reset_btn.pack_forget()
         node = self.tab
         if node:
-            who = "the main node" if node == "main" else f"'{node}'"
             tk.Label(self.top, bg=BG, fg="#555", justify="left", wraplength=680, anchor="w",
-                     text=f"These settings are for {who} only. What you don't change here comes from 'All nodes'.").pack(anchor="w")
+                     text=f"These settings are for '{node}' only. What you don't change here follows the main node.").pack(anchor="w")
             if self.api.own_settings(node): self.reset_btn.pack(side="left")
         self.node_vars, self.private_var, self.toolbar_var, self.delay_vars = {}, None, None, None
         if not node and self.extra:                             # which nodes this addon works on at all

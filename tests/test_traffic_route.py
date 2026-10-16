@@ -1,15 +1,15 @@
 import os as _os; _os.environ["MCIRC_NO_LOG_FILE"] = "1"      # tests must never write to the bot's real log
 import os, sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-PKG = os.path.join(ROOT, "packages", "broadcast_alerts")
+PKG = os.path.join(ROOT, "packages", "area_alerts")
 sys.path.insert(0, ROOT); sys.path.insert(0, PKG); os.chdir(ROOT)
-"""Traffic, transit and weather: 'route <address>' by private message - the quickest route, then fewer incidents / roadwork, never through
+"""Area alerts (since 2.0; before: Traffic, transit and weather): 'route <address>' by private message - the quickest route, then fewer incidents / roadwork, never through
 a closure while another route is open; answered privately only, the address never repeated in a channel.  No radio, no internet."""
 import importlib.util, time
 from unittest import mock
 
-sys.modules.pop("traffic_route", None)
-import traffic_route as tr
+for _m in ("aa_route", "aa_extras", "aa_traffic", "aa_sources"): sys.modules.pop(_m, None)     # the package's, not an installed copy
+import aa_route as tr
 
 fails = []
 def ok(label, cond, detail=""):
@@ -182,8 +182,9 @@ tr.answer(HOME, "Mall", get=g)
 ok("...no key: TomTom is never asked", tt == [])
 
 # ---- in the addon: private only, never repeated in a channel, one per person every 2 minutes, nothing in the log
-spec = importlib.util.spec_from_file_location("t_ba_route", os.path.join(PKG, "broadcast_alerts.py"))
+spec = importlib.util.spec_from_file_location("t_aa_route", os.path.join(PKG, "area_alerts.py"))
 ba = importlib.util.module_from_spec(spec); spec.loader.exec_module(ba)
+import aa_extras, aa_traffic
 class Nodes:
     def find_by_prefix(self, p): return {"lat": HOME[0], "lon": HOME[1], "lastmod": int(time.time()) - 7200} if p == "aabbcc" else None
     def find_by_name(self, n): return None
@@ -217,16 +218,14 @@ for key in ("", "k3y"):
     ok(f"the TomTom key from its settings goes to the route ({key or 'none: as before'})", given.get("tomtom_key") == key, given)
 b.api.s.pop("tomtom_key")
 import gui_diag
-snap = gui_diag.settings_snapshot({"addons": {"broadcast_alerts": {"tomtom_key": "k3y"}}})
+snap = gui_diag.settings_snapshot({"addons": {"area_alerts": {"tomtom_key": "k3y"}}})
 ok("...and is never shown in a bug report's settings (only that it is set)", "k3y" not in snap and "tomtom_key = (set)" in snap, snap)
-with mock.patch.object(ba.logging, "warning") as w:
+with mock.patch.object(aa_extras.logging, "warning") as w:
     b2 = ba.Addon.__new__(ba.Addon); b2.api = API(); b2.route_last = {}
     b2.api.run_background = lambda fn, done: done(RuntimeError("HTTP 500 for url ...q=5+Secret+Lane"))
     b2.on_message(dict(dm, nick="Dee", text="route 5 Secret Lane"))
-# DriveBC busy: the incidents the traffic check already tracks (its areas) are used, and the answer says so
-ea = ba.ea
-with mock.patch.dict(ea.active_traffic_alerts, {"DriveBC|x1": ("DriveBC", "INCIDENT - Highway 1 (Burnaby)")}, clear=True), \
-        mock.patch.dict(ea.ALERT_LOCATIONS, {"DriveBC|x1": (49.30, -122.80, "Highway 1")}, clear=True):
+# DriveBC busy: the incidents Area alerts' last checks saw (its areas) are used, and the answer says so
+with mock.patch.dict(aa_traffic.INCIDENTS_SEEN, {"x1": (49.30, -122.80, "Incident: Highway 1 (Burnaby)", "", time.time())}, clear=True):
     known = b._known_events()
     get, _ = fake(osrm((20, 25, "Hwy 1", 49.30)), drivebc_error=RuntimeError("429"))
     r = parts(tr.answer(HOME, "Mall", get=get, known=b._known_events))

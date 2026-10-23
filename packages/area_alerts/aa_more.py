@@ -1,5 +1,5 @@
 """Area alerts: what came over from the Traffic, transit and weather addon besides its alert feeds -
-  * daily forecast posts: a 3-day forecast at 6 AM and a 5-day outlook at 8 AM for each area (Open-Meteo, free, no key)
+  * daily forecast posts: a 3-day forecast (6 AM by default) and a 5-day outlook (8 AM) for each area (Open-Meteo, free, no key)
   * the weekly reminder: Sundays around noon, which channels carry the alerts
   * moving that addon's settings over (move_settings): its channels are ADDED to what Area alerts has - nothing is overwritten or removed."""
 import datetime
@@ -35,10 +35,35 @@ def forecast(area, hour, label, get=None):
     return Alert(f"forecast{hour}:{label}:{days[0]}", "weather", text, "Open-Meteo")
 
 
-def due_posts(now, sent):
-    """Which daily posts are due now: 6 and/or 8, each once a day (sent: {'6': 'YYYY-MM-DD', ...})."""
-    today = now.date().isoformat()
-    return [h for h in (6, 8) if now.hour == h and sent.get(str(h)) != today]
+DEFAULT_TIMES = {6: "06:00", 8: "08:00"}        # which post (6 = the 3-day forecast, 8 = the 5-day outlook): its time of day
+
+
+def parse_time(text, default=None):
+    """'6', '06:30', '6:30 PM', '18:30', '7am' -> (hour, minute); default when it isn't a time."""
+    m = re.fullmatch(r"\s*(\d{1,2})(?:[:h.](\d{2}))?\s*([ap])?\.?\s*m?\.?\s*", (text or "").lower())
+    if not m: return default
+    h, mi, ap = int(m.group(1)), int(m.group(2) or 0), m.group(3)
+    if ap:
+        if not 1 <= h <= 12: return default
+        h = h % 12 + (12 if ap == "p" else 0)
+    return (h, mi) if h < 24 and mi < 60 else default
+
+
+def shown_time(text, default):
+    """A time as it is saved and shown: '06:30'."""
+    h, mi = parse_time(text, parse_time(default))
+    return f"{h:02d}:{mi:02d}"
+
+
+def due_posts(now, sent, times=None, on=(6, 8)):
+    """Which daily posts are due now, each once a day: from its time (times: {6: '06:00', 8: '08:00'}) for an hour - mcIRC started later
+    in the day doesn't post a stale one.  sent: {'6': 'YYYY-MM-DD', ...}.  on: the posts switched on."""
+    today, mins = now.date().isoformat(), now.hour * 60 + now.minute
+    out = []
+    for p in on:
+        h, mi = parse_time((times or {}).get(p) or (times or {}).get(str(p)), parse_time(DEFAULT_TIMES[p]))
+        if 0 <= mins - (h * 60 + mi) < 60 and sent.get(str(p)) != today: out.append(p)
+    return out
 
 
 def weekly_due(now, last):

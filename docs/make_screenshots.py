@@ -121,7 +121,7 @@ def steps():
     child(gui_update_ui.CatalogDialog).destroy()
 
     # each addon's own settings window, with example settings (demo mode never saves them)
-    def addon(name, picture, values=None, tab=None):
+    def addon(name, picture, values=None, tab=None, scroll=None):
         if name not in app.addons.loaded: print("not loaded:", name); return
         api = app.addons.loaded[name][0].api
         for k, v in (values or {}).items(): api.set(k, v)
@@ -129,11 +129,13 @@ def steps():
         if tab is not None:
             nb = next((w for w in _descendants(win) if isinstance(w, ttk.Notebook)), None)
             if nb is not None: nb.select(tab); yield 500
+        if scroll is not None: win.canvas.yview_moveto(scroll); yield 500
         grab(win, picture)
         win.destroy(); yield 300
 
     yield from addon("auto_reply", "auto-reply-options.png")       # (its example rules were set above)
-    yield from addon("area_alerts", "addon-area-alerts.png", {"kinds": {"disasters": True, "weather": True, "emergency": True}, "forecast_on": True})
+    yield from addon("area_alerts", "addon-area-alerts.png", {"kinds": {"disasters": True, "weather": True, "emergency": True}, "forecast_on": True, "forecast_channels": "#daily"})
+    yield from addon("area_alerts", "addon-area-alerts-daily.png", {"forecast_on": True, "forecast_channels": "#daily"}, scroll=1.0)   # Daily weather
     yield from addon("area_alerts", "addon-area-alerts-route.png", {"route_on": True}, tab=4)    # Route and more
     yield from addon("area_alerts", "addon-area-alerts-weather.png", {"wx_on": True, "wx_channels": "#weather"}, tab=3)    # Weather commands (the Weather bot's)
     yield from addon("fun_bot", "addon-fun-bot.png", {"enabled": True, "channels": {c: "#fun" for c in ("dice", "roll", "magic8", "joke", "dadjoke", "hacker", "catfact")}})

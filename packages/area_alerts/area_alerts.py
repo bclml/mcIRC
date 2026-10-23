@@ -53,7 +53,7 @@ def _chan_field(parent, var, width=24, **options):
 class Addon(WeatherCmds, Extras, AddonBase):
     KINDS, DEFAULT_ON, WINDOW = KINDS, DEFAULT_ON, WINDOW
     title = "Area alerts"
-    version = "2.1.0"
+    version = "2.1.1"
     author = "mcIRC"
     description = ("Natural disasters, earthquakes, tsunamis, weather warnings, public emergency alerts (Canada, US), public transit alerts, road closures and BC Ferries "
                    "for the areas you choose anywhere in the world (country, region, area), plus 'route <address>' by private message and daily forecasts "
@@ -186,8 +186,9 @@ class Addon(WeatherCmds, Extras, AddonBase):
         return [k for k in KINDS if saved.get(k, k in DEFAULT_ON)]
 
     def channel_for(self, al):
-        """The alert's own channel: its transit agency's or road source's when one is set, else its kind's."""
+        """The alert's own channel: its transit agency's or road source's when one is set (the daily forecasts': theirs), else its kind's."""
         src_ = self.source_of.get(al.id, "")
+        if al.id.startswith("forecast") and (self.api.get("forecast_channels", "") or "").strip(): return self.api.get("forecast_channels")
         if src_.startswith("transit:"): own = self.api.get("transit_channels", {}).get(src_[8:])
         elif src_: own = self.api.get("traffic_channels", {}).get(src_)
         else: own = None
@@ -208,7 +209,7 @@ class Addon(WeatherCmds, Extras, AddonBase):
         forecasts' - and where the weather commands are answered (mcIRC adds these to the node when it lacks them)."""
         wx = self.wx_channels_used()
         if not (self.api.get("enabled", False) and self.api.get("broadcast", False)): return wx
-        boxes = [self.channel(k) for k in self.kinds_on()] + ([self.channel("weather")] if self.api.get("forecast_on", False) else [])
+        boxes = [self.channel(k) for k in self.kinds_on()] + ([(self.api.get("forecast_channels", "") or "").strip() or self.channel("weather")] if self.api.get("forecast_on", False) else [])
         if "transit" in self.kinds_on(): boxes += list(self.api.get("transit_channels", {}).values())
         if "traffic" in self.kinds_on(): boxes += list(self.api.get("traffic_channels", {}).values())
         return [n for b in boxes for n in re.split(r"[,;\s]+", b or "") if n.strip()] + wx
@@ -282,9 +283,7 @@ class Addon(WeatherCmds, Extras, AddonBase):
             self.ch_vars[k] = tk.StringVar(value=chans.get(k, default_ch))
             tk.Checkbutton(kinds, text=title, variable=self.k_vars[k], bg=bg, anchor="w").grid(row=i, column=0, sticky="w")
             _chan_field(kinds, self.ch_vars[k], 20, public=False, max_items=MAX_CHANNELS, empty=f"({default_ch})").grid(row=i, column=1, padx=4, sticky="w")
-        self.v_fc = tk.BooleanVar(value=g("forecast_on", False))
-        tk.Checkbutton(kinds, text="Daily weather: a 3-day forecast at 6 AM and a 5-day outlook at 8 AM for each area (to the Weather warnings channels)",
-                       variable=self.v_fc, bg=bg, anchor="w", wraplength=520, justify="left").grid(row=len(KINDS), column=0, columnspan=2, sticky="w")
+        self._forecast_rows(kinds, bg, len(KINDS))
         opt = tk.Frame(page, bg=bg); opt.pack(fill="x", pady=2)
         self.v_level = tk.StringVar(value=g("min_level", "orange"))
         self.v_mag, self.v_rad = tk.StringVar(value=str(g("min_mag", 5.0))), tk.StringVar(value=str(g("quake_radius", 300)))
@@ -298,6 +297,21 @@ class Addon(WeatherCmds, Extras, AddonBase):
             "Sources (free, no key): GDACS (UN / EU JRC), USGS, NOAA tsunami warning centres, Environment Canada, the US National Weather "
             "Service, MeteoAlarm. Places: GeoNames (CC BY 4.0). Official weather warnings are available for Canada, the US and 38 European "
             "countries; natural disasters and earthquakes everywhere.")).pack(anchor="w", pady=(4, 0))
+
+    def _forecast_rows(self, parent, bg, row):
+        """Daily weather: on / off, the time of each post, its channels (empty: the Weather warnings channels)."""
+        g = self.api.get
+        self.v_fc = tk.BooleanVar(value=g("forecast_on", False))
+        self.v_fc3, self.v_fc5 = tk.BooleanVar(value=g("forecast_3day", True)), tk.BooleanVar(value=g("forecast_5day", True))
+        self.v_fc3_at, self.v_fc5_at = tk.StringVar(value=g("forecast_3day_at", "06:00")), tk.StringVar(value=g("forecast_5day_at", "08:00"))
+        self.v_fc_ch = tk.StringVar(value=g("forecast_channels", ""))
+        tk.Checkbutton(parent, text="Daily weather for each area (Open-Meteo):", variable=self.v_fc, bg=bg, anchor="w").grid(row=row, column=0, sticky="w")
+        _chan_field(parent, self.v_fc_ch, 20, public=False, max_items=MAX_CHANNELS, empty="(the Weather warnings channels)").grid(row=row, column=1, padx=4, sticky="w")
+        times = tk.Frame(parent, bg=bg); times.grid(row=row + 1, column=0, columnspan=2, sticky="w", padx=(22, 0))
+        for var, at, text in ((self.v_fc3, self.v_fc3_at, "3-day forecast at"), (self.v_fc5, self.v_fc5_at, "5-day outlook at")):
+            tk.Checkbutton(times, text=text, variable=var, bg=bg).pack(side="left")
+            tk.Entry(times, textvariable=at, width=6).pack(side="left", padx=(2, 12))
+        tk.Label(times, text="(24-hour, e.g. 06:00 or 18:30)", bg=bg, fg="#555").pack(side="left")
 
     def _key_row(self, parent, bg, slot, help_text, url):
         """'How to get a free key' in plain words, a button opening the sign-up page, and the box for the key."""

@@ -60,7 +60,9 @@ class Extras:
         now = datetime.datetime.now()
         if self.api.get("forecast_on", False):                     # its own switch on the first tab (not tied to Weather warnings)
             sent = dict(self.api.get("forecast_sent", {}))
-            due = more.due_posts(now, sent)
+            g = self.api.get
+            due = more.due_posts(now, sent, {6: g("forecast_3day_at", "06:00"), 8: g("forecast_5day_at", "08:00")},
+                                 [p for p, key in ((6, "forecast_3day"), (8, "forecast_5day")) if g(key, True)])
             if due:
                 for h in due: sent[str(h)] = now.date().isoformat()
                 self.api.set("forecast_sent", sent)
@@ -177,7 +179,12 @@ class Extras:
     def extras_apply(self):
         self.api.set("route_on", bool(self.v_route.get()))
         self.api.set("tomtom_key", self.v_tomtom.get().strip())
-        if hasattr(self, "v_fc"): self.api.set("forecast_on", bool(self.v_fc.get()))         # (on the 'Areas and alerts' tab)
+        if hasattr(self, "v_fc"):                                                       # (on the 'Areas and alerts' tab)
+            self.api.set("forecast_on", bool(self.v_fc.get()))
+            self.api.set("forecast_3day", bool(self.v_fc3.get())); self.api.set("forecast_5day", bool(self.v_fc5.get()))
+            self.api.set("forecast_3day_at", more.shown_time(self.v_fc3_at.get(), "06:00"))
+            self.api.set("forecast_5day_at", more.shown_time(self.v_fc5_at.get(), "08:00"))
+            self.api.set("forecast_channels", self.v_fc_ch.get().strip())
         self.api.set("weekly_on", bool(self.v_week.get()))
         self.api.set("weekly_channel", self.v_week_ch.get().strip() or "Public")
         self.api.set("prefix", self.v_prefix.get().strip()[:12])

@@ -89,7 +89,30 @@ ok("Weather bot 2.0: switches Area alerts on and itself off, noting it was on; i
 
 # the daily forecasts: their own switch, on the first tab
 src = open(os.path.join(ROOT, "packages", "area_alerts", "area_alerts.py"), encoding="utf-8").read()
-ok("the 6 AM / 8 AM forecasts have a checkbox on the 'Areas and alerts' tab", "Daily weather: a 3-day forecast at 6 AM and a 5-day outlook at 8 AM" in src)
+ok("the daily forecasts have a checkbox, their times and channels on the 'Areas and alerts' tab", "Daily weather for each area" in src
+   and "3-day forecast at" in src and "forecast_channels" in src)
 ok("...not tied to the Weather warnings kind", 'if self.api.get("forecast_on", False):' in open(os.path.join(ROOT, "packages", "area_alerts", "aa_extras.py"), encoding="utf-8").read())
+import datetime as dt, aa_more
+ok("times as people type them: 6, 06:30, 6:30 PM, 7am, 18:30; nonsense: the default", [aa_more.parse_time(t) for t in ("6", "06:30", "6:30 PM", "7am", "18:30", "25:00", "x")]
+   == [(6, 0), (6, 30), (18, 30), (7, 0), (18, 30), None, None] and aa_more.shown_time("7am", "06:00") == "07:00" and aa_more.shown_time("x", "08:00") == "08:00")
+T = {6: "07:15", 8: "18:30"}
+ok("the 3-day forecast at its own time (07:15), once a day, for an hour after it", aa_more.due_posts(dt.datetime(2026, 10, 16, 7, 20), {}, T) == [6]
+   and aa_more.due_posts(dt.datetime(2026, 10, 16, 7, 10), {}, T) == [] and aa_more.due_posts(dt.datetime(2026, 10, 16, 8, 15), {}, T) == []
+   and aa_more.due_posts(dt.datetime(2026, 10, 16, 7, 20), {"6": "2026-10-16"}, T) == [])
+ok("...the 5-day outlook at its own (18:30); one switched off isn't posted", aa_more.due_posts(dt.datetime(2026, 10, 16, 18, 30), {}, T) == [8]
+   and aa_more.due_posts(dt.datetime(2026, 10, 16, 18, 30), {}, T, on=(6,)) == [])
+ok("...the defaults stay 6 AM and 8 AM", aa_more.due_posts(dt.datetime(2026, 10, 16, 6, 0), {}) == [6] and aa_more.due_posts(dt.datetime(2026, 10, 16, 8, 59), {}) == [8])
+area = load("area_alerts")
+class FA:
+    def __init__(self, **v): self.v = v
+    def get(self, k, d=None): return self.v.get(k, d)
+fc = area.Addon.__new__(area.Addon); fc.source_of = {}
+fc.api = FA(enabled=True, broadcast=True, forecast_on=True, forecast_channels="#daily, #wx", kinds={"weather": True, "disasters": False}, channels={"weather": "#alerts"})
+import aa_sources
+ok("the daily weather goes to its own channels; warnings stay on theirs", fc.channels_for(aa_sources.Alert("forecast6:LM:2026-10-16", "weather", "x", "")) == ["#daily", "#wx"]
+   and fc.channels_for(aa_sources.Alert("w1", "weather", "x", "")) == ["#alerts"])
+ok("...and those channels are added to the node", {"#daily", "#wx", "#alerts"} <= set(fc.channels_used()), fc.channels_used())
+fc.api.v["forecast_channels"] = ""
+ok("...none set: the Weather warnings channels, as before", fc.channels_for(aa_sources.Alert("forecast8:LM:2026-10-16", "weather", "x", "")) == ["#alerts"])
 print("\nALL PASSED" if not fails else f"\n{len(fails)} FAILED: {fails}")
 sys.exit(1 if fails else 0)

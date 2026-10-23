@@ -75,10 +75,15 @@ class PrivateMixin:
 
     def reply_privately(self, msg, text):
         """A bot's answer to a channel message, sent to the person who asked instead (on the node it came in on).  Someone not in node
-        memory yet can't be messaged: then the answer goes to the channel after all, and Status says why."""
+        memory yet can't be messaged: then the answer goes to the channel after all - never to Public (bots don't post there unless Options
+        lets them): there it isn't answered at all - and Status says why."""
         nick = (msg.get("nick") or "").strip()
         node = self.nodes.find_by_name(nick) if nick else None
         if not node:
+            chan = str(msg.get("channel") or "")
+            if chan.split(" [")[0].strip().lower() in ("public", "#public") and not self.settings.get("bots_in_public", False):
+                return self.status_line(f"*** Couldn't answer {nick or 'someone'} privately (not in node memory yet - no advert heard from them), "
+                                        f"and bots don't post in Public - not answered.", "warn")
             self.status_line(f"*** Couldn't answer {nick or 'someone'} privately (not in node memory yet) - answered in {msg.get('channel')} instead.", "warn")
             from gui_addons import addressed
             return self.send_to(msg.get("channel"), addressed(msg.get("nick", ""), text))      # (who it answers: "@Bob: ...")

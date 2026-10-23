@@ -54,6 +54,15 @@ dms.clear()
 api.reply(dict(msg, nick="Stranger"), "Cloudy"); drain()
 ok("someone not in node memory yet: answered in the channel after all, and Status says why",
    chans == [("#weather", "@Stranger: Cloudy")] and any("Couldn't answer Stranger privately" in t for _, t in lines), (chans, lines))
+chans.clear(); lines.clear()
+for ch in ("Public", "Public [wifi 1]"):
+    api.reply(dict(msg, nick="Stranger", channel=ch), "Test should be made in #test"); drain()
+ok("...but a question in Public from someone not in node memory is NOT answered in Public (any node's) - Status says so",
+   chans == [] and dms == [] and sum("not answered" in t for _, t in lines) == 2, (chans, lines))
+app.settings["bots_in_public"] = True
+api.reply(dict(msg, nick="Stranger", channel="Public"), "x"); drain()
+ok("...unless 'Let bots post in Public' is ticked", chans == [("Public", "@Stranger: x")], chans)
+app.settings["bots_in_public"] = False
 chans.clear()
 api.reply(dict(msg, dm=True, channel="@Alice"), "x"); drain()
 ok("a private question is always answered privately", chans == [])

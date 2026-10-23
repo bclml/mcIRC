@@ -163,6 +163,26 @@ with mock.patch.object(app, "nodes", AskNodes()), mock.patch.object(wapi, "node_
     ok("...a place that is asked for still wins", got[-1] == (1.0, 2.0, "Hope"), got)
 with mock.patch.object(wapi, "node_position", lambda: (10.0, 10.0, "Me")), mock.patch.object(mc, "town_name", lambda *a: None):
     ok("...'here' only when there is no town at the bot (or the lookup fails)", wx_bot.wx_home()[2] == "here")
+# ---- a repeater's or asker's node name is never put in an answer (it often holds someone's callsign: 'VA7XYZ - EastVancouver')
+AskNodes.rows.append({"name": "VA7XYZ - EastVancouver", "public_key": "e5aa", "type": 2, "lat": 49.26, "lon": -123.07, "last_seen": 9})
+AskNodes.rows.append({"name": "VE7ABC Cal", "public_key": "f6bb", "type": 1, "lat": 49.27, "lon": -123.10, "last_seen": 9})
+calls = []
+def down(lat, lon, *a): calls.append((lat, lon)); return None          # the town lookup failed (busy / no answer)
+with mock.patch.object(app, "nodes", AskNodes()), mock.patch.object(wapi, "node_position", lambda: (0, 0, "")), \
+        mock.patch.object(mc, "town_name", down), mock.patch.object(ws, "wx", mock.Mock(side_effect=ValueError("US only"))), \
+        mock.patch.object(ws, "gwx", lambda lat, lon, label, units="metric", get=None: got.append((lat, lon, label)) or f"{label}: canned"):
+    wx_bot.wx_limiter = mc.Limiter(0, 0)
+    app.packet_log = [{"t": time.time() - 2, "type": "GRP_TXT", "path": "E5D4", "size": 1}]
+    wx_bot.on_message({**msg("wx", nick="Mike"), "hops": 2}); app.packet_log = []
+    ok("the nearest repeater's town can't be found: the answer says 'Near you' - never the repeater's name (a callsign)",
+       got[-1][2] == "Near you" and not any("VA7XYZ" in t for _, t in raw_sent), (got[-1], raw_sent[-1:]))
+    wx_bot.on_message(msg("wx", nick="VE7ABC Cal"))
+    ok("...nor the asker's own node name", got[-1][2] == "Near you" and not any("VE7ABC Cal:" in t.split(": ", 1)[-1] for _, t in raw_sent[-1:]), raw_sent[-1:])
+    n = len(calls); wx_bot.on_message({**msg("wx", nick="VE7ABC Cal")})
+    ok("...a failed town lookup isn't asked again at once", len(calls) == n, calls)
+    wx_bot._towns = {k: (v[0], v[1] - 601) for k, v in wx_bot._towns.items()}
+    wx_bot.on_message({**msg("wx", nick="VE7ABC Cal")})
+    ok("...but is tried again after 10 minutes (before, a moment's failure stuck for the whole session)", len(calls) == n + 1, calls)
 
 # ---- every command that can use a place takes one: city, postal code, ZIP, node name or coordinates
 import wxbot_sky as sky

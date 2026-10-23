@@ -32,6 +32,8 @@ COMMANDS = {        # command: what it does
 ALIASES = {"solarforecast": "sf", "overhead": "airplanes"}
 USAGE = {"wx": "wx <place>", "gwx": "gwx <place>", "aqi": "aqi <place>", "sf": "sf <place>", "rain": "rain <place>", "satpass": "satpass iss"}
 OLD_WX = "weather_bot"
+NEAR_YOU = "Near you"          # an answer's place when the town isn't known (never a node's name - those often hold callsigns)
+RETRY_TOWN = 600
 MOVED = {"enabled": "wx_on", "channels": "wx_channels", "home": "wx_home", "prefix": "wx_prefix", "cooldown": "wx_cooldown", "units": "wx_units",
          "contact": "wx_contact", "answer_dm": "wx_answer_dm", "off": "wx_off", "max_parts": "wx_max_parts", "rain_alerts": "wx_rain",
          "_names": "_names", "_reply_delay": "_reply_delay", "_part_gap": "_part_gap", "_reply_private": "_reply_private"}
@@ -113,10 +115,14 @@ class WeatherCmds:
         return lat, lon, self.town(lat, lon) or "here"
 
     def town(self, lat, lon):
-        """The town at a position ('Hope BC'), looked up once per spot (OpenStreetMap allows one lookup a second); None if there is none."""
+        """The town at a position ('Hope BC'), looked up once per spot (OpenStreetMap allows one lookup a second); None if there is none.
+        A lookup that found nothing (or failed - the service was busy) is tried again after RETRY_TOWN seconds, not kept for good."""
         key, towns = (round(lat, 2), round(lon, 2)), self.__dict__.setdefault("_towns", {})
-        if key not in towns: towns[key] = mc.town_name(lat, lon)
-        return towns[key]
+        name, when = towns.get(key, (None, 0.0))
+        if name is None and time.time() - when >= RETRY_TOWN:
+            name = mc.town_name(lat, lon)
+            towns[key] = (name, time.time())
+        return name
 
     def asker_place(self, msg, heard_at):
         """Where the asker is, for a command without a place: their node's advertised position, else the repeater their message reached
@@ -127,7 +133,7 @@ class WeatherCmds:
             or nodes.find_by_name((msg.get("nick") or "").lstrip("@"))
         if row and (row.get("lat") or row.get("lon")):
             lat, lon = float(row["lat"]), float(row["lon"])
-            return lat, lon, self.town(lat, lon) or row["name"][:24]
+            return lat, lon, self.town(lat, lon) or NEAR_YOU          # never a node's name: it often holds someone's callsign
         hops = msg.get("hops")
         if msg.get("dm") or hops in (None, 0, 255): return None
         first = first_hop(self.api.packet_log, heard_at, hops)
@@ -136,7 +142,7 @@ class WeatherCmds:
                        and (n.get("public_key") or "").lower().startswith(first.lower())), key=lambda n: -(n.get("last_seen") or 0))
         if not reps: return None
         lat, lon = float(reps[0]["lat"]), float(reps[0]["lon"])
-        return lat, lon, self.town(lat, lon) or reps[0]["name"][:24]
+        return lat, lon, self.town(lat, lon) or NEAR_YOU
 
     # ---- answering ----
     def on_message(self, msg):

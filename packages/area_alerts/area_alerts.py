@@ -53,7 +53,7 @@ def _chan_field(parent, var, width=24, **options):
 class Addon(WeatherCmds, Extras, AddonBase):
     KINDS, DEFAULT_ON, WINDOW = KINDS, DEFAULT_ON, WINDOW
     title = "Area alerts"
-    version = "2.1.1"
+    version = "2.1.2"
     author = "mcIRC"
     description = ("Natural disasters, earthquakes, tsunamis, weather warnings, public emergency alerts (Canada, US), public transit alerts, road closures and BC Ferries "
                    "for the areas you choose anywhere in the world (country, region, area), plus 'route <address>' by private message and daily forecasts "

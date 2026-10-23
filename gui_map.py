@@ -13,6 +13,9 @@ from gui_nodes import TYPE_NAMES
 
 try:
     import tkintermapview
+    import tkintermapview.map_widget
+    import gui_tiles
+    gui_tiles.install(tkintermapview.map_widget)        # tiles fetched as OpenStreetMap asks (its own name was blocked), kept on disk
 except ImportError:
     tkintermapview = None
 
@@ -76,6 +79,10 @@ class MapWindow(tk.Toplevel):
         self.info.pack(fill="x", side="bottom")
         if tkintermapview:
             self.map = tkintermapview.TkinterMapView(self, corner_radius=0)
+            gui_tiles.install(tkintermapview.map_widget, self.map)
+            gui_tiles.on_refused = lambda code: app.q.put(("call", lambda: app.status_line(
+                f"*** Map: OpenStreetMap refused the map tiles ({code}) - the map shows the nodes without streets for now; it asks again in "
+                f"{gui_tiles.BACK_OFF // 60} minutes.", "warn")))
             self.center()
         else:
             self.map = tk.Canvas(self, bg="white", highlightthickness=0)

@@ -46,6 +46,7 @@ import gui_nicks
 import gui_sources
 import gui_sounds
 from gui_private import PrivateMixin
+from gui_updflag import UpdateFlagMixin
 from gui_menus import MenusMixin
 from gui_commands import CommandsMixin, CommandPopup
 
@@ -263,7 +264,7 @@ class QueueLogHandler(logging.Handler):
 
 
 class App(PrivateMixin, MenusMixin, CommandsMixin, gui_multinode.MultiNodeMixin, gui_nodestatus.NodeStatusMixin, gui_channels.ChannelsMixin,
-          gui_nicks.NickListMixin):
+          gui_nicks.NickListMixin, UpdateFlagMixin):
     def __init__(self, root, demo=False):
         self.root, self.demo, self.connected = root, demo, False
         gui_common.FULL_UNICODE = gui_common.tk_full_unicode(root)      # emoji shown (Tk 8.6.10+), not dropped
@@ -322,6 +323,7 @@ class App(PrivateMixin, MenusMixin, CommandsMixin, gui_multinode.MultiNodeMixin,
         self.addons.load_all()
         self.resolve_key_windows()
         root.after(100, self.drain)
+        if not demo: root.after(1500, self.show_update_flag)          # an update found earlier and not installed yet: the red UPDATE square
         if not demo and self.settings["check_updates"]:
             root.after(8000, self.auto_update_check)
             root.after(15000, self.auto_repair)
@@ -703,6 +705,7 @@ class App(PrivateMixin, MenusMixin, CommandsMixin, gui_multinode.MultiNodeMixin,
             if isinstance(r, Exception): return   # offline / GitHub unreachable: stay silent
             self.settings["last_update_check"] = time.time()
             self.save()
+            self.note_updates(r["remote"] if r["newer"] else "", r["addons"])      # the flashing UPDATE square on the toolbar
             if r["newer"]: self.status_line(f"*** Update available: version {r['remote']} (you have {r['local']}) - Help > Check for updates.", "warn")
             if r["addons"]:
                 self.status_line("*** Addon update" + ("s" if len(r["addons"]) > 1 else "") + " available: "

@@ -66,6 +66,7 @@ class UpdateDialog(tk.Toplevel):
                 self.say(f"(Could not read the addon catalog: {addons})")
                 addons = []
             self.addon_updates = addons
+            if hasattr(self.app, "note_updates"): self.app.note_updates(self.info["remote"] if self.info["newer"] else "", addons)
             parts = []
             if self.info["newer"]: parts.append(f"mcIRC {self.info['remote']}  (installed: {self.info['local']})")
             if addons: parts.append(f"{len(addons)} addon update{'s' if len(addons) > 1 else ''}")
@@ -115,6 +116,7 @@ class UpdateDialog(tk.Toplevel):
                 self.head.config(text="Addons updated - they are running the new version already.")
                 self.done_box(f"{len(addons)} addon(s) updated - they are running the new version already.", restart=False)
             self.addon_updates = []
+            if hasattr(self.app, "show_update_flag"): self.app.show_update_flag()      # installed: the UPDATE square goes away
         self.app.bg(work, done)
 
     def done_box(self, text, restart):

@@ -18,7 +18,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 WINDOWS_ONLY = {"test_cancel", "test_launcher"}                       # use .cmd stand-ins, tasklist, PowerShell, WinForms
 SERIAL = {"test_cancel", "test_launcher", "test_logo", "test_multinode"}     # they look at the PC's processes and windows, or are timing-sensitive: alone
-NO_DISPLAY_OK = {"test_updater", "test_addon_helpers", "test_weather_restart", "test_diag", "test_portable", "test_install_update", "test_146", "test_health"}     # (the GUI ones are skipped without a display)
+NO_DISPLAY_OK = {"test_updater", "test_addon_helpers", "test_weather_restart", "test_diag", "test_portable", "test_install_update", "test_146", "test_health", "test_settings_safe"}     # (the GUI ones are skipped without a display)
 
 
 def has_display():

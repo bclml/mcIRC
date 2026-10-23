@@ -1,7 +1,7 @@
 {
   "name": "area_alerts",
   "title": "Area alerts",
-  "version": "2.1.2",
+  "version": "2.1.3",
   "description": "Natural disasters (GDACS), earthquakes (USGS), tsunami warnings (NOAA), official weather warnings (Environment Canada, US NWS, MeteoAlarm for 38 European countries), public emergency alerts (Canada: Alert Ready; US: FEMA IPAWS), public transit service alerts (489 agencies in 28 countries), road closures (DriveBC and 20 other 511 sites) and BC Ferries for the areas you choose anywhere in the world: country, region, area. Also everything Traffic, transit and weather did: 'route <address>' by private message (optional TomTom live traffic), the map's DriveBC and earthquake layers, daily forecast posts and a weekly reminder - and it takes that addon's settings over. And the Weather bot's commands: wx <place>, gwx, aqi, sun, moon, solar, sf, hfcond, satpass, airplanes, rain, aurora (answered in the channels you choose, '@name:' first) and its rain warning - it takes the Weather bot's settings over too. Shown on this PC; broadcast to the mesh only if you tick it. Most sources are free with no key. Off until you switch it on.",
   "requires": [
     "requests",

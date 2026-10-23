@@ -41,6 +41,30 @@ MAX_WAITING = 30             # alerts waiting to be broadcast; the oldest are dr
 MAX_CHANNELS = 5             # channels one alert may go to (each is a transmission)
 FORGET = 6 * 3600            # an alert not in force for this long is forgotten: if it comes back, it is announced again
 WINDOW = "Area alerts"
+SAME_WORDS = FORGET           # an alert worded like one already broadcast this long ago is not broadcast again (agencies reword them)
+FILLER = {"at", "the", "is", "are", "a", "an", "of", "to", "due", "has", "been", "will", "be", "on", "for"}
+
+
+def wording(text):
+    """An alert's words for spotting the same alert reworded: '#1 DTEX at 3:22 is cancelled due to staff shortage.' and
+    '#1 DTEX 3:22 is cancelled due to staff shortage' match; '3:22' and '3:52', or route #1 and #10, don't."""
+    words = re.findall(r"[a-z0-9#]+(?:[:.][0-9]+)*", (text or "").lower())
+    return " ".join(w for w in words if w not in FILLER)
+
+
+def one_per_event(found):
+    """The same event found for several of your areas (one earthquake: '80 km from Vancouver Island', '170 km from Lower Mainland', ...)
+    -> once, for the nearest area; the order stays that of the first sighting."""
+    def dist(al):
+        m = re.search(r"(\d+) km from ", al.text)
+        return int(m.group(1)) if m else float("inf")
+    best = {}
+    for lab, al in found:
+        if al.id not in best or dist(al) < dist(best[al.id][1]): best[al.id] = (lab, al)
+    out, done = [], set()
+    for _, al in found:
+        if al.id not in done: done.add(al.id); out.append(best[al.id])
+    return out
 
 
 def _chan_field(parent, var, width=24, **options):
@@ -53,7 +77,7 @@ def _chan_field(parent, var, width=24, **options):
 class Addon(WeatherCmds, Extras, AddonBase):
     KINDS, DEFAULT_ON, WINDOW = KINDS, DEFAULT_ON, WINDOW
     title = "Area alerts"
-    version = "2.1.2"
+    version = "2.1.3"
     author = "mcIRC"
     description = ("Natural disasters, earthquakes, tsunamis, weather warnings, public emergency alerts (Canada, US), public transit alerts, road closures and BC Ferries "
                    "for the areas you choose anywhere in the world (country, region, area), plus 'route <address>' by private message and daily forecasts "
@@ -148,16 +172,21 @@ class Addon(WeatherCmds, Extras, AddonBase):
         if self.unloaded: return
         if isinstance(r, Exception): return self.api.log(f"Area alerts: check failed: {r}", "warn")
         found, errors = r
+        found = one_per_event(found)                            # one quake near several of your areas: one alert, not one per area
         for e in errors[:3]: self.api.log(f"Area alerts: couldn't read {e}", "warn")
         self.current = found
         now = time.time()
         seen = self.api.get("seen", {})
         seen = dict(seen) if isinstance(seen, dict) else {i: now for i in seen}         # (1.3 and older: a plain list)
         quiet = show_only or self.quiet_next
+        said = {w: t for w, t in dict(self.api.get("sent_words", {})).items() if now - t < SAME_WORDS}
         for lab, al in found:
             if al.id in seen: continue
-            self.api.write(WINDOW, f"{'(in force) ' if quiet else ''}{al.text}  [{lab}]")
-            if not quiet and self.api.get("broadcast", False): self.queue.append(al)
+            again = wording(al.text) in said                  # the agency reworded / republished one that already went out
+            self.api.write(WINDOW, f"{'(in force) ' if quiet else '(again, not sent) ' if again else ''}{al.text}  [{lab}]")
+            if not quiet and not again and self.api.get("broadcast", False): self.queue.append(al)
+            said.setdefault(wording(al.text), now)
+        self.api.set("sent_words", dict(sorted(said.items(), key=lambda x: -x[1])[:2000]))
         del self.queue[:-MAX_WAITING]
         seen.update({al.id: now for _, al in found})
         keep = sorted(((t, i) for i, t in seen.items() if now - t < FORGET), reverse=True)[:5000]      # only what is (about) in force now

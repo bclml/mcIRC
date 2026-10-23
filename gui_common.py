@@ -1,6 +1,6 @@
 """Shared settings, theme constants and helpers for the mIRC-style GUI (see mcIRC.py)."""
 import gui_platform
-import json, os, re
+import json, os, re, time
 
 import meshcore_io as ea
 
@@ -90,16 +90,60 @@ def insert_text(t, text, tags=()):
     if pos < len(text): t.insert("end", text[pos:], tags)
 
 
+SETTINGS_PROBLEM = ""      # set by load_settings when gui_settings.json is there but couldn't be used: a line for the Status window
+_SAVE_BLOCKED = False      # ...and it couldn't even be moved aside: save_settings never writes over it (defaults would replace everything)
+
+
 def load_settings():
+    """The saved settings over the defaults.  A file that is there but broken (half written, not JSON) is kept as gui_settings.json.broken-<time>
+    and mcIRC starts with defaults; one that can't be opened (locked by OneDrive / antivirus) is left alone and never saved over this session."""
+    global SETTINGS_PROBLEM, _SAVE_BLOCKED
+    SETTINGS_PROBLEM, _SAVE_BLOCKED = "", False
     s = dict(DEFAULT_SETTINGS)
     try:
-        with open(SETTINGS_PATH, encoding="utf-8") as f: s.update(json.load(f))
-    except (OSError, ValueError): pass
+        with open(SETTINGS_PATH, encoding="utf-8") as f: data = json.load(f)
+        if not isinstance(data, dict): raise ValueError("it holds no settings")
+        s.update(data)
+    except FileNotFoundError:
+        pass
+    except ValueError as e:                                       # (bad JSON, bad UTF-8)
+        aside = SETTINGS_PATH + time.strftime(".broken-%Y%m%d-%H%M%S")
+        try:
+            os.replace(SETTINGS_PATH, aside)
+            SETTINGS_PROBLEM = (f"Your settings file couldn't be read ({e}). It was kept as {os.path.basename(aside)} and mcIRC started with "
+                                "default settings.")
+        except OSError:
+            _SAVE_BLOCKED = True
+            SETTINGS_PROBLEM = (f"Your settings file couldn't be read ({e}) or moved aside. mcIRC started with default settings and won't save "
+                                "over it this session - copy gui_settings.json somewhere safe, then restart mcIRC.")
+    except OSError as e:
+        _SAVE_BLOCKED = True
+        SETTINGS_PROBLEM = (f"Your settings file couldn't be opened ({e.strerror or e}). mcIRC started with default settings and won't save over it "
+                            "this session - close whatever holds it (OneDrive sync, antivirus), then restart mcIRC.")
     return s
 
 
 def save_settings(s):
-    with open(SETTINGS_PATH, "w", encoding="utf-8") as f: json.dump(s, f, indent=2)
+    """Writes the whole file or nothing: a temp file next to it, then swapped in, so a crash or power cut mid-write can't leave half a file.
+    -> False (nothing written) while load_settings couldn't read the file that is there."""
+    if _SAVE_BLOCKED: return False
+    data = json.dumps(s, indent=2)                                # (an error here leaves the file as it was)
+    tmp = SETTINGS_PATH + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        f.write(data)
+        f.flush()
+        os.fsync(f.fileno())
+    for attempt in range(5):
+        try:
+            os.replace(tmp, SETTINGS_PATH)
+            return True
+        except OSError as e:
+            if isinstance(e, PermissionError) and attempt < 4:    # Windows: OneDrive or antivirus can hold the file for a moment
+                time.sleep(0.1)
+                continue
+            try: os.remove(tmp)
+            except OSError: pass
+            raise
 
 
 def _norm(name): return name.lstrip("#").strip().lower()

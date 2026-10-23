@@ -17,6 +17,7 @@ Thumbs.db
 
 # GUI settings may contain your TransLink API key - never commit
 gui_settings.json
+gui_settings.json.*
 nodes.db
 logs/
 

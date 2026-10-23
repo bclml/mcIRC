@@ -320,6 +320,7 @@ class App(PrivateMixin, MenusMixin, CommandsMixin, gui_multinode.MultiNodeMixin,
         root.protocol("WM_DELETE_WINDOW", self.quit)
         self.select_window("Status")
         self.status_line("*** Welcome. Type /help for commands, or press Connect.", "info")
+        if gui_common.SETTINGS_PROBLEM and not demo: self.status_line("*** " + gui_common.SETTINGS_PROBLEM, "warn")
         self.addons.load_all()
         self.resolve_key_windows()
         root.after(100, self.drain)

@@ -313,7 +313,7 @@ bot.check(); n = len(api.sent)
 mod.src.SOURCES["weather"] = lambda a: []
 bot.check()
 ok("a warning that ended is remembered for a while (a feed hiccup doesn't send it again)", "ec:Area:SNOWFALL" in api.s["seen"])
-api.s["seen"]["ec:Area:SNOWFALL"] -= mod.FORGET + 1; bot.check()
+api.s["seen"]["ec:Area:SNOWFALL"] -= mod.FORGET + 1; api.s["sent_words"] = {k: v - mod.FORGET - 1 for k, v in api.s.get("sent_words", {}).items()}; bot.check()
 mod.src.SOURCES["weather"] = lambda a: [src.Alert("ec:Area:SNOWFALL", "weather", "SNOWFALL WARNING", "EC")]
 bot.sent_times = []; bot.check(); bot.drain()
 ok("...but when the same kind of warning comes back later, it is announced again", api.sent[-1] == ("#weather", "SNOWFALL WARNING") and len(api.sent) == n + 1, api.sent[n:])

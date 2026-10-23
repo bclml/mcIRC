@@ -1,0 +1,10 @@
+{
+  "name": "channel_spotter",
+  "title": "Channel spotter",
+  "version": "1.0.0",
+  "description": "Logs every #channel name people mention in messages: who said it first, where, and how often. Never transmits. Off until you switch it on.",
+  "requires": [],
+  "files": {
+    "channel_spotter.py": "addons/channel_spotter.py"
+  }
+}

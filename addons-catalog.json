@@ -115,6 +115,24 @@
         "release": "v1.1.0"
       },
       "tested": "2026-10-08 with app 2.0.6: every command covered by tests with fake node memory, heard packets and sports data; not yet tried on the mesh"
+    },
+    {
+      "name": "nodes_dashboard",
+      "title": "Nodes dashboard",
+      "version": "1.0.0",
+      "author": "bclml",
+      "description": "One window for all your nodes (companions, repeaters, room servers): online / quiet / silent, last heard, heard by, and graphs of signal, activity and hops. Add or remove nodes from the ones mcIRC knows. Listens only, never transmits.",
+      "path": "packages/nodes_dashboard",
+      "tested": "2026-10-23 with app 2026.10.23-5 with a stand-in radio and fake nodes (not over the air yet)"
+    },
+    {
+      "name": "channel_spotter",
+      "title": "Channel spotter",
+      "version": "1.0.0",
+      "author": "bclml",
+      "description": "Logs every #channel name people mention in messages: who said it first, where, and how often. Never transmits. Off until you switch it on.",
+      "path": "packages/channel_spotter",
+      "tested": "2026-10-23 with app 2026.10.23-5 with a stand-in radio and fake nodes (not over the air yet)"
     }
   ]
 }

@@ -47,6 +47,7 @@ uv.lock.bak
 /pktup_*.py
 /ntools_*.py
 /wxbot_*.py
+/ndash_*.py
 
 # Map tiles kept on this PC (gui_tiles.py)
 tile_cache/

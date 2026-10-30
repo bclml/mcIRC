@@ -133,6 +133,15 @@
       "description": "Logs every #channel name people mention in messages: who said it first, where, and how often. Never transmits. Off until you switch it on.",
       "path": "packages/channel_spotter",
       "tested": "2026-10-23 with app 2026.10.23-5 with a stand-in radio and fake nodes (not over the air yet)"
+    },
+    {
+      "name": "hf_conditions",
+      "title": "HF conditions",
+      "version": "1.0.0",
+      "author": "bclml",
+      "description": "For amateur radio operators: someone types 'hf' (your own trigger words) and gets the current HF band conditions - solar flux, sunspots, A and K index, X-rays, noise, and Good / Fair / Poor for 80-40m, 30-20m, 17-15m and 12-10m by day and night (from hamqsl.com, N0NBH). Only in the channels you choose, never in Public. Off until you switch it on.",
+      "path": "packages/hf_conditions",
+      "tested": "2026-10-29 with app 2026.10.29-1 with a stand-in radio and the live hamqsl.com feed (not over the air yet)"
     }
   ]
 }

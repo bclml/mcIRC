@@ -1,0 +1,11 @@
+{
+  "name": "wardrive_map",
+  "title": "Wardrive map",
+  "version": "1.0.0",
+  "description": "Where each repeater can hear you: while recording, every packet a repeater sends straight to your radio is noted with your position and its signal - shown on the map in three layers (strong / fair / weak), listed per repeater (how often, best signal and where, farthest spot) and saved as CSV if you like. Off until you switch it on; never transmits.",
+  "requires": [],
+  "files": {
+    "wardrive_map.py": "addons/wardrive_map.py",
+    "wdmap_core.py": "wdmap_core.py"
+  }
+}

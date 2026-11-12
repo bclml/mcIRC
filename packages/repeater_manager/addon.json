@@ -1,0 +1,12 @@
+{
+  "name": "repeater_manager",
+  "title": "Repeater manager",
+  "version": "1.0.0",
+  "description": "Your repeaters and room servers on one page: log in (the password stays in memory only), status (battery, uptime, noise floor, signal, packets, airtime), neighbours, telemetry and a remote command line, with graphs of battery, noise floor and traffic over time. Each request goes over the air, one at a time and never retried by itself; commands that change or stop a repeater ask first; status on a timer is off until you set it.",
+  "requires": [],
+  "files": {
+    "repeater_manager.py": "addons/repeater_manager.py",
+    "rptmgr_core.py": "rptmgr_core.py",
+    "rptmgr_window.py": "rptmgr_window.py"
+  }
+}

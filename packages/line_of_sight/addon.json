@@ -1,0 +1,11 @@
+{
+  "name": "line_of_sight",
+  "title": "Line of sight",
+  "version": "1.0.0",
+  "description": "Is there a clear radio path between two nodes? Pick the two ends, the antenna heights and the frequency: it draws the ground along the path (with the earth's curve), the line between the antennas and the Fresnel zone, and says clear, weaker signal, or blocked at X km. Elevation data from Open-Meteo (free, no key). Never transmits.",
+  "requires": [],
+  "files": {
+    "line_of_sight.py": "addons/line_of_sight.py",
+    "los_core.py": "los_core.py"
+  }
+}

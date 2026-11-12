@@ -1,0 +1,11 @@
+{
+  "name": "channel_activity",
+  "title": "Channel activity",
+  "version": "1.0.0",
+  "description": "How busy your frequency is: packets per minute, how much of the airtime they use, which kinds, the noise floor and how far signals stand above it - live, with graphs for the last hour, 6 hours or day. From the packets mcIRC hears and a local read of your node every few minutes. Never transmits.",
+  "requires": [],
+  "files": {
+    "channel_activity.py": "addons/channel_activity.py",
+    "chact_core.py": "chact_core.py"
+  }
+}

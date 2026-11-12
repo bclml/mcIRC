@@ -1,0 +1,10 @@
+{
+  "name": "bearing_distance",
+  "title": "Bearing & distance",
+  "version": "1.0.0",
+  "description": "How far away every node is and in which direction: /bearing <name> ('12.3 km NE, 45 degrees'), 'Distance and bearing' in the right-click menu on a name, and a Nodes by distance window you can sort and filter. From your node's position. Never transmits.",
+  "requires": [],
+  "files": {
+    "bearing_distance.py": "addons/bearing_distance.py"
+  }
+}

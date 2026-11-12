@@ -166,6 +166,8 @@ class AddonAPI:
         return name.split(" [")[0].strip().lower() in ("public", "#public")
     def send(self, channel, text):
         """Send `text` to a channel (display name like '#general'/'Public', or an index). Runs in the background.  Not to Public (see above)."""
+        import gui_lang
+        text = gui_lang.mesh(text)                                 # Options > Display: the language bots answer in (English unless chosen)
         if self._public_blocked(channel):
             return self._app.status_line(f"*** [{self.name}] Not posted in Public: bots don't post there (Options > Display > Let bots post in Public).", "warn")
         if isinstance(channel, str) and " [" not in channel and self._app.connected and self._needs_channel(channel):
@@ -192,6 +194,8 @@ class AddonAPI:
     def reply(self, msg, text, private=None):
         """Answer a message where it came from: its channel, or the person for a direct message (msg as given to on_message).
         private=True (default: the addon's 'Send answers by private message' setting) answers a channel message privately instead."""
+        import gui_lang
+        text = gui_lang.mesh(text)                                 # Options > Display: the language bots answer in (English unless chosen)
         if private is None:
             with self.for_node(msg.get("node") or "main"): private = bool(self.get("_reply_private", False))      # that node's choice
         if not msg.get("dm") and self._public_blocked(msg.get("channel", "")): private = True     # in Public: only to the person who asked

@@ -28,6 +28,8 @@ DEFAULT_SETTINGS = {
     "theme": "Classic mIRC", "skin": "None", "highlight_words": "",
     "sounds_enabled": True, "sound_private": "Ding", "sound_mention": "Exclamation", "sound_highlight": "Question",
     "sound_channel": "None", "sound_custom": "", "closed_channels": [],
+    "language": "en",            # the language of mcIRC's windows (a pack in lang/; gui_lang.py)
+    "mesh_language": "en",       # the language bots answer in over the mesh (English keeps every channel readable for everyone)
     "log_enabled": True,         # keep one .txt log per window in logs/
     "log_history": 200,          # how many log lines to show again after a restart
     "addons": {}, "addons_enabled": {},

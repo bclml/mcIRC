@@ -19,6 +19,7 @@ from gui_addons import AddonManager
 from gui_common import (BG, TEXT_BG, FONT_FAMILY, NICK_COLORS, CHANNELS, safe_text, load_settings, save_settings, SETTINGS_PATH,
                         channel_index, display_for_index, insert_text, tk_offset)
 import gui_common
+import gui_lang
 from gui_dialogs import OptionsDialog, ChannelListDialog, AddonsDialog, NodeListDialog, show_about
 from gui_map import MapWindow
 from gui_nodes import NodeStore, sync as sync_nodes
@@ -270,6 +271,9 @@ class App(PrivateMixin, MenusMixin, CommandsMixin, gui_multinode.MultiNodeMixin,
         gui_common.FULL_UNICODE = gui_common.tk_full_unicode(root)      # emoji shown (Tk 8.6.10+), not dropped
         first_start = not os.path.exists(SETTINGS_PATH)          # a brand-new setup: the default addons get installed below
         self.settings = load_settings()
+        gui_lang.install()                                       # language packs: every window built from here on uses the chosen language
+        gui_lang.set_ui(self.settings.get("language", "en"))
+        gui_lang.set_mesh(self.settings.get("mesh_language", "en"))
         if not demo: self._fold_main_node()
         if not self.settings.get("auto_reset_v2"):                 # restarting a silent radio is on by default now (also on existing installs, once)
             self.settings["auto_reset_radio"], self.settings["auto_reset_v2"] = True, True
@@ -530,6 +534,7 @@ class App(PrivateMixin, MenusMixin, CommandsMixin, gui_multinode.MultiNodeMixin,
 
     def status_line(self, text, tag="text", log=True):
         if log and tag in ("error", "warn"): gui_diag.event(tag, text)       # (records that came through logging are already in the diagnostic log)
+        text = gui_lang.tr(text)                                             # (the diagnostic log above stays English, for bug reports)
         self.status.write(self.stamp() + [(text, tag)])
         self.mark_unread(self.status, "event")
 
@@ -767,6 +772,8 @@ class App(PrivateMixin, MenusMixin, CommandsMixin, gui_multinode.MultiNodeMixin,
 
     def apply_settings(self):
         s = self.settings
+        gui_lang.set_ui(s.get("language", "en"))               # (new windows at once; the main window after a restart)
+        gui_lang.set_mesh(s.get("mesh_language", "en"))        # bots' next answers
         self.paint_public_btn()                                # Options > Display may have changed it
         ea.BOT_NICK = s["node_name"]
         self.font.configure(size=s["font_size"])

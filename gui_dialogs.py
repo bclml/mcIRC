@@ -6,6 +6,7 @@ import tkinter as tk
 from tkinter import ttk, messagebox
 
 import meshcore_io as ea
+import gui_lang
 import gui_themes
 import gui_skins
 import gui_sounds
@@ -156,6 +157,19 @@ class OptionsDialog(tk.Toplevel):
         tk.Label(r, text="Skin (a picture from skins/):", bg=BG, width=30, anchor="w").pack(side="left")
         ttk.Combobox(r, textvariable=self.vars["skin"], values=[gui_skins.NONE] + gui_skins.list_skins(), state="readonly", width=16).pack(side="left")
         tk.Label(f, text="A skin puts its picture across the top and takes the pane colours from it (it replaces the colour theme). Drop any PNG / JPG / GIF / BMP into the skins folder; see docs/SKINS.md.", bg=BG, fg="#555", wraplength=420, justify="left").pack(anchor="w")
+        # language packs (lang/*.json): one choice for mcIRC's windows, one for what bots send over the mesh
+        self.langs = gui_lang.available()
+        names = [n for _, n in self.langs]
+        by_code = dict(self.langs)
+        self.lang_vars = {"language": tk.StringVar(value=by_code.get(self.app.settings.get("language", "en"), "English")),
+                          "mesh_language": tk.StringVar(value=by_code.get(self.app.settings.get("mesh_language", "en"), "English"))}
+        for label, key in (("Language of mcIRC's windows:", "language"), ("Language bots answer in (over the mesh):", "mesh_language")):
+            r = tk.Frame(f, bg=BG)
+            r.pack(fill="x", pady=3)
+            tk.Label(r, text=label, bg=BG, width=30, anchor="w").pack(side="left")
+            ttk.Combobox(r, textvariable=self.lang_vars[key], values=names, state="readonly", width=16).pack(side="left")
+        tk.Label(f, text="Windows: new windows change at once, the main window after a restart. Bots: their fixed words (not what comes from the "
+                         "internet) - English keeps a channel readable for everyone.", bg=BG, fg="#555", wraplength=420, justify="left").pack(anchor="w")
         self._row(f, "Highlight words (comma separated):", "highlight_words", 24)
         tk.Label(f, text="@nickname and @[nick name] in messages are highlighted automatically (stronger when it is your name).", bg=BG, fg="#555", wraplength=420, justify="left").pack(anchor="w")
         tk.Checkbutton(f, text="Show timestamps", variable=self.vars["show_time"], bg=BG).pack(anchor="w", pady=(6, 0))
@@ -179,9 +193,15 @@ class OptionsDialog(tk.Toplevel):
         except ValueError:
             messagebox.showerror("Options", "Please check the numeric fields.", parent=self)
             return False
+        if hasattr(self, "lang_vars"):                       # language names shown -> the pack codes saved ('Français' -> 'fr')
+            by_name = {n: c for c, n in self.langs}
+            restart = by_name.get(self.lang_vars["language"].get(), "en") != s.get("language", "en")
+            for key, var in self.lang_vars.items(): new[key] = by_name.get(var.get(), "en")
+        else: restart = False
         s.update(new)
         if hasattr(self, "more_nodes"): s["extra_nodes"] = self.more_nodes.items()
         self.app.apply_settings()
+        if restart: messagebox.showinfo("Options", "New windows use the new language now. Restart mcIRC to see the main window in it too.", parent=self)
         return True
 
     def ok(self):

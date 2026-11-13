@@ -161,8 +161,8 @@ def explain_failure(text):
     if "access is denied" in t or "could not open port" in t or "permissionerror" in t or "being used by another" in t:
         return "the port is busy - close other programs that use it (serial monitor, the console agent, another meshcli)"
     if "err_code_not_found" in t or "unknown destination" in t:
-        return ("the radio does not have this contact (its contact list was cleared, or the person was never added). "
-                "It is added again when the radio hears that person's next advert; mcIRC cannot add it back from memory")
+        return ("the radio does not have this contact, and mcIRC's node memory has no record of it to put back (no advert heard from them yet). "
+                "It is added when the radio hears that person's next advert")
     if "not found" in t or "no such file" in t or "cannot find the file" in t:
         return "meshcli was not found - run: pip install meshcore-cli"
     return (text or "unknown error").strip().splitlines()[-1][:200] if (text or "").strip() else "unknown error"

@@ -131,7 +131,20 @@ class ExtraNode:
         res = self.run_cmd("msg", key, text)
         out = f"{res.stdout}\n{res.stderr}"
         bad = [l.strip() for l in out.splitlines() if "unknown destination" in l.lower() or "err_code_not_found" in l.lower()]
-        if bad: raise RuntimeError(bad[-1])
+        if bad:                                                    # this radio lost the contact: put it back from mcIRC's memory (making room) and try once more
+            import gui_nodes
+            row = self.app.nodes.find_by_prefix(key)
+            if not row: raise RuntimeError(bad[-1])
+            put, removed, why = gui_nodes.put_back(row, lambda args: self.run_cmd(*args, timeout=120, retries=0))
+            if removed:
+                name = removed.get("adv_name") or removed["public_key"][:8]
+                self.say(f"*** The radio's contact list was full: took {name} off it to make room for {row['name']} "
+                         f"(it stays in mcIRC's node memory and comes back with its next advert).")
+            if not put: raise RuntimeError(why)
+            res = self.run_cmd("msg", key, text)
+            out = f"{res.stdout}\n{res.stderr}"
+            bad = [l.strip() for l in out.splitlines() if "unknown destination" in l.lower() or "err_code_not_found" in l.lower()]
+            if bad: raise RuntimeError(bad[-1])
 
 
 class MultiNodeMixin:

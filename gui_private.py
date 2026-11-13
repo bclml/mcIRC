@@ -107,12 +107,27 @@ class PrivateMixin:
             bad = [l.strip() for l in out.splitlines() if re.search(r"unknown destination|err_code_not_found|\berror\b", l, re.IGNORECASE)]
             if bad and re.search(r"unknown destination|err_code_not_found", bad[-1], re.IGNORECASE):      # the radio does not have this contact: put it back from mcIRC's memory and try once more
                 row = self.nodes.find_by_prefix(key)
-                if row and gui_nodes.add_to_radio([row]):
+                if row:
+                    def run(args):
+                        with io.MESH_LOCK: return io.execute_mesh_command(io.CONNECTION_ARGS + args, timeout=120, retries=0)
+                    put, removed, why = gui_nodes.put_back(row, run)          # (a full contact list: the longest-unheard companion makes room)
+                    if removed: self.q.put(("call", lambda v=removed: self.room_made(w, v, row)))
+                    if not put: raise RuntimeError(why)
                     res = io.execute_mesh_command(io.CONNECTION_ARGS + ["msg", key, text])
                     out = res.stdout + chr(10) + res.stderr
                     bad = [l.strip() for l in out.splitlines() if re.search(r"unknown destination|err_code_not_found|\berror\b", l, re.IGNORECASE)]
             if bad: raise RuntimeError(bad[-1])      # the line that names the problem (the last line is usually just meshcli's "Connected" notice)
         self.bg(work, lambda r: isinstance(r, Exception) and self.unsent(w, text, io.explain_failure(str(r))))
+
+    def room_made(self, w, removed, row):
+        """Says in the person's window and in Status which contact was taken off the full radio to make room."""
+        name = removed.get("adv_name") or removed["public_key"][:8]
+        heard = max(int(removed.get("last_advert") or 0), int(removed.get("lastmod") or 0))
+        days = f", last heard {int((time.time() - heard) // 86400)} days ago" if heard > 1577836800 else ""
+        line = (f"*** The radio's contact list was full: took {name} off it{days} to make room for {row['name']} "
+                f"(it stays in mcIRC's node memory and comes back with its next advert).")
+        w.write(self.stamp() + [(line, "info")])
+        self.status_line(line, "info")
 
     # ---- turning "@3ddcdf84" into the real name ----
     def resolve_key_windows(self, ask_radio=False):

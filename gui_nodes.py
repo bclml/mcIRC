@@ -3,7 +3,7 @@
 A MeshCore node only holds a limited number of contacts (about 350).  This store keeps everything it has ever
 listed (in nodes.db next to the script) so the map and node list can show far more than the radio can, and
 forgets nodes that haven't been seen for N days."""
-import json, logging, os, sqlite3, threading, time
+import json, logging, os, re, sqlite3, threading, time
 
 import meshcore_io as ea
 
@@ -186,6 +186,41 @@ def add_to_radio(rows):
         except Exception as e:
             logging.error(f"Putting nodes back on the radio failed: {e}")
     return done
+
+
+REFUSED_RE = re.compile(r"Error adding contact", re.IGNORECASE)        # meshcli prints this (and still exits 0) when the radio says no
+FULL_RE = re.compile(r"TABLE_FULL|table full", re.IGNORECASE)          # ...because its contact list is full
+
+
+def _text(res): return f"{getattr(res, 'stdout', '') or ''}\n{getattr(res, 'stderr', '') or ''}"
+
+
+def room_to_make(contacts, keep_key):
+    """The radio contact to take off when its list is full: the one heard longest ago, but only a companion or a sensor - never a
+    favorite (starred on the node), a repeater or a room server, and never the person being added."""
+    cands = [c for c in contacts.values() if isinstance(c, dict) and c.get("public_key") and c["public_key"] != keep_key
+             and not int(c.get("flags") or 0) & 1 and int(c.get("type") or 1) in (1, 4)]
+    return min(cands, key=lambda c: max(int(c.get("last_advert") or 0), int(c.get("lastmod") or 0)), default=None)
+
+
+def put_back(row, run):
+    """Puts one remembered node back on a radio (its contact list was cleared or it was pruned), making room first when the list is full.
+    run(args) runs meshcli on that radio and returns its result.  -> (ok, removed contact dict or None, why it failed)."""
+    out = _text(run(_add_args([row])))
+    if not REFUSED_RE.search(out): return True, None, ""
+    if not FULL_RE.search(out): return False, None, "the radio refused to add the contact back"
+    res = run([".contacts"])                                       # full: which contact can go?
+    text = _text(res)
+    i = text.find("{")
+    try: contacts = json.JSONDecoder().raw_decode(text[i:])[0] if i != -1 else {}
+    except ValueError: contacts = {}
+    victim = room_to_make(contacts, row["public_key"])
+    if not victim:
+        return False, None, "the radio's contact list is full and holds only favorites, repeaters and room servers - none was removed"
+    run(["remove_contact", victim["public_key"]])                  # (it stays in mcIRC's node memory and comes back with its next advert)
+    out = _text(run(_add_args([row])))
+    if REFUSED_RE.search(out): return False, victim, "the radio's contact list is still full after making room"
+    return True, victim, ""
 
 
 def sync(store, prune_days, also_remove_from_radio):

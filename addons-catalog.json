@@ -105,14 +105,14 @@
     {
       "name": "mesh_bot",
       "title": "Mesh bot",
-      "version": "1.2.14",
+      "version": "1.2.15",
       "author": "bclml (commands after agessaman/meshcore-bot, MIT)",
       "description": "ping, hello, path, prefix, multitest, stats, sports, version and firmware (the newest MeshCore releases) - the agessaman/meshcore-bot commands mcIRC's other bots don't have - plus its greeter (a random greeting from a list you can edit), each switched on for the channels you choose. Off until you switch it on.",
       "path": "packages/mesh_bot",
       "upstream": {
         "repo": "agessaman/meshcore-bot",
-        "ref": "7a6580c608b6b9e5ac2f7df8c236c875e5cb4b22",
-        "release": "v1.1.0"
+        "ref": "52a5f1c9bda9d35c6385532da6f5187ca13f0b3b",
+        "release": "v1.2.0"
       },
       "tested": "2026-10-08 with app 2.0.6: every command covered by tests with fake node memory, heard packets and sports data; not yet tried on the mesh"
     },

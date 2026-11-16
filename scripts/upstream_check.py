@@ -90,6 +90,17 @@ def apply(name, repo, new_ref, release, kind):
     with open(CATALOG, "w", encoding="utf-8", newline="\n") as f: f.write(json.dumps(cat, indent=2, ensure_ascii=False) + "\n")
 
 
+def open_issue(name, repo, what):
+    """An issue next to each review pull request: things that watch the repo's open issues (a maintainer's notification light, say)
+    see a review waiting.  The pull request says 'Closes #N', so merging it closes the issue.  -> the issue number, or '' when it
+    couldn't be opened (the pull request is opened anyway)."""
+    body = (f"**{repo}** has a new version (**{what}**) for the **{name}** addon. Its review pull request is labelled `{LABEL}`; merging it "
+            "closes this issue. If you decide against the update, close the pull request and this issue.")
+    url = sh("gh", "issue", "create", "--label", LABEL, "--title", f"Addon review waiting: {name} - {repo} {what}", "--body", body, check=False)
+    m = re.search(r"/issues/(\d+)\s*$", url or "")
+    return m.group(1) if m else ""
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--dry-run", action="store_true")
@@ -116,6 +127,8 @@ def main():
                 "- [ ] what it contacts on the internet, and what it sends there\n"
                 "- [ ] files, passwords or keys it touches outside its own folder\n"
                 "- [ ] the tests pass on this pull request\n")
+        num = open_issue(name, repo, what)
+        if num: body += f"\nCloses #{num} (merging this closes the review issue).\n"
         sh("gh", "pr", "create", "--base", "master", "--head", branch, "--label", LABEL, "--title", f"Review: {name} - {repo} {what}", "--body", body)
         sh("git", "checkout", "master")
 

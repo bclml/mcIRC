@@ -90,6 +90,33 @@ with mock.patch.object(uc, "ROOT", work), mock.patch.object(uc, "CATALOG", os.pa
     up = json.load(open(os.path.join(work, "packages", "bridge", "upstream.json")))
     ok("...and for an addon built on it: the pin in the package, and a new version so installed copies update",
        up["ref"] == "c" * 40 and after["bridge"]["version"] == "1.0.1" and 'version = "1.0.1"' in open(os.path.join(work, "packages", "bridge", "bridge.py")).read())
+# the daily script: each review pull request comes with an issue it closes (so whatever watches open issues - a notification light - sees it)
+def run_main(issue_url="https://github.com/bclml/mcIRC/issues/12", open_branches=""):
+    calls = []
+    def fake_sh(*args, check=True):
+        calls.append(list(args))
+        if args[:3] == ("gh", "issue", "create"): return issue_url
+        if args[:3] == ("gh", "pr", "list"): return open_branches
+        return ""
+    todo = [("mesh_bot", "agessaman/meshcore-bot", "a" * 40, "b" * 40, "v1.3.0", "upstream")]
+    with mock.patch.object(uc, "sh", fake_sh), mock.patch.object(uc, "plan", lambda: todo), mock.patch.object(uc, "apply", lambda *a: None), \
+         mock.patch.object(sys, "argv", ["upstream_check.py"]):
+        uc.main()
+    return calls
+calls = run_main()
+issue = next((c for c in calls if c[:3] == ["gh", "issue", "create"]), None)
+pr = next((c for c in calls if c[:3] == ["gh", "pr", "create"]), None)
+ok("a review opens an issue, labelled for reviews, before its pull request", issue and pr and calls.index(issue) < calls.index(pr)
+   and issue[issue.index("--label") + 1] == "upstream-update" and issue[issue.index("--title") + 1] == "Addon review waiting: mesh_bot - agessaman/meshcore-bot v1.3.0", calls)
+ok("...and the pull request closes it when merged", "Closes #12" in pr[pr.index("--body") + 1], pr)
+calls = run_main(issue_url="")
+pr = next((c for c in calls if c[:3] == ["gh", "pr", "create"]), None)
+ok("the issue couldn't be opened: the pull request still is (without 'Closes')", pr and "Closes #" not in pr[pr.index("--body") + 1])
+calls = run_main(open_branches="upstream/mesh_bot-v1.3.0")
+ok("a review already waiting: no second pull request and no second issue", not any(c[:3] in (["gh", "issue", "create"], ["gh", "pr", "create"]) for c in calls))
+ok("mcIRC's own 'review waiting' notice counts pull requests only (the issue isn't counted twice)", "/pulls?" in open(os.path.join(ROOT, "gui_sources.py"), encoding="utf-8").read())
+wf = open(os.path.join(ROOT, ".github", "workflows", "upstream-check.yml"), encoding="utf-8").read()
+ok("the daily workflow may open issues", "issues: write" in wf)
 shutil.rmtree(work, ignore_errors=True); shutil.rmtree(tmp, ignore_errors=True)
 print("\nALL PASSED" if not fails else f"\n{len(fails)} FAILED: {fails}")
 sys.exit(1 if fails else 0)

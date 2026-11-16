@@ -12,6 +12,7 @@ on:
 permissions:
   contents: write
   pull-requests: write
+  issues: write          # an "Addon review waiting" issue next to each review pull request (it closes when the pull request is merged)
 
 jobs:
   check:

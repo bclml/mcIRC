@@ -109,7 +109,9 @@ bot.on_message(dict(msg("ver", nick="Ed"), channel="@Ed", dm=True))
 ok("private messages are answered by default, and 'ver' works like 'version' (also 'stat', 'fw')", sent and "Mesh bot" in sent[0][1]
    and mod.ALIASES == {"stat": "stats", "fw": "firmware", "ver": "version"}, sent)
 ok("bothelp lists what's on in a channel", bot.help_for("#bot-van") == ["ping", "hello", "version"] and bot.help_for("Public") == ["version"], (bot.help_for("#bot-van"), bot.help_for("Public")))
-# greeter
+# greeter (connected, and bots may post in Public - where these welcomes are tested; the cases where they can't are further down)
+app.connected = True
+app.settings["bots_in_public"] = True
 sent.clear()
 app.settings["addons"]["mesh_bot"].update(greet_channels="Public", greeted=["Old Timer"])
 bot.on_message(msg("hello all", ch="Public", nick="Newbie"))
@@ -150,6 +152,33 @@ ok("greeter switched off: no greeting (its channels and greetings are kept)", ho
 app.settings["addons"]["mesh_bot"]["greet_on"] = True
 how.clear(); bot.on_message(msg("first time", ch="Public", nick="Third One"))
 ok("...on again, in the channel as before", how == [("Third One", False)], how)
+# a welcome that doesn't go out doesn't count (as meshcore-bot 1.2.0): the newcomer is marked greeted only when it is sent
+greeted = lambda n: n in app.settings["addons"]["mesh_bot"].get("greeted", [])
+waiting = []
+api.after = lambda ms, fn: waiting.append(fn)                # hold the welcome in its wait before answering
+how.clear(); bot.on_message(msg("first time", ch="Public", nick="Late One")); bot.on_message(msg("still here", ch="Public", nick="Late One"))
+ok("during the wait: not marked yet, and a second message doesn't queue a second welcome", not greeted("Late One") and len(waiting) == 1)
+app.connected = False
+for fn in waiting: fn()
+ok("disconnected when the wait ends: nothing sent, not marked", how == [] and not greeted("Late One"), how)
+app.connected = True; waiting.clear()
+bot.on_message(msg("back again", ch="Public", nick="Late One"))
+for fn in waiting: fn()
+ok("...so their next message welcomes them, and only then they are marked", how == [("Late One", False)] and greeted("Late One"), how)
+how.clear(); waiting.clear()
+bot.on_message(msg("first time", ch="Public", nick="Unlucky One"))
+app.settings["addons"]["mesh_bot"]["greet_on"] = False
+for fn in waiting: fn()
+ok("greeter switched off during the wait: nothing sent, not marked", how == [] and not greeted("Unlucky One"))
+app.settings["addons"]["mesh_bot"]["greet_on"] = True; waiting.clear()
+api.after = lambda ms, fn: fn()
+was = app.settings.get("bots_in_public", False)
+app.settings["bots_in_public"] = False
+bot.on_message(msg("first time", ch="Public", nick="Public One"))
+ok("Public, with bots kept out of it: nothing can go out (a newcomer can't be messaged privately), so not marked", how == [] and not greeted("Public One"), how)
+app.settings["bots_in_public"] = was
+bot.on_message(msg("first time again", ch="Public", nick="Public One"))
+ok("...welcomed once it can be", how == [("Public One", False)] and greeted("Public One"), how)
 api.reply = real_reply
 ok("...otherwise the default greetings, Invision-style ones included", bot.greetings() == mcmds.DEFAULT_GREETINGS and any("graced us" in g for g in bot.greetings()))
 page = bot.build_options(tk.Frame(root)); bot.v_greet_ch.set("#weather"); bot.v_greet_ch.set("")

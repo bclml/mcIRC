@@ -114,7 +114,7 @@
         "ref": "52a5f1c9bda9d35c6385532da6f5187ca13f0b3b",
         "release": "v1.2.0"
       },
-      "tested": "2026-10-08 with app 2.0.6: every command covered by tests with fake node memory, heard packets and sports data; not yet tried on the mesh"
+      "tested": "2026-11-15 with app 2026.11.15-1: every command covered by tests with fake node memory, heard packets and sports data; greeter marks a newcomer only when the welcome goes out; not yet tried on the mesh"
     },
     {
       "name": "nodes_dashboard",

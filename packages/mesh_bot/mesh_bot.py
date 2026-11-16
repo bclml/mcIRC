@@ -28,7 +28,7 @@ GREETING = cmds.DEFAULT_GREETINGS[0]                     # the single greeting o
 class Addon(AddonBase):
     title = "Mesh bot"
     command_words = list(COMMANDS)          # (the settings window's 'Command names...': other names for each command)
-    version = "1.2.14"
+    version = "1.2.15"
     author = "mcIRC (commands after agessaman/meshcore-bot, MIT)"
     description = ("ping, hello, path, prefix, multitest, stats, sports and version - the meshcore-bot commands mcIRC's other bots don't have - "
                    "plus its greeter for newcomers (a random greeting from your list), each switched on for the channels you choose. Off until you switch it on.")
@@ -40,6 +40,7 @@ class Addon(AddonBase):
         self.limiter = mc.Limiter(per_user=int(self.api.get("cooldown", 20)), gap=5)
         self.counts = {}
         self.loaded_at = time.time()
+        self.welcoming = set()                     # newcomers whose welcome is waiting to go out (marked greeted only when it does)
         if hasattr(self.api, "add_bot_commands"): self.api.add_bot_commands(self.help_for)
 
     def on_unload(self): pass
@@ -134,19 +135,37 @@ class Addon(AddonBase):
         if msg.get("dm") or not mc.channel_ok(msg.get("channel", ""), mc.channel_list(self.api.get("greet_channels", ""))): return
         nick = (msg.get("nick") or "").strip()
         if not nick or nick == "someone": return
-        seen = set(self.api.get("greeted", []))
-        if nick in seen: return
-        seen.add(nick)
-        self.api.set("greeted", sorted(seen)[-5000:])
+        if nick in set(self.api.get("greeted", [])) or nick in self.welcoming: return     # welcomed before, or a welcome is on its way
         if cmds.known_node(self.api.nodes.all(), nick) or cmds.known_from_logs(getattr(self.api, "log_dir", None), nick):
-            return                                                 # been around already (another device, or chatted before): no welcome
+            return self.mark_greeted(nick)                         # been around already (another device, or chatted before): no welcome
+        # A newcomer isn't in node memory, so they can't be messaged privately: in a Public that bots are kept out of, nothing can go out.
+        # Not marked then (as meshcore-bot 1.2.0: a greeting that isn't sent doesn't count) - a message in a greeting channel welcomes them.
+        blocked = getattr(self.api, "_public_blocked", None)
+        if blocked and blocked(msg.get("channel", "")): return
         line = cmds.pick_greeting(self.greetings(), getattr(self, "_last_greeting", None))
         self._last_greeting = line
         text = cmds.greeting_for(nick, line, msg.get("channel", ""))
         private = bool(self.api.get("greet_private", False))     # only to the newcomer: nothing in the channel
         first, gap = mc.reply_delays_ms(self.api, msg)
-        for i, part in enumerate(mc.split_message(text, limit=mc.MAX_CHARS - (0 if private else mc.name_room(msg)), max_parts=2)):
-            self.api.after(first + i * gap, lambda p=part: self.api.reply(msg, p, private=private))
+        parts = mc.split_message(text, limit=mc.MAX_CHARS - (0 if private else mc.name_room(msg)), max_parts=2)
+        self.welcoming.add(nick)
+        sent = []                                                  # (whether the first part went out: the later parts follow only then)
+        def send(i, part):
+            if i == 0:
+                self.welcoming.discard(nick)
+                # after the wait: disconnected or switched off meanwhile -> nothing goes out and they aren't marked; their next message tries again
+                if not (self.api.connected and self.api.get("enabled", False) and self.api.get("greet_on", True)): return
+                self.mark_greeted(nick)                            # marked as it goes out, not before the wait
+                sent.append(True)
+            if sent: self.api.reply(msg, part, private=private)
+        for i, part in enumerate(parts):
+            self.api.after(first + i * gap, lambda i=i, p=part: send(i, p))
+
+    def mark_greeted(self, nick):
+        """Remembers that this person was welcomed (or has been around): never greeted again.  At most 5000 names are kept."""
+        seen = set(self.api.get("greeted", []))
+        seen.add(nick)
+        self.api.set("greeted", sorted(seen)[-5000:])
 
     def greetings(self):
         """The greetings to pick from: the list from the settings, or 1.0.x's single line if it was changed, else the defaults."""
